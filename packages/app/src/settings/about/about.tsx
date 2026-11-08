@@ -1,6 +1,5 @@
 import { createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js"
 import { writeClipboard } from "@opencode/session-ui/copy"
-import { useDialog } from "@opencode/ui/context/dialog"
 import { Tooltip } from "@opencode/ui/tooltip"
 import { useLanguage } from "@/runtime/i18n/language"
 import { usePlatform } from "@/runtime/platform/platform"
@@ -17,7 +16,6 @@ import {
 export function SettingsAbout(props: { active: boolean }) {
   const language = useLanguage()
   const platform = usePlatform()
-  const dialog = useDialog()
   const [copyState, setCopyState] = createSignal(INITIAL_ABOUT_COPY_STATE)
   const copy = createMemo(() => selectAboutCopyView(copyState()))
   const version = () => platform.version ?? language.t("settings.about.devVersion")
@@ -61,19 +59,6 @@ export function SettingsAbout(props: { active: boolean }) {
   })
   onCleanup(() => dispatchCopy({ type: "disposed" }))
 
-  const showNotices = async () => {
-    // The license texts load only when someone reads them.
-    const loaded = await import("./notices/dialog").catch(() => undefined)
-
-    if (!loaded) {
-      showToast({ variant: "error", title: language.t("settings.about.notices.loadFailed") })
-
-      return
-    }
-
-    void dialog.show(() => <loaded.default />)
-  }
-
   return (
     <div class="settings-about-content">
       <div class="settings-about-intro">
@@ -107,11 +92,6 @@ export function SettingsAbout(props: { active: boolean }) {
 
       <div class="settings-about-details">
         <p>{language.t("settings.about.description")}</p>
-        <p>
-          <button type="button" class="settings-about-link" onClick={() => void showNotices()}>
-            {language.t("settings.about.notices.title")}
-          </button>
-        </p>
       </div>
     </div>
   )
