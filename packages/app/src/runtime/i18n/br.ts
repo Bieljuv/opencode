@@ -144,6 +144,7 @@ export const dict = {
   "settings.tab.experimental": "Experimental",
   "settings.experimental.description": "Experimente recursos experimentais",
   "settings.tab.about": "Sobre",
+  "settings.about.checkUpdates": "Verificar atualizações",
   "settings.about.version": "Versão {{version}}",
   "settings.about.devVersion": "desenvolvimento",
   "settings.about.license": "Lançado sob a Licença MIT",
