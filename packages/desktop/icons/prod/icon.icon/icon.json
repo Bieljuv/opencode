@@ -1,10 +1,10 @@
 {
   "groups": [
     {
-      "name": "OpenCode",
+      "name": "ManosTech",
       "layers": [
         {
-          "name": "OpenCode",
+          "name": "ManosTech",
           "image-name": "icon.png",
           "glass": false
         }
