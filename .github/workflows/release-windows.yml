@@ -1,0 +1,168 @@
+name: release-windows
+
+# Publishes a Windows release of the rebranded desktop (Editor IA ManosTech)
+# to GitHub Releases — the auto-update feed (electron-updater, github
+# provider). The installer + latest.yml become release assets; the installed
+# app checks the latest release and downloads the update from there.
+# No signing and no extra tokens: release creation uses the built-in
+# GITHUB_TOKEN (gh CLI, preinstalled on the runner).
+#
+# Trigger: push a tag `editor-vX.Y.Z` (e.g. `editor-v3.0.0`). The tag IS the
+# release version (OPENCODE_VERSION comes from it), so the tag must be
+# greater than the version installed on users' PCs (2.2.5 today) or the
+# updater will not offer the update — the workflow fails fast otherwise.
+# A manual dispatch with a version input runs the same build + checks as a
+# dry run and publishes nothing.
+#
+# Mirrors the build steps of build-windows.yml (CLI -> desktop -> unpacked
+# app -> NSIS); keep the two in sync until they share a composite action.
+# build-windows.yml itself is still unmerged (branch manostech-windows-build),
+# so this workflow is self-contained and does not depend on it.
+
+on:
+  push:
+    tags: ["editor-v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build and check (dry run, no release is published)"
+        required: true
+        type: string
+
+run-name: "release-windows ${{ github.ref_name }}"
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-windows-x64:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      OPENCODE_CHANNEL: dev
+      OPENCODE_TARGET: windows-x64
+    steps:
+      - name: Check out
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      # The tag is the version: editor-v3.0.0 -> 3.0.0. It must be a plain
+      # X.Y.Z greater than 2.2.5 (the version installed on users' PCs today),
+      # or the updater will not offer the update. Exported via GITHUB_ENV so
+      # every build step below picks it up as OPENCODE_VERSION.
+      - name: Version from tag
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            version="${{ inputs.version }}"
+            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "version input must be X.Y.Z (got $version)"
+              exit 1
+            fi
+          else
+            tag="${GITHUB_REF_NAME}"
+            if [[ ! "$tag" =~ ^editor-v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              echo "tag must be editor-vX.Y.Z (got $tag)"
+              exit 1
+            fi
+            version="${BASH_REMATCH[1]}"
+          fi
+          version_gt() {
+            local IFS=.
+            local i a=($1) b=($2)
+            for i in 0 1 2; do
+              if (( ${a[i]} > ${b[i]} )); then return 0; fi
+              if (( ${a[i]} < ${b[i]} )); then return 1; fi
+            done
+            return 1
+          }
+          if ! version_gt "$version" "2.2.5"; then
+            echo "version $version must be greater than 2.2.5 (installed version)"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "OPENCODE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "Releasing Editor IA ManosTech $version"
+
+      # The repo's own setup action: Node 24 (node-gyp needs Node >= 22),
+      # Bun from packageManager (1.4.4, overridden here), then
+      # `bun install --frozen-lockfile`.
+      - name: Set up Bun
+        uses: ./.github/actions/setup-bun
+        with:
+          bun-version: 1.4.4
+
+      # Builds packages/cli/dist/cli-windows-x64-baseline — the CLI the
+      # desktop bundles. Built from this commit so desktop and CLI agree.
+      # No BUN_COMPILE_RELEASE: Bun.build uses the installed Bun 1.4.4 as
+      # the compile base, so no GitHub API call (and no token) is needed.
+      # The bundled models.dev catalog is the snapshot committed in the
+      # repo; upstream fetches a fresh one for releases.
+      - name: Build CLI
+        working-directory: packages/cli
+        run: bun run build
+
+      # Builds the desktop into packages/desktop/out and stages the CLI
+      # into packages/desktop/resources (opencode-cli.exe + .version).
+      - name: Build desktop
+        working-directory: packages/desktop
+        run: bun run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      # Packs the unpacked app into dist/desktop/app (no installer yet).
+      # Also writes resources/app-update.yml with the github feed, which the
+      # installed app reads to find its updates.
+      - name: Pack unpacked app
+        working-directory: packages/desktop
+        timeout-minutes: 60
+        run: bun run pack
+
+      # Builds the NSIS installer around the unpacked app.
+      # NOTE: pack.ts's OPENCODE_DESKTOP_APP path is not used here on
+      # purpose: it copies a hardcoded `dist/opencode-desktop-win-x64.exe`,
+      # but the rebrand renamed the artifact to
+      # `editor-ia-manostech-win-x64.exe`, so that path would fail.
+      # Calling electron-builder directly with --prepackaged produces the
+      # same installer without that copy.
+      - name: Pack NSIS installer
+        working-directory: packages/desktop
+        timeout-minutes: 60
+        run: bunx electron-builder --win --x64 --publish never --config electron-builder.config.ts --prepackaged ../../dist/desktop/app
+
+      # latest.yml carries the release version; fail fast if it disagrees
+      # with the tag instead of publishing an update nobody can install.
+      - name: Check latest.yml version
+        working-directory: packages/desktop
+        run: |
+          grep -q "^version: ${{ steps.version.outputs.version }}$" dist/latest.yml
+          grep -q "editor-ia-manostech-win-x64.exe" dist/latest.yml
+          cat dist/latest.yml
+
+      # Create the release on the pushed tag (or upload to it on re-run) and
+      # attach the installer + latest.yml. gh is preinstalled on the runner;
+      # GITHUB_TOKEN is provided by Actions — no other secret is needed.
+      # Manual dispatches stop before this step: they publish nothing.
+      - name: Publish GitHub Release
+        if: github.event_name == 'push'
+        working-directory: packages/desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${{ steps.version.outputs.version }}"
+          installer="dist/editor-ia-manostech-win-x64.exe"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$installer" dist/latest.yml --clobber
+          else
+            gh release create "$tag" --title "Editor IA ManosTech $version" --notes "Editor IA ManosTech $version." "$installer" dist/latest.yml
+          fi

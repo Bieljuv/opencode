@@ -211,8 +211,10 @@ const getBase = (appId: string): Configuration => {
 export function getConfig() {
   const channel = resolveChannel()
   const appId = APP_IDS[channel]
-  // PLACEHOLDER ManosTech: as URLs de publish abaixo ainda não existem; o feed
-  // real (latest.yml no formato do electron-updater) é o passo 7 da auditoria.
+  // ManosTech: auto-update via GitHub Releases no fork BielJuv/opencode.
+  // O electron-updater lê a latest release pública (sem token) e baixa o
+  // latest.yml + o instalador dela. Uma só linha de releases por enquanto:
+  // dev, beta e prod apontam para o mesmo repo.
   const base = getBase(appId)
 
   switch (channel) {
@@ -222,8 +224,9 @@ export function getConfig() {
         appId,
         productName: "Editor IA ManosTech Dev",
         publish: {
-          provider: "generic",
-          url: "https://manostech-system.com.br/update/api/dev/desktop/editor/",
+          provider: "github",
+          owner: "BielJuv",
+          repo: "opencode",
           channel: "latest",
         },
         deb: { fpm: [...previewCompressionFpm("deb"), metainfoFpm(appId)] },
@@ -241,8 +244,9 @@ export function getConfig() {
         productName: "Editor IA ManosTech Beta",
         protocols: { name: "ManosTech Beta", schemes: ["manostech"] },
         publish: {
-          provider: "generic",
-          url: "https://manostech-system.com.br/update/api/beta/desktop/editor/",
+          provider: "github",
+          owner: "BielJuv",
+          repo: "opencode",
           channel: "latest",
         },
         deb: { fpm: [...previewCompressionFpm("deb"), metainfoFpm(appId)] },
@@ -265,8 +269,9 @@ export function getConfig() {
         // The DMG volume icon would otherwise use the same actool-generated ICNS.
         dmg: { icon: "resources/icons/icon.icns" },
         publish: {
-          provider: "generic",
-          url: "https://manostech-system.com.br/update/api/latest/desktop/editor/",
+          provider: "github",
+          owner: "BielJuv",
+          repo: "opencode",
           channel: "latest",
         },
         deb: { fpm: [metainfoFpm(appId), legacyDesktopEntryFpm] },

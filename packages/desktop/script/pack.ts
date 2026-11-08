@@ -63,17 +63,17 @@ if (!app && os === "win") {
 }
 
 // electron-builder writes resources/app-update.yml only for dmg, zip and nsis targets, not for --dir builds.
-// electron-updater reads its feed from that file, so write the one those targets would.
+// electron-updater reads its feed from that file, so write the one those targets would:
+// the publish config plus updaterCacheDirName (see PublishManager.getAppUpdatePublishConfiguration).
 async function writeUpdateConfig(resources: string) {
   const publish = getConfig().publish
   const name: string = (await Bun.file("package.json").json()).name
-  await Bun.write(
-    path.join(resources, "app-update.yml"),
-    [
-      `provider: ${publish.provider}`,
-      `url: ${publish.url}`,
-      `channel: ${publish.channel}`,
-      `updaterCacheDirName: '${name.replace(/[/\\:*?"<>|]/g, "").toLowerCase()}-updater'`,
-    ].join("\n") + "\n",
+  const lines = [`provider: ${publish.provider}`]
+  if (publish.provider === "github") lines.push(`owner: ${publish.owner}`, `repo: ${publish.repo}`)
+  if ("url" in publish && typeof publish.url === "string") lines.push(`url: ${publish.url}`)
+  lines.push(
+    `channel: ${publish.channel}`,
+    `updaterCacheDirName: '${name.replace(/[/\\:*?"<>|]/g, "").toLowerCase()}-updater'`,
   )
+  await Bun.write(path.join(resources, "app-update.yml"), lines.join("\n") + "\n")
 }
