@@ -88,6 +88,8 @@ export type ComposerEditorProps = {
   borderUnderlay?: boolean
   class?: string
   modelControl?: JSX.Element
+  /** The microphone, rendered next to the attach menu and before the model control. */
+  dictationControl?: JSX.Element
   modelControlsVisible?: boolean
   attachKeybind?: string[]
   attachShortcut?: string
@@ -443,6 +445,7 @@ export function ComposerEditor(props: ComposerEditorProps) {
                 onContext={props.controller.openContext}
                 onShell={props.controller.openShell}
               />
+              {props.dictationControl}
             </div>
           </Show>
           <div

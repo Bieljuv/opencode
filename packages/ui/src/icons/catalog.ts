@@ -14,6 +14,10 @@ const icons = {
     viewBox: "0 0 16 16",
     body: `<rect x="3.5" y="7" width="9" height="7" rx="1" stroke="currentColor"/><path d="M5 7V5a3 3 0 0 1 6 0v2M8 10v1" stroke="currentColor" stroke-linecap="round"/>`,
   },
+  mic: {
+    viewBox: "0 0 16 16",
+    body: `<rect x="6" y="1.5" width="4" height="8" rx="2" stroke="currentColor"/><path d="M4 8.5a4 4 0 0 0 8 0" stroke="currentColor" stroke-linecap="round"/><path d="M8 12.5v2M5.5 14.5h5" stroke="currentColor" stroke-linecap="round"/>`,
+  },
   globe: {
     viewBox: "0 0 16 16",
     body: `<circle cx="8" cy="8" r="6" stroke="currentColor"/><ellipse cx="8" cy="8" rx="2.5" ry="6" stroke="currentColor"/><path d="M2 8h12" stroke="currentColor"/>`,
