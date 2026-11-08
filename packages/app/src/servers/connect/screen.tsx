@@ -1,7 +1,7 @@
 import { lazy, Show, Suspense } from "solid-js"
+import manostechLogo from "@/assets/manostech-logo.png"
 import { Button } from "@opencode/ui/button"
 import { TextInput } from "@opencode/ui/text-input"
-import { Wordmark } from "@opencode/ui/wordmark"
 import { useLanguage } from "@/runtime/i18n/language"
 import { createServerConnectController } from "./controller"
 import { ConnectMethodSwitch } from "./method"
@@ -18,8 +18,8 @@ export function ConnectServerScreen(props: { url?: string } = {}) {
   return (
     <main data-component="connect-server" aria-labelledby="server-connect-title">
       <div class="server-connect-content">
-        <div class="server-connect-brand" role="img" aria-label="OpenCode">
-          <Wordmark />
+        <div class="server-connect-brand" role="img" aria-label="ManosTech">
+          <img src={manostechLogo} alt="" class="mx-auto block size-28" />
         </div>
         <header>
           <h1 id="server-connect-title">{language.t("server.connect.title")}</h1>

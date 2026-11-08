@@ -280,8 +280,6 @@ export const dict = {
   "error.page.action.checkUpdates": "Patikrinkite, ar nėra atnaujinimų",
   "error.page.action.updateTo": "Atnaujinkite į {{version}}",
   "error.page.circular": "[Aplinkraštis]",
-  "error.page.report.prefix": "Praneškite apie šią klaidą OpenCode komandai",
-  "error.page.report.discord": "ant Discord",
   "error.page.version": "Versija: {{version}}",
   "error.dev.rootNotFound":
     "Šakninis elementas nerastas. Ar pamiršote jį įtraukti į index.html? O gal id atributas buvo neteisingai parašytas?",

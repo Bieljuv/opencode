@@ -296,8 +296,6 @@ export const dict = {
   "error.page.action.checking": "Проверка…",
   "error.page.action.checkUpdates": "Проверить обновления",
   "error.page.action.updateTo": "Обновить до {{version}}",
-  "error.page.report.prefix": "Пожалуйста, сообщите об этой ошибке команде OpenCode",
-  "error.page.report.discord": "в Discord",
   "error.page.version": "Версия: {{version}}",
 
   "error.dev.rootNotFound":

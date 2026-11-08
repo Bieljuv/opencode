@@ -309,8 +309,6 @@ export const dict = {
   "error.page.action.checking": "Kontrol ediliyor…",
   "error.page.action.checkUpdates": "Güncellemeleri kontrol et",
   "error.page.action.updateTo": "{{version}} sürümüne güncelle",
-  "error.page.report.prefix": "Lütfen bu hatayı OpenCode ekibine",
-  "error.page.report.discord": "Discord üzerinden bildirin",
   "error.page.version": "Sürüm: {{version}}",
 
   "error.dev.rootNotFound":

@@ -279,8 +279,6 @@ export const dict = {
   "error.page.action.checking": "確認中…",
   "error.page.action.checkUpdates": "アップデートを確認",
   "error.page.action.updateTo": "{{version}}にアップデート",
-  "error.page.report.prefix": "このエラーをOpenCodeチームに報告してください: ",
-  "error.page.report.discord": "Discord",
   "error.page.version": "バージョン: {{version}}",
   "error.dev.rootNotFound":
     "ルート要素が見つかりません。index.htmlに追加するのを忘れていませんか？またはid属性のスペルが間違っていませんか？",

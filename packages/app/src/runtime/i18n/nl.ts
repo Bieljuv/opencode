@@ -463,8 +463,6 @@ export const dict = {
   "error.page.action.checkUpdates": "Controleer op updates",
   "error.page.action.updateTo": "Update naar {{version}}",
   "error.page.circular": "[Circulair]",
-  "error.page.report.prefix": "Rapporteer deze fout aan het OpenCode-team",
-  "error.page.report.discord": "op Discord",
   "error.page.version": "Versie: {{version}}",
   "error.dev.rootNotFound":
     "Root-element niet gevonden. Ben je vergeten het toe te voegen aan je index.html? Of is het id-attribuut misschien verkeerd gespeld?",

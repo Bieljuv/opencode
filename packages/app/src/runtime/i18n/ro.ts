@@ -265,8 +265,6 @@ export const dict = {
   "error.page.action.checkUpdates": "Caută actualizări",
   "error.page.action.updateTo": "Actualizează la {{version}}",
   "error.page.circular": "[Ciclic]",
-  "error.page.report.prefix": "Te rugăm să raportezi această eroare echipei OpenCode",
-  "error.page.report.discord": "pe Discord",
   "error.page.version": "Versiune: {{version}}",
   "error.dev.rootNotFound":
     "Elementul root nu a fost găsit. L-ai adăugat în index.html? Sau poate atributul id este scris greșit?",

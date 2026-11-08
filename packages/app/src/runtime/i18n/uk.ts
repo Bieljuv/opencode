@@ -327,8 +327,6 @@ export const dict = {
   "error.page.action.checkUpdates": "Перевірити оновлення",
   "error.page.action.updateTo": "Оновити до {{version}}",
   "error.page.circular": "[Циклічне]",
-  "error.page.report.prefix": "Будь ласка, повідомте про цю помилку команді OpenCode",
-  "error.page.report.discord": "у Discord",
   "error.page.version": "Версія: {{version}}",
 
   "error.dev.rootNotFound":

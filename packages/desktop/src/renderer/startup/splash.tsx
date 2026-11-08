@@ -1,5 +1,4 @@
-import { Splash } from "@opencode/ui/logo"
-import { Wordmark } from "@opencode/ui/wordmark"
+import manostechLogo from "@/assets/manostech-logo.png"
 import type { Platform } from "@opencode/app/desktop"
 import { onCleanup, onMount, Show } from "solid-js"
 import "./splash.css"
@@ -57,7 +56,7 @@ export function LoadingSplash(props: {
             "bg-v2-background-bg-base": !props.deep,
           }}
         >
-          <Splash class="w-16 h-20 opacity-50 animate-pulse" />
+          <img src={manostechLogo} alt="" class="size-44 animate-pulse" />
         </div>
       }
     >
@@ -67,25 +66,18 @@ export function LoadingSplash(props: {
         aria-hidden="true"
         class="h-dvh w-screen bg-v2-background-bg-base"
         style={{
-          // Match the default session's titlebar, panel insets, and wordmark position.
+          // Match the default session's titlebar, panel insets, and logo position.
           "padding-block-start": `calc(${titlebarHeight()} + ${props.platform.os === "windows" ? 1 : 8}px)`,
           "padding-block-end": "8px",
           "padding-inline": "32px",
         }}
         onAnimationEnd={(event) => {
-          if (event.animationName === "first-launch-wordmark-draw") props.onDrawEnd()
+          if (event.animationName === "first-launch-logo-fade") props.onDrawEnd()
         }}
       >
         <div class="relative size-full">
-          <div class="absolute inset-x-0 top-[25.375%]">
-            <div class="mx-auto w-full max-w-[720px]">
-              <Wordmark
-                outline
-                fade={false}
-                muted={false}
-                class="mx-auto block h-auto w-4/5 text-v2-icon-icon-faint opacity-50"
-              />
-            </div>
+          <div class="absolute inset-x-0 top-[18%] flex justify-center px-6">
+            <img src={manostechLogo} alt="" class="size-44" />
           </div>
         </div>
       </div>

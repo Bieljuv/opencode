@@ -142,7 +142,6 @@ function Fixture(props: { picked: typeof commits; previous?: string; previousCom
         notes={notes}
         previous={props.previous ?? "0.0.0-beta-21180"}
         dialog={{ close: () => dialog.close() }}
-        open={(href) => window.open(href, "_blank")}
         viewAll={() => {
           dialog.close()
           setPage(true)
@@ -155,7 +154,7 @@ function Fixture(props: { picked: typeof commits; previous?: string; previousCom
   return (
     <Show when={page()} fallback={<Button onClick={open}>Open What's new in beta</Button>}>
       <SettingsPanel>
-        <BetaNotesView embedded={embedded(props.picked)} open={(href) => window.open(href, "_blank")} />
+        <BetaNotesView embedded={embedded(props.picked)} />
       </SettingsPanel>
     </Show>
   )
@@ -199,7 +198,7 @@ export const PreviousBuildUnknown = {
 export const Page = {
   render: () => (
     <SettingsPanel>
-      <BetaNotesView embedded={embedded(commits)} open={(href) => window.open(href, "_blank")} />
+      <BetaNotesView embedded={embedded(commits)} />
     </SettingsPanel>
   ),
 }

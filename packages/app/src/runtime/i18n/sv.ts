@@ -457,8 +457,6 @@ export const dict = {
   "error.page.action.checkUpdates": "Sök efter uppdateringar",
   "error.page.action.updateTo": "Uppdatera till {{version}}",
   "error.page.circular": "[Circular]",
-  "error.page.report.prefix": "Rapportera det här felet till OpenCode-teamet",
-  "error.page.report.discord": "på Discord",
   "error.page.version": "Version: {{version}}",
   "error.dev.rootNotFound":
     "Rotelementet hittades inte. Har du glömt att lägga till det i din index.html? Eller kanske id-attributet är felstavat?",

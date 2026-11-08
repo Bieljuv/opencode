@@ -265,8 +265,6 @@ export const dict = {
   "error.page.action.checkUpdates": "Comproveu si hi ha actualitzacions",
   "error.page.action.updateTo": "Actualitza a {{version}}",
   "error.page.circular": "[Circular]",
-  "error.page.report.prefix": "Informeu aquest error a l'equip OpenCode.",
-  "error.page.report.discord": "a Discord",
   "error.page.version": "Versió: {{version}}",
   "error.dev.rootNotFound":
     "No s'ha trobat l'element arrel. T'has oblidat d'afegir-lo al teu index.html? O potser l'atribut id s'ha escrit malament?",

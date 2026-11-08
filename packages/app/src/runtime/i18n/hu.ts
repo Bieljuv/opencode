@@ -280,8 +280,6 @@ export const dict = {
   "error.page.action.checkUpdates": "Ellenőrizze a frissítéseket",
   "error.page.action.updateTo": "Frissítés a {{version}}-re",
   "error.page.circular": "[Kör alakú]",
-  "error.page.report.prefix": "Kérjük, jelentse ezt a hibát a OpenCode csapatának",
-  "error.page.report.discord": "a Discord-n",
   "error.page.version": "Kivitel: {{version}}",
   "error.dev.rootNotFound":
     "A gyökérelem nem található. Elfelejtette hozzáadni az index.html-hez? Vagy lehet, hogy az id attribútumot rosszul írták?",

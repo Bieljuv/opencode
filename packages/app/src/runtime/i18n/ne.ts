@@ -270,8 +270,6 @@ export const dict = {
   "error.page.action.checkUpdates": "अपडेटहरूको लागि जाँच गर्नुहोस्",
   "error.page.action.updateTo": "{{version}} मा अद्यावधिक गर्नुहोस्",
   "error.page.circular": "[परिपत्र]",
-  "error.page.report.prefix": "कृपया यो त्रुटि OpenCode टोलीलाई रिपोर्ट गर्नुहोस्",
-  "error.page.report.discord": "Discord मा",
   "error.page.version": "संस्करण: {{version}}",
   "error.dev.rootNotFound":
     "मूल तत्व फेला परेन। के तपाईंले यसलाई आफ्नो index.html मा थप्न बिर्सनुभयो? वा हुनसक्छ आईडी विशेषता गलत हिज्जे भयो?",

@@ -17,7 +17,7 @@ import type definition from "./index"
 
 /**
  * The features and fixes this beta build carries since the commit of the build the user saw last; undefined when there
- * are none. Everything comes from the build itself; only the links reach the network, when clicked.
+ * are none. Everything comes from the build itself.
  */
 export function readBetaNotes(previousCommit: string | undefined) {
   return Option.getOrUndefined(
@@ -34,7 +34,6 @@ export function openBetaNotes(ctx: SetupContext<typeof definition>, notes: BetaN
       notes={notes}
       previous={previous}
       dialog={dialog}
-      open={(href) => ctx.system.openExternal(href)}
       viewAll={() => {
         dialog.close()
         ctx.layout.settings("whats-new")
@@ -48,7 +47,6 @@ export function DialogBetaNotes(props: {
   notes: BetaNotes
   previous: string
   dialog: DialogHandle
-  open: (href: string) => void
   viewAll: () => void
 }) {
   const ctx = usePlugin<typeof definition>()
@@ -87,8 +85,8 @@ export function DialogBetaNotes(props: {
           }}
           onScroll={measure}
         >
-          <Section title={ctx.t("beta.added")} notes={props.notes.added} open={props.open} />
-          <Section title={ctx.t("beta.fixed")} notes={props.notes.fixed} open={props.open} />
+          <Section title={ctx.t("beta.added")} notes={props.notes.added} />
+          <Section title={ctx.t("beta.fixed")} notes={props.notes.fixed} />
         </div>
       </DialogBody>
       <DialogFooter>
@@ -110,7 +108,7 @@ const FADE = 24
 
 // Every entry starts on the heading's edge; a visual sits small at the row's end, so rows keep one rhythm with or
 // without one.
-function Section(props: { title: string; notes: readonly BetaNote[]; open: (href: string) => void }) {
+function Section(props: { title: string; notes: readonly BetaNote[] }) {
   return (
     <Show when={props.notes.length > 0}>
       <section class="flex flex-col gap-3">
@@ -123,7 +121,7 @@ function Section(props: { title: string; notes: readonly BetaNote[]; open: (href
                   <p class="m-0 text-[13px] leading-5 font-[500] tracking-[-0.04px] text-v2-text-text-base">
                     {note.summary}
                   </p>
-                  <Meta note={note} open={props.open} />
+                  <Meta note={note} />
                 </div>
                 <Show when={note.visual}>{(visual) => <Visual visual={visual()} label={note.description} />}</Show>
               </li>
@@ -169,7 +167,7 @@ export function Visual(props: { visual: NonNullable<BetaNote["visual"]>; label?:
 }
 
 /** Who made it and its pull request, quietly; `class` sets the type, the dialog's own scale by default. */
-export function Meta(props: { note: BetaNote; open: (href: string) => void; class?: string }) {
+export function Meta(props: { note: BetaNote; class?: string }) {
   return (
     <Show when={props.note.author || props.note.pr}>
       <div
@@ -189,16 +187,7 @@ export function Meta(props: { note: BetaNote; open: (href: string) => void; clas
               <Show when={props.note.author}>
                 <span aria-hidden="true">·</span>
               </Show>
-              <a
-                href={pr().url}
-                class="rounded-[4px] tabular-nums text-v2-text-text-faint underline-offset-2 hover:text-v2-text-text-base hover:underline focus-visible:underline focus-visible:outline-none"
-                onClick={(event) => {
-                  event.preventDefault()
-                  props.open(pr().url)
-                }}
-              >
-                #{pr().number}
-              </a>
+              <span class="rounded-[4px] tabular-nums text-v2-text-text-faint">#{pr().number}</span>
             </>
           )}
         </Show>
