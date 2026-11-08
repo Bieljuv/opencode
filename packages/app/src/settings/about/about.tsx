@@ -3,6 +3,7 @@ import { writeClipboard } from "@opencode/session-ui/copy"
 import { useDialog } from "@opencode/ui/context/dialog"
 import { Tooltip } from "@opencode/ui/tooltip"
 import { useLanguage } from "@/runtime/i18n/language"
+import { useCommand } from "@/shell/commands/command"
 import { usePlatform } from "@/runtime/platform/platform"
 import { showToast } from "@/shell/notifications/toast"
 import manostechLogo from "@/assets/manostech-logo.png"
@@ -16,6 +17,7 @@ import {
 
 export function SettingsAbout(props: { active: boolean }) {
   const language = useLanguage()
+  const command = useCommand()
   const platform = usePlatform()
   const dialog = useDialog()
   const [copyState, setCopyState] = createSignal(INITIAL_ABOUT_COPY_STATE)
@@ -98,6 +100,11 @@ export function SettingsAbout(props: { active: boolean }) {
             </button>
           </Tooltip>
         </div>
+        <p>
+          <button type="button" class="settings-about-link" onClick={() => void command.trigger("updater.check")}>
+            {language.t("settings.about.checkUpdates")}
+          </button>
+        </p>
         <p>{language.t("settings.about.license")}</p>
       </div>
 
