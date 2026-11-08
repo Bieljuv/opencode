@@ -73,7 +73,7 @@ for (const flag of [undefined, "0", "1", "true"]) {
             location: ref,
           })
           const failure = yield* runner.resolve(session, models.available).pipe(Effect.flip)
-          expect(failure.message).toBe(`Model unavailable: ${providerID}/big-pickle`)
+          expect(failure.message).toBe("O modelo não está disponível no momento. Tente novamente mais tarde.")
           expect(yield* resolver.resolve(Model.Ref.make({ providerID, id: free }))).toBeUndefined()
           // Later transforms cannot restore a free model, even when all paid models are removed.
           yield* models.transform((editor) => {

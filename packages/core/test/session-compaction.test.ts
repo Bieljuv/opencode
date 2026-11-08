@@ -487,17 +487,17 @@ it.effect("auto compaction estimates current content against the buffered prompt
 
     const interrupted = { ...assistant, id: SessionMessage.ID.create(), tokens: undefined }
     expect(SessionCompaction.estimateContext({ ...grown, messages: [...grown.messages, interrupted] })).toBe(90_001)
-    // Without provider usage, include 20 tokens for the system prompt, instructions, and tool definition.
-    expect(SessionCompaction.estimateContext({ ...grown, messages: [interrupted] })).toBe(21)
+    // Without provider usage, include 82 tokens for the system prompt, instructions, tool definition, and token economy.
+    expect(SessionCompaction.estimateContext({ ...grown, messages: [interrupted] })).toBe(83)
     // Another provider's usage is not trusted either.
     const foreign = { ...assistant, model: { ...assistant.model, providerID: Provider.ID.make("other") } }
-    expect(SessionCompaction.estimateContext({ ...grown, messages: [foreign] })).toBe(21)
+    expect(SessionCompaction.estimateContext({ ...grown, messages: [foreign] })).toBe(83)
     expect(
       SessionCompaction.estimateContext({
         ...grown,
         messages: [{ ...interrupted, tokens: input(0, contextLimited).messages[0].tokens }],
       }),
-    ).toBe(21)
+    ).toBe(83)
 
     const media = [
       { type: "file", mime: "image/png", uri: `data:image/png;base64,${"a".repeat(100_000)}` },
@@ -525,7 +525,7 @@ it.effect("auto compaction estimates current content against the buffered prompt
         model: { ...grown.model, capabilities: { ...grown.model.capabilities, input: modalities } },
       }
       expect(SessionCompaction.estimateContext({ ...selected, messages: [...messages, user] })).toBe(tokens)
-      expect(SessionCompaction.estimateContext({ ...selected, messages: [user] })).toBe(fallback + 20)
+      expect(SessionCompaction.estimateContext({ ...selected, messages: [user] })).toBe(fallback + 82)
     }
 
     const checkpoint = Schema.decodeUnknownSync(SessionMessage.CompactionCompleted)({

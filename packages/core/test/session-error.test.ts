@@ -35,9 +35,8 @@ describe("toSessionError", () => {
     })
     expect(toSessionError(llm(new AuthenticationError({ message: "auth" }))).type).toBe("provider.auth")
     expect(toSessionError(llm(new QuotaExceededError({ message: "quota", retryAfterMs: 456 })))).toEqual({
-      type: "provider.quota",
-      message: "quota",
-      retryAfterMs: 456,
+      type: "provider.exhausted",
+      message: "Tente novamente mais tarde.",
     })
     expect(toSessionError(llm(new ContentPolicyError({ message: "blocked" }))).type).toBe("provider.content-filter")
     expect(
@@ -67,7 +66,7 @@ describe("toSessionError", () => {
     expect(toSessionError(llm(new UnknownProviderError({ message: "unknown" }))).type).toBe("provider.unknown")
   })
 
-  test("separates the free and Go usage limits from paid rate limits, credit limits, and other providers' 429s", () => {
+  test("collapses free, Go, and credit limits into one generic exhaustion error", () => {
     const fail = (url: string, body: unknown, headers?: Record<string, string>) =>
       RequestExecutor.httpFailure({
         message: "Rate limit exceeded. Please try again later.",
@@ -84,11 +83,8 @@ describe("toSessionError", () => {
     const free = fail("https://opencode.ai/inference/openai/v1/chat/completions", freeBody, { "retry-after": "3600" })
     expect(SessionRunnerRetry.isRetryable(free)).toBe(false)
     expect(toSessionError(free)).toEqual({
-      type: "provider.free-limit",
-      message: "Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.",
-      status: 429,
-      response: { body: JSON.stringify(freeBody) },
-      retryAfterMs: 3_600_000,
+      type: "provider.exhausted",
+      message: "Tente novamente mais tarde.",
     })
 
     const paid = fail(
@@ -107,12 +103,8 @@ describe("toSessionError", () => {
     const go = fail("https://opencode.ai/inference/go/openai/v1/chat/completions", goBody, { "retry-after": "120" })
     expect(SessionRunnerRetry.isRetryable(go)).toBe(false)
     expect(toSessionError(go)).toEqual({
-      type: "provider.go-limit",
-      message:
-        "OpenCode Go 5 hour usage limit reached. Switch to a free model, or turn on Extra Usage on the Go page in OpenCode Console to keep going.",
-      status: 429,
-      response: { body: JSON.stringify(goBody) },
-      retryAfterMs: 120_000,
+      type: "provider.exhausted",
+      message: "Tente novamente mais tarde.",
     })
 
     const credit = RequestExecutor.httpFailure({
@@ -124,7 +116,10 @@ describe("toSessionError", () => {
         error: { type: "CreditLimitExceeded", message: "Credit limit exceeded." },
       }),
     })
-    expect(toSessionError(credit)).toMatchObject({ type: "provider.quota" })
+    expect(toSessionError(credit)).toEqual({
+      type: "provider.exhausted",
+      message: "Tente novamente mais tarde.",
+    })
 
     const other = fail(
       "https://api.openai.com/v1/chat/completions",
@@ -135,7 +130,7 @@ describe("toSessionError", () => {
     expect(toSessionError(other)).toMatchObject({ type: "provider.rate-limit", retryAfterMs: 10_000 })
   })
 
-  test("tells a budget on the requested model from one pausing all model use", () => {
+  test("collapses model and workspace budget limits into one generic exhaustion error", () => {
     const refuse = (body: unknown) =>
       RequestExecutor.httpFailure({
         message: "A budget policy for this model has been reached.",
@@ -151,10 +146,8 @@ describe("toSessionError", () => {
     const model = refuse(modelBody)
     expect(SessionRunnerRetry.isRetryable(model)).toBe(false)
     expect(toSessionError(model)).toEqual({
-      type: "provider.model-budget-limit",
-      message: "You've reached the spend limit for this model. Switch models to keep going.",
-      status: 429,
-      response: { body: JSON.stringify(modelBody) },
+      type: "provider.exhausted",
+      message: "Tente novamente mais tarde.",
     })
 
     // Google clients get Google's envelope, with the same metadata in its ErrorInfo.
@@ -174,22 +167,21 @@ describe("toSessionError", () => {
       },
     })
     expect(SessionRunnerRetry.isRetryable(all)).toBe(false)
-    expect(toSessionError(all)).toMatchObject({
-      type: "provider.budget-limit",
-      message: "Workspace usage limit reached. Model use is paused until the limit resets.",
+    expect(toSessionError(all)).toEqual({
+      type: "provider.exhausted",
+      message: "Tente novamente mais tarde.",
     })
   })
 
-  test("types the ChatGPT usage limit whichever way the failure arrives", () => {
+  test("collapses the ChatGPT usage limit whichever way the failure arrives", () => {
     const body = JSON.stringify({ error: { code: "subscription_sharing_usage_limit_exceeded", message: "Limit" } })
     for (const reason of [
       new RateLimitError({ message: "Too many requests", body }),
       new UnknownProviderError({ message: "Request failed", body }),
     ])
       expect(toSessionError(llm(reason))).toEqual({
-        type: "provider.chatgpt-limit",
-        message: "ChatGPT usage limit reached. Check ChatGPT Settings → Usage for details.",
-        response: { body },
+        type: "provider.exhausted",
+        message: "Tente novamente mais tarde.",
       })
   })
 
@@ -261,7 +253,6 @@ describe("toSessionError", () => {
   test("maps token-sharing failures while preserving HTTP and stream bodies", () => {
     const cases = [
       ["subscription_sharing_user_not_eligible", "token sharing isn't available for this account"],
-      ["subscription_sharing_usage_limit_exceeded", "ChatGPT usage limit reached"],
       ["subscription_sharing_usage_unavailable", "Try again later"],
       ["subscription_sharing_unsupported_capability", "Remove the unsupported feature"],
       ["subscription_sharing_route_not_supported", "Check the configured endpoint"],
@@ -290,8 +281,7 @@ describe("toSessionError", () => {
     })
     expect(toSessionError(error)).toEqual({
       type: "provider.no-route",
-      message:
-        "Cannot initialize cloudflare-workers-ai/model: CLOUDFLARE_ACCOUNT_ID is required to resolve the provider endpoint",
+      message: "CLOUDFLARE_ACCOUNT_ID is required to resolve the provider endpoint",
     })
   })
 
@@ -304,7 +294,7 @@ describe("toSessionError", () => {
     })
     expect(toSessionError(configuration)).toEqual({
       type: "provider.no-route",
-      message: "Cannot initialize azure/gpt-5.4-nano: Azure requires resourceName or baseURL",
+      message: "Azure requires resourceName or baseURL",
     })
     const initialization = new ModelResolver.ModelInitializationError({
       providerID: Provider.ID.make("custom"),
@@ -315,7 +305,7 @@ describe("toSessionError", () => {
     })
     expect(toSessionError(initialization)).toEqual({
       type: "provider.no-route",
-      message: "Cannot initialize custom/model: Provider package @opencode/ai/providers/custom is broken",
+      message: "Provider package @opencode/ai/providers/custom is broken",
     })
   })
 

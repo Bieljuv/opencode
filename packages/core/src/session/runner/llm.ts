@@ -4,6 +4,7 @@ import { Message } from "@opencode/ai/effect"
 import { and, desc, eq, inArray, sql } from "drizzle-orm"
 import { Cause, Effect, Exit, FiberMap, Layer } from "effect"
 import { Database } from "../../database/database.js"
+import { Model } from "../../model.js"
 import { Bus } from "../../bus.js"
 import { LocationLifecycle } from "../../location-lifecycle.js"
 import { InstructionState } from "../instruction-state.js"
@@ -15,6 +16,7 @@ import { SessionBackground } from "../background.js"
 import { Job } from "../../job.js"
 import { SessionHistory } from "../history.js"
 import { SessionModelRequest } from "../model-request.js"
+import { SessionRouter } from "../router.js"
 import { SessionModelTransport } from "../model-transport.js"
 import { SessionMessage } from "../message.js"
 import { SessionSchema } from "../schema.js"
@@ -49,6 +51,7 @@ const layer = Layer.effect(
     const lifecycle = yield* LocationLifecycle.Service
     const store = yield* SessionStore.Service
     const context = yield* SessionContext.Service
+    const models = yield* Model.Service
     const modelTransport = yield* SessionModelTransport.Service
     const db = (yield* Database.Service).db
     const compaction = yield* SessionCompaction.Service
@@ -238,6 +241,41 @@ const layer = Layer.effect(
       let recoverOverflow = true
       let recoverContinuation = true
       let retryAttempt: number | undefined
+      // ManosTech router: the hop chain for this step, from the providers
+      // connected right now. The current model counts as tried, so a hop
+      // never returns to it.
+      const available = yield* models.available()
+      const configured = yield* models.configuredDefault()
+      const lastUser = [...first.messages]
+        .reverse()
+        .find((message): message is SessionMessage.User => message.type === "user")
+      const effort =
+        lastUser?.metadata !== undefined
+          ? SessionRouter.effortFromMetadata(lastUser.metadata)
+          : SessionRouter.effortFromVariant(first.model.ref.variant)
+      const explicit = configured !== undefined || first.agent.info.model !== undefined
+      const chain = SessionRouter.buildChain(available, {
+        complexity: SessionRouter.classifyComplexity(lastUser?.text ?? ""),
+        effort,
+      })
+      const tried = new Set<string>(
+        first.session.model === undefined ? [] : [SessionRouter.refKey(first.session.model)],
+      )
+      if (!explicit) {
+        // The chain head answers this step unless it is already the session
+        // model. The switch is published, so the loop below re-resolves the
+        // new model; the user never sees the change.
+        const head = SessionRouter.nextHop(chain, tried)
+        if (head !== undefined) {
+          yield* bus.publish(SessionEvent.ModelSelected, {
+            sessionID,
+            model: head,
+            previous: first.session.model,
+          })
+          tried.add(SessionRouter.refKey(head))
+          initial = undefined
+        }
+      }
       while (true) {
         // Reuse boundary preparation once; retries refresh context without delivering more input.
         const loaded = initial ?? (yield* prepareContext(sessionID).pipe(Effect.flatMap(context.load)))
@@ -297,13 +335,31 @@ const layer = Layer.effect(
           },
           retryAttempt,
           retry: (cause, error, proposed) =>
-            retry.decide({
-              cause,
-              error,
-              agent: loaded.agent.id,
-              model: loaded.model.ref,
-              hook: prepared.retry,
-              retry: proposed,
+            Effect.gen(function* () {
+              // ManosTech router: on exhausted credit, hop to the next
+              // connected model instead of failing the turn. The switch is
+              // published as ModelSelected, so the retry re-resolves the new
+              // model; the user never sees the hop.
+              if (SessionRouter.isExhaustionError(error)) {
+                const next = SessionRouter.nextHop(chain, tried)
+                if (next !== undefined) {
+                  tried.add(SessionRouter.refKey(next))
+                  yield* bus.publish(SessionEvent.ModelSelected, {
+                    sessionID,
+                    model: next,
+                    previous: loaded.session.model,
+                  })
+                  return { retry: true as const, attempt: (retryAttempt ?? 1) + 1, delay: 0 }
+                }
+              }
+              return yield* retry.decide({
+                cause,
+                error,
+                agent: loaded.agent.id,
+                model: loaded.model.ref,
+                hook: prepared.retry,
+                retry: proposed,
+              })
             }),
           recoverContinuation,
           recoverOverflow: Effect.suspend(() =>
@@ -454,6 +510,7 @@ export const node = makeLocationNode({
     LocationLifecycle.node,
     llmClient,
     SessionContext.node,
+    Model.node,
     SessionModelTransport.node,
     SessionStore.node,
     SessionCompaction.node,

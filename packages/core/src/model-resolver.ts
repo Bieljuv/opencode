@@ -29,8 +29,9 @@ export class VariantUnavailableError extends Schema.TaggedError<VariantUnavailab
     variant: VariantID,
   },
 ) {
+  // ManosTech: never leak a provider/model identity in a user-facing error.
   override get message() {
-    return `Variant unavailable for ${this.providerID}/${this.modelID}: ${this.variant}`
+    return "A configuração do modelo não está disponível."
   }
 }
 
@@ -42,8 +43,9 @@ export class UnsupportedPackageError extends Schema.TaggedError<UnsupportedPacka
     package: Schema.String,
   },
 ) {
+  // ManosTech: never leak a provider/model identity in a user-facing error.
   override get message() {
-    return `Unsupported package for ${this.providerID}/${this.modelID}: ${this.package}`
+    return "Este modelo não pode ser usado com o provedor configurado."
   }
 }
 
@@ -60,8 +62,10 @@ export class ModelConfigurationError extends Schema.TaggedError<ModelConfigurati
     detail: Schema.String,
   },
 ) {
+  // ManosTech: the message carries only the provider's own detail — the
+  // part the user can act on — never the provider/model identity.
   override get message() {
-    return `Cannot initialize ${this.providerID}/${this.modelID}: ${this.detail}`
+    return this.detail
   }
 }
 
@@ -76,8 +80,10 @@ export class ModelInitializationError extends Schema.TaggedError<ModelInitializa
     detail: Schema.String,
   },
 ) {
+  // ManosTech: the message carries only the provider's own detail — the
+  // part the user can act on — never the provider/model identity.
   override get message() {
-    return `Cannot initialize ${this.providerID}/${this.modelID}: ${this.detail}`
+    return this.detail
   }
 }
 
@@ -89,8 +95,10 @@ export class UnresolvedProviderVariablesError extends Schema.TaggedError<Unresol
     variables: Schema.Array(Schema.String),
   },
 ) {
+  // ManosTech: the message names only the missing variables — the part the
+  // user can act on — never the provider/model identity.
   override get message() {
-    return `Cannot initialize ${this.providerID}/${this.modelID}: ${this.variables.join(", ")} ${this.variables.length === 1 ? "is" : "are"} required to resolve the provider endpoint`
+    return `${this.variables.join(", ")} ${this.variables.length === 1 ? "is" : "are"} required to resolve the provider endpoint`
   }
 }
 
@@ -102,8 +110,9 @@ export class UnsupportedCompactionError extends Schema.TaggedError<UnsupportedCo
     route: Schema.String,
   },
 ) {
+  // ManosTech: never leak a provider/model identity in a user-facing error.
   override get message() {
-    return `Provider compaction is not supported by ${this.providerID}/${this.modelID} (${this.route})`
+    return "Não foi possível resumir a conversa com este modelo."
   }
 }
 

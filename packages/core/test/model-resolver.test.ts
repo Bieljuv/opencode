@@ -527,7 +527,7 @@ describe("ModelResolver", () => {
           variables: ["REQUIRED_HOST", "REQUIRED_PATH"],
         })
         expect(failure.message).toBe(
-          "Cannot initialize test-provider/test-model: REQUIRED_HOST, REQUIRED_PATH are required to resolve the provider endpoint",
+          "REQUIRED_HOST, REQUIRED_PATH are required to resolve the provider endpoint",
         )
       }),
     ),
@@ -640,7 +640,7 @@ describe("ModelResolver", () => {
         modelID: "test-model",
         variant: "unknown",
       })
-      expect(failure.message).toBe("Variant unavailable for test-provider/test-model: unknown")
+      expect(failure.message).toBe("A configuração do modelo não está disponível.")
     }),
   )
 
@@ -1512,7 +1512,7 @@ describe("ModelResolver", () => {
         modelID: "test-model",
         package: "aisdk:@ai-sdk/perplexity",
       })
-      expect(failure.message).toBe("Unsupported package for test-provider/test-model: aisdk:@ai-sdk/perplexity")
+      expect(failure.message).toBe("Este modelo não pode ser usado com o provedor configurado.")
     }),
   )
 
@@ -1539,7 +1539,7 @@ describe("ModelResolver", () => {
         package: "@opencode/ai/providers/azure/responses",
         detail: "Azure requires resourceName or baseURL",
       })
-      expect(failure.message).toBe("Cannot initialize azure/test-model: Azure requires resourceName or baseURL")
+      expect(failure.message).toBe("Azure requires resourceName or baseURL")
     }),
   )
 
@@ -1587,7 +1587,7 @@ describe("ModelResolver", () => {
         phase: "init",
         detail: "Perplexity plugin failed",
       })
-      expect(init.message).toBe("Cannot initialize test-provider/test-model: Perplexity plugin failed")
+      expect(init.message).toBe("Perplexity plugin failed")
     }),
   )
 
