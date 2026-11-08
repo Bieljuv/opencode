@@ -61,4 +61,8 @@ export default {
   "zoom.percent": "{{percent}}%",
   "link.copy": "Copy link",
   "history.clear": "Clear history",
+  "device.label": "Preview device",
+  "device.desktop": "Desktop",
+  "device.tablet": "Tablet",
+  "device.mobile": "Mobile",
 }

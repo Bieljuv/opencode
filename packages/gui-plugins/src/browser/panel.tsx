@@ -59,6 +59,29 @@ import {
 
 const RECENT = 5
 
+type Device = "desktop" | "tablet" | "mobile"
+
+const DEVICES = ["desktop", "tablet", "mobile"] as const
+
+const DEVICE_ICON: Record<Device, IconName> = {
+  desktop: "outline-monitor",
+  tablet: "outline-tablet",
+  mobile: "outline-smartphone",
+}
+
+const DEVICE_LABEL: Record<Device, "device.desktop" | "device.tablet" | "device.mobile"> = {
+  desktop: "device.desktop",
+  tablet: "device.tablet",
+  mobile: "device.mobile",
+}
+
+// The preview's width for the selected device; desktop fills the pane.
+const DEVICE_WIDTH_CLASS: Record<Device, string> = {
+  desktop: "",
+  tablet: "max-w-[768px]",
+  mobile: "max-w-[390px]",
+}
+
 export default function SessionBrowserPane(props: {
   tab: Accessor<PanelTab>
   session: MountedSession
@@ -87,6 +110,7 @@ export default function SessionBrowserPane(props: {
   const [addressState, setAddressState] = createSignal(initialAddressState)
   const [size, setSize] = createSignal({ width: 0, height: 0 })
   const [overlay, setOverlay] = createSignal(initialOverlayState)
+  const [device, setDevice] = createSignal<Device>("desktop")
 
   // The page's reports, counted; a submitted address in the field ends at the next one.
   const epoch = createMemo((previous: AddressEpoch | undefined) =>
@@ -645,6 +669,24 @@ export default function SessionBrowserPane(props: {
           </Popover.Portal>
         </Popover>
         <div class="flex shrink-0 items-center gap-1">
+          <div role="group" aria-label={plugin.t("device.label")} class="flex shrink-0 items-center">
+            <For each={DEVICES}>
+              {(option) => (
+                <Tooltip placement="top" value={plugin.t(DEVICE_LABEL[option])}>
+                  <IconButton
+                    variant="ghost-muted"
+                    size="large"
+                    state={device() === option ? "pressed" : undefined}
+                    disabled={!state()}
+                    aria-pressed={device() === option}
+                    aria-label={plugin.t(DEVICE_LABEL[option])}
+                    onClick={() => setDevice(option)}
+                    icon={<Icon name={DEVICE_ICON[option]} />}
+                  />
+                </Tooltip>
+              )}
+            </For>
+          </div>
           <Tooltip placement="top" value={tip(plugin.t("inspect"), keybinds.keybind("browser.inspect"))}>
             {/* The ghost variant sets the button color, so the active accent needs precedence over it. */}
             <IconButton
@@ -726,7 +768,7 @@ export default function SessionBrowserPane(props: {
         // A navigation, in-page or not, or a reload starting is another page.
         page={JSON.stringify([state()?.id, state()?.generation, state()?.url, !!state()?.loading])}
         radius={10}
-        class="relative min-h-0 flex-1 bg-v2-background-bg-base flex items-center justify-center"
+        class={`relative min-h-0 flex-1 w-full ${DEVICE_WIDTH_CLASS[device()]} ${DEVICE_WIDTH_CLASS[device()] ? "mx-auto" : ""} bg-v2-background-bg-base flex items-center justify-center`}
       >
         <div ref={box} aria-hidden="true" class="pointer-events-none absolute inset-0" />
         <Show when={empty() && !failed() && !suspended()}>

@@ -10,4 +10,8 @@ export default {
   "failed.title": "Não foi possível acessar a URL",
   "failed.description": "Verifique a URL e sua conexão e tente novamente.",
   "action.reload": "Recarregar",
+  "device.label": "Dispositivo do preview",
+  "device.desktop": "Computador",
+  "device.tablet": "Tablet",
+  "device.mobile": "Celular",
 }
