@@ -118,6 +118,18 @@ const icons = {
     viewBox: "0 0 16 16",
     body: `<path d="M4.05559 9.38889H0.500007C0.500007 9.38889 0.500017 8.59298 0.500017 7.61112V2.27778C0.500017 1.29594 0.500102 0.5 0.500102 0.5H13.3889C13.3889 0.5 13.3889 1.29594 13.3889 2.27778V7.61112C13.3889 8.59298 13.3889 9.38889 13.3889 9.38889H9.83336M4.05559 9.38889V11.6111H6.94448H9.83336V9.38889M4.05559 9.38889H9.83336" transform="translate(1.05556 1.94444)" stroke="currentColor"/>`,
   },
+  "outline-monitor": {
+    viewBox: "0 0 16 16",
+    body: `<rect x="1.5" y="2.5" width="13" height="9" rx="1" stroke="currentColor"/><path d="M6 14.5h4M8 11.5v3" stroke="currentColor" stroke-linecap="square"/>`,
+  },
+  "outline-tablet": {
+    viewBox: "0 0 16 16",
+    body: `<rect x="2.5" y="1.5" width="11" height="13" rx="1.5" stroke="currentColor"/><path d="M8 12.5h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>`,
+  },
+  "outline-smartphone": {
+    viewBox: "0 0 16 16",
+    body: `<rect x="4.5" y="1.5" width="7" height="13" rx="1.5" stroke="currentColor"/><path d="M7 12.5h2" stroke="currentColor" stroke-linecap="round"/>`,
+  },
   "workspace-new": {
     viewBox: "0 0 16 16",
     body: `<path d="M2 10.7578V14.0011H5.24324M13.9991 5.24324V2H10.7559M13.9991 10.7578V14.0011H10.7559M2 5.24324V2H5.24324" stroke="currentColor" stroke-miterlimit="10" stroke-linecap="square"/><path d="M8 4.5V11.5M4.5 8H11.5" stroke="currentColor" stroke-linejoin="round"/>`,
