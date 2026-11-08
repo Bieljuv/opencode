@@ -20,7 +20,6 @@ import { useWorkspaceLocation } from "@/workspaces/location"
 import { useServerSDK } from "@/runtime/server/client"
 import { useData } from "@/runtime/server/current"
 import { pluginLabels } from "@/providers/catalog/plugin"
-import { ExternalLink } from "@/runtime/platform/external-link"
 import { ProjectFolderMissing } from "./project-folder-missing"
 import { configuredLanguageServers } from "./project-lsp"
 import { SettingsList } from "@/settings/list"
@@ -396,11 +395,7 @@ export const ProjectSettingsExtensions: Component<{
               <ProjectSectionHeader
                 kind="skills"
                 empty={projectSkills().length === 0}
-                action={
-                  <ExternalLink class="settings-extension-link" href="https://opencode.ai/docs/skills">
-                    {language.t("settings.extensions.addSkills")}
-                  </ExternalLink>
-                }
+                action={<></>}
               />
               <Show when={projectSkills().length > 0}>
                 <ExtensionCard>{skillRows(projectSkills())}</ExtensionCard>
