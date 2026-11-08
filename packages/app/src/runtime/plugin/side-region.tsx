@@ -7,7 +7,7 @@ import { Tabs } from "@opencode/ui/tabs"
 import { IconButton } from "@opencode/ui/icon-button"
 import { Icon } from "@opencode/ui/icon"
 import { ResizeHandle } from "@opencode/ui/resize-handle"
-import { Mark } from "@opencode/ui/logo"
+import manostechMark from "@/assets/manostech-mark.png"
 import { Keybind } from "@opencode/ui/keybind"
 import { Tooltip } from "@opencode/ui/tooltip"
 import { Menu } from "@opencode/ui/menu"
@@ -432,7 +432,7 @@ export function PaneTabs(props: {
           <Show when={!primary()}>
             <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
               <div class="h-full px-6 pb-42 -mt-4 flex flex-col items-center justify-center text-center gap-6">
-                <Mark class="w-14 opacity-10" />
+                <img src={manostechMark} alt="" class="w-14 opacity-10" />
                 <div class="text-14-regular text-text-weak max-w-56">{language.t("session.files.selectToOpen")}</div>
               </div>
             </div>
