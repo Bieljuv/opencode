@@ -16,7 +16,10 @@
     "noEmit": true,
     "emitDeclarationOnly": false,
     "outDir": "node_modules/.ts-dist",
-    "types": ["vite/client", "node", "electron"]
+    "types": ["vite/client", "node", "electron"],
+    // The renderer build shares the app vite plugin, whose "@" alias points at
+    // packages/app/src, so the renderer resolves the same alias for assets.
+    "paths": { "@/*": ["../app/src/*"] }
   },
   "references": [{ "path": "../app" }],
   "include": ["src", "perf", "package.json"],

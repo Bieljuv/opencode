@@ -277,8 +277,6 @@ export const dict = {
   "error.page.action.checkUpdates": "དུས་མཐུན་ཚུ་ཞིབ་དཔྱད་འབད།",
   "error.page.action.updateTo": "{{version}} ལུ་དུས་མཐུན་བཟོ།",
   "error.page.circular": "[སྒོར་ཐིག་] .",
-  "error.page.report.prefix": "འཛོལ་བ་འདི་OpenCodeསྡེ་ཚན་ལུ་སྙན་ཞུ་འབད་གནང་།",
-  "error.page.report.discord": "on Discordལུ།",
   "error.page.version": "ཐོན་རིམ: {{version}}",
   "error.dev.rootNotFound":
     "རྩ་བའི་ཆ་ཤས་འཚོལ་མ་ཐོབ། ཁྱོད་ཀྱི་ index.html ལུ་ཁ་སྐོང་འབད་ནི་བརྗེད་སོང་ག? ཡང་ན་ id ཁྱད་ཆོས་འདི་ཡིག་སྡེབ་འཛོལ་བ་འོང་ག?",

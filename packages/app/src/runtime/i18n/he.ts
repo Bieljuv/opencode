@@ -275,8 +275,6 @@ export const dict = {
   "error.page.action.checkUpdates": "בדוק אם יש עדכונים",
   "error.page.action.updateTo": "עדכון ל-{{version}}",
   "error.page.circular": "[מעגלי]",
-  "error.page.report.prefix": "אנא דווח על שגיאה זו לצוות OpenCode",
-  "error.page.report.discord": "ב-Discord",
   "error.page.version": "גרסה: {{version}}",
   "error.dev.rootNotFound":
     "רכיב השורש לא נמצא. שכחת להוסיף אותו ל-index.html שלך? או שאולי התכונה id נכתבה בצורה שגויה?",

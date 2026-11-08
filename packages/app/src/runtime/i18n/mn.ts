@@ -266,8 +266,6 @@ export const dict = {
   "error.page.action.checkUpdates": "Шинэчлэлт байгаа эсэхийг шалгана уу",
   "error.page.action.updateTo": "{{version}} руу шинэчлэх",
   "error.page.circular": "[Тойрог]",
-  "error.page.report.prefix": "Энэ алдааг OpenCode багт мэдэгдэнэ үү",
-  "error.page.report.discord": "Discord дээр",
   "error.page.version": "Хувилбар: {{version}}",
   "error.dev.rootNotFound":
     "Үндэс элемент олдсонгүй. Та үүнийг index.html дээрээ нэмэхээ мартсан уу? Эсвэл id атрибутыг буруу бичсэн байж магадгүй юм уу?",

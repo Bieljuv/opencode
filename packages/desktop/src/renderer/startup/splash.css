@@ -1,25 +1,23 @@
-[data-component="first-launch-splash"] path {
-  /* Outline paths use a normalized length so the drawing scales with the wordmark. */
-  stroke-dasharray: 1;
-  animation: first-launch-wordmark-draw 1000ms ease-out both;
+[data-component="first-launch-splash"] img {
+  /* The logo fades in; the startup machine waits for the fade before revealing. */
+  animation: first-launch-logo-fade 1000ms ease-out both;
 }
 
-[data-component="first-launch-splash"][data-drawing="pending"] path {
+[data-component="first-launch-splash"][data-drawing="pending"] img {
   animation-play-state: paused;
 }
 
-@keyframes first-launch-wordmark-draw {
+@keyframes first-launch-logo-fade {
   from {
-    stroke-dashoffset: 1;
+    opacity: 0;
   }
   to {
-    stroke-dashoffset: 0;
+    opacity: 1;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-component="first-launch-splash"] path {
+  [data-component="first-launch-splash"] img {
     animation: none;
-    stroke-dasharray: none;
   }
 }

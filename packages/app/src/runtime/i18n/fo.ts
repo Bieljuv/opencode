@@ -265,8 +265,6 @@ export const dict = {
   "error.page.action.checkUpdates": "Kanna fyri dagføringum",
   "error.page.action.updateTo": "Dagfør til {{version}}",
   "error.page.circular": "[Rundskriv]",
-  "error.page.report.prefix": "Vinarliga melda hendan feilin til OpenCode toymið",
-  "error.page.report.discord": "á Discord",
   "error.page.version": "Útgáva: {{version}}",
   "error.dev.rootNotFound":
     "Rótarevni ikki funnið. Gloymdi tú at leggja tað til títt index.html? Ella kanska fekk id eginleikin skeivt stavað?",

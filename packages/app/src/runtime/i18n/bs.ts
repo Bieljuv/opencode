@@ -297,8 +297,6 @@ export const dict = {
   "error.page.action.checking": "Provjera…",
   "error.page.action.checkUpdates": "Provjeri ažuriranja",
   "error.page.action.updateTo": "Ažuriraj na {{version}}",
-  "error.page.report.prefix": "Molimo prijavi ovu grešku OpenCode timu",
-  "error.page.report.discord": "na Discordu",
   "error.page.version": "Verzija: {{version}}",
 
   "error.dev.rootNotFound":

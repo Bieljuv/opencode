@@ -283,8 +283,6 @@ export const dict = {
   "error.page.action.checkUpdates": "Kiểm tra các bản cập nhật",
   "error.page.action.updateTo": "Cập nhật lên {{version}}",
   "error.page.circular": "[Vòng lặp]",
-  "error.page.report.prefix": "Vui lòng báo cáo lỗi này cho nhóm OpenCode",
-  "error.page.report.discord": "trên Discord",
   "error.page.version": "Phiên bản: {{version}}",
   "error.dev.rootNotFound":
     "Không tìm thấy phần tử gốc. Bạn đã quên thêm nó vào index.html của mình? Hoặc có thể thuộc tính id bị sai chính tả?",

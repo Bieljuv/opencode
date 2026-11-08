@@ -280,8 +280,6 @@ export const dict = {
   "error.page.action.checkUpdates": "Leitaðu að uppfærslum",
   "error.page.action.updateTo": "Uppfærsla í {{version}}",
   "error.page.circular": "[Hringbréf]",
-  "error.page.report.prefix": "Vinsamlegast tilkynnið þessa villu til OpenCode teymisins",
-  "error.page.report.discord": "á Discord",
   "error.page.version": "Útgáfa: {{version}}",
   "error.dev.rootNotFound":
     "Rótarþáttur fannst ekki. Gleymdirðu að bæta því við index.html þinn? Eða er id eigindin kannski rangt stafsett?",

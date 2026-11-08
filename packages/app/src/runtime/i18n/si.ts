@@ -269,8 +269,6 @@ export const dict = {
   "error.page.action.checkUpdates": "යාවත්කාලීන සඳහා පරීක්ෂා කරන්න",
   "error.page.action.updateTo": "{{version}} වෙත යාවත්කාලීන කරන්න",
   "error.page.circular": "[චක්‍රලේඛය]",
-  "error.page.report.prefix": "කරුණාකර මෙම දෝෂය OpenCode කණ්ඩායමට වාර්තා කරන්න",
-  "error.page.report.discord": "Discord මත",
   "error.page.version": "අනුවාදය: {{version}}",
   "error.dev.rootNotFound":
     "මූල මූලද්රව්යය හමු නොවීය. ඔබට එය ඔබගේ index.html වෙත එක් කිරීමට අමතකද? එසේත් නැතිනම් හැඳුනුම්පත වැරදි ලෙස සටහන් වී තිබේද?",
