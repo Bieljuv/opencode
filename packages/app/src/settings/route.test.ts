@@ -11,7 +11,7 @@ describe("settings route", () => {
 
   test("round trips root pages, the selected server, and project pages", () => {
     const root: SettingsView = { type: "root", tab: "appearance" }
-    const models: SettingsView = { type: "root", tab: "models", server: "wsl:Debian" }
+    const providers: SettingsView = { type: "root", tab: "providers", server: "wsl:Debian" }
     // Preferences with a selected server names its tab, which a link to the old server page lacks.
     const preferences: SettingsView = { type: "root", tab: "general", server: "wsl:Debian" }
 
@@ -24,7 +24,7 @@ describe("settings route", () => {
     }
 
     expect(parse(root)).toEqual({ ...root, server: undefined, subtab: undefined })
-    expect(parse(models)).toEqual({ ...models, subtab: undefined })
+    expect(parse(providers)).toEqual({ ...providers, subtab: undefined })
     expect(settingsViewUrl(preferences)).toBe("/settings?server=wsl%3ADebian&tab=general")
     expect(parse(preferences)).toEqual({ ...preferences, subtab: undefined })
     expect(parse(project)).toEqual(project)
@@ -67,7 +67,7 @@ describe("settings route", () => {
   })
 
   test("keeps a restored server selection until the server lists load, then drops a removed one", () => {
-    const view: SettingsView = { type: "root", tab: "models", server: "wsl:Debian" }
+    const view: SettingsView = { type: "root", tab: "providers", server: "wsl:Debian" }
     const local = { key: "local", availability: "ready" as const }
     const wsl = { key: "wsl:Debian", availability: "starting" as const }
 
@@ -75,7 +75,7 @@ describe("settings route", () => {
     expect(settingsViewRedirect({ view, loaded: true, servers: [local, wsl] })).toBeUndefined()
     expect(settingsViewRedirect({ view, loaded: true, servers: [local] })).toEqual({
       type: "root",
-      tab: "models",
+      tab: "providers",
       server: undefined,
     })
   })

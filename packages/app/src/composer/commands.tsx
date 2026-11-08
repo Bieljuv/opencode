@@ -1,6 +1,5 @@
 import { useCommand, type CommandOption } from "@/shell/commands/command"
 import { useLanguage } from "@/runtime/i18n/language"
-import { DialogSelectModel } from "@/providers/models/select-dialog"
 import { useLocal, type ModelSelection } from "@/providers/models/selection"
 import { useDialog } from "@opencode/ui/context/dialog"
 import { useSessionLayout } from "@/session/session-layout"
@@ -29,7 +28,6 @@ export const useComposerCommands = (input: { model?: ModelSelection } = {}) => {
   const data = useData()
   const sdk = useServerSDK()
   const model = input.model ?? local.model
-  const modelCommand = withCategory(language.t("command.category.model"))
   const agentCommand = withCategory(language.t("command.category.agent"))
   const providerCommand = withCategory(language.t("command.category.provider"))
   const viewCommand = withCategory(language.t("command.category.view"))
@@ -83,10 +81,6 @@ export const useComposerCommands = (input: { model?: ModelSelection } = {}) => {
     })
   }
 
-  const chooseModel = () => {
-    void dialog.show(() => <DialogSelectModel model={model} />)
-  }
-
   const viewUsage = async () => {
     const { DialogUsage } = await import("@/usage/dialog")
     const current = model.current()
@@ -101,27 +95,11 @@ export const useComposerCommands = (input: { model?: ModelSelection } = {}) => {
         location={workspace().ref}
         model={current && { providerID: current.provider.id, modelID: current.id, name: current.name }}
         credits={last?.type === "assistant" && last.error?.status === 402}
-        onSwitchModel={chooseModel}
       />
     ))
   }
 
   command.register("composer", () => [
-    modelCommand({
-      id: "model.choose",
-      title: language.t("command.model.choose"),
-      description: language.t("command.model.choose.description"),
-      keybind: "mod+'",
-      slash: "model",
-      onSelect: chooseModel,
-    }),
-    modelCommand({
-      id: "model.variant.cycle",
-      title: language.t("command.model.variant.cycle"),
-      description: language.t("command.model.variant.cycle.description"),
-      keybind: "shift+mod+d",
-      onSelect: () => model.variant.cycle(),
-    }),
     viewCommand({
       id: "usage.view",
       title: language.t("command.usage.view"),

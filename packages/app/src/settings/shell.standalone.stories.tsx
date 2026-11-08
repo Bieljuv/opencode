@@ -41,7 +41,3 @@ export const Preferences = {
 export const Providers = {
   render: () => <SettingsStory tab="providers" />,
 }
-
-export const Models = {
-  render: () => <SettingsStory tab="models" />,
-}

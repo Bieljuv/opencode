@@ -15,7 +15,6 @@ import { experimentalSettingsAvailable, SettingsExperimental } from "./experimen
 import { SettingsKeybinds } from "./keybinds/keybinds"
 import { SettingsNotifications } from "./notifications/notifications"
 import { SettingsProviders } from "./providers/providers"
-import { SettingsModels } from "./models/models"
 import { SettingsServerGeneral, SettingsServerList } from "./servers/servers"
 import { SettingsServerSwitcher } from "./servers/switcher"
 import { SettingsServerUnavailable } from "./servers/unavailable"
@@ -45,7 +44,6 @@ const rootClientTabs = [
 
 const serverTabs = [
   { value: "providers", icon: pageIcons.providers, label: "settings.providers.title" },
-  { value: "models", icon: pageIcons.models, label: "settings.models.title" },
   { value: "extensions", icon: pageIcons.extensions, label: "settings.tab.extensions" },
   { value: "projects", icon: pageIcons.projects, label: "settings.tab.projects" },
   { value: "workspaces", icon: pageIcons.workspaces, label: "settings.tab.workspaces" },
@@ -54,7 +52,6 @@ const serverTabs = [
 // The heading of each per-server page, which its unreachable state keeps.
 const serverPages = {
   providers: { title: "settings.providers.title", description: "settings.providers.description" },
-  models: { title: "settings.models.title", description: "settings.models.description" },
   extensions: { title: "settings.tab.extensions", description: "settings.extensions.description" },
   projects: { title: "settings.projects.title", description: "settings.projects.description" },
   workspaces: { title: "settings.tab.workspaces", description: "settings.workspaces.description" },
@@ -170,9 +167,8 @@ function RootSettings() {
   const surface = useSettingsSurface()
   const inventory = useSettingsServers()
 
-  const [state, setState] = createStore<{ worktreeFilterReset: number; modelProvider: string | undefined }>({
+  const [state, setState] = createStore<{ worktreeFilterReset: number }>({
     worktreeFilterReset: 0,
-    modelProvider: undefined,
   })
 
   const multiple = createMemo(() => inventory().length > 1)
@@ -296,18 +292,6 @@ function RootSettings() {
               <SettingsProviders
                 directory={undefined}
                 headerAction={<SettingsServerSwitcher />}
-                onSelectProvider={(providerID) => {
-                  setState("modelProvider", providerID)
-                  surface.select("models")
-                }}
-              />
-            </Tabs.Content>
-            <Tabs.Content value="models" class="settings-panel">
-              <SettingsModels
-                active={surface.view().tab === "models"}
-                provider={state.modelProvider}
-                headerAction={<SettingsServerSwitcher />}
-                onConsumeTarget={() => setState("modelProvider", undefined)}
               />
             </Tabs.Content>
             <Tabs.Content value="extensions" class="settings-panel">
