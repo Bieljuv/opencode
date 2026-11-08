@@ -4,8 +4,6 @@ import { useI18n } from "@opencode/ui/context/i18n"
 import { Card } from "@opencode/ui/card"
 import { Icon } from "@opencode/ui/icon"
 import { TextShimmer } from "@opencode/ui/text-shimmer"
-import { Tooltip } from "@opencode/ui/tooltip"
-import { SessionErrorMessage } from "./session-error"
 
 export function SessionRetry(props: { status: SessionStatus; show?: boolean }) {
   const i18n = useI18n()
@@ -34,20 +32,6 @@ export function SessionRetry(props: { status: SessionStatus; show?: boolean }) {
     }),
   )
 
-  const message = createMemo(() => {
-    const current = retry()
-
-    if (!current) return ""
-
-    if (current.message.includes("exceeded your current quota") && current.message.includes("gemini")) {
-      return i18n.t("ui.sessionTurn.retry.geminiHot")
-    }
-
-    if (current.message.length > 80) return current.message.slice(0, 80) + "…"
-
-    return current.message
-  })
-
   const info = createMemo(() => {
     const current = retry()
 
@@ -66,16 +50,7 @@ export function SessionRetry(props: { status: SessionStatus; show?: boolean }) {
           <div class="flex w-full items-start gap-2">
             <Icon name="outline-hexagonal-warning" class="shrink-0 text-v2-state-fg-danger" />
             <div class="min-w-0 flex-1">
-              <Tooltip
-                appearance="large"
-                contentClass="max-w-80 break-words"
-                value={retry()?.message ?? ""}
-                placement="top"
-              >
-                <div data-slot="session-turn-retry-message" class="cursor-help truncate">
-                  <SessionErrorMessage message={message()} />
-                </div>
-              </Tooltip>
+              {/* The provider's error message never shows here: it can name the model or its limits. */}
               <Show when={info()}>
                 {(line) => (
                   <div data-slot="session-turn-retry-info">

@@ -281,6 +281,7 @@ function ComposerStory(props: {
   const model = {
     ...editor,
     model: { selection: modelSelection, paid: true, loading: false },
+    effort: { current: () => "automatico" as const, set: () => undefined, ready: () => true },
   } satisfies ComposerModel
 
   const suggest = (kind: typeof props.suggestions) => {

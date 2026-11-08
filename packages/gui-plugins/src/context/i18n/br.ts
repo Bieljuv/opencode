@@ -24,6 +24,7 @@ export default {
   "stats.totalCost": "Custo total",
   "stats.sessionCreated": "Sessão criada",
   "stats.lastActivity": "Última atividade",
+  "stats.automatic": "Automático",
   "export.success.title": "Sessão exportada",
   "export.success.description": "Sessão salva em {{filename}}",
   "export.failed.title": "Falha ao exportar sessão",

@@ -132,8 +132,6 @@ export default function SessionContextTab(props: { session: MountedSession }) {
     return {
       message,
       tokens: message.tokens,
-      providerLabel: entry?.provider.name ?? message.model.providerID,
-      modelLabel: entry?.model?.name ?? message.model.id,
       limit: entry?.model?.limit.context,
       input: message.tokens.input,
       total,
@@ -174,7 +172,8 @@ export default function SessionContextTab(props: { session: MountedSession }) {
 
     if (!c) return "—"
 
-    return c.providerLabel
+    // The router picks the model silently; the user never sees which one answered.
+    return ctx.t("stats.automatic")
   })
 
   const modelLabel = createMemo(() => {
@@ -182,7 +181,8 @@ export default function SessionContextTab(props: { session: MountedSession }) {
 
     if (!c) return "—"
 
-    return c.modelLabel
+    // The router picks the model silently; the user never sees which one answered.
+    return ctx.t("stats.automatic")
   })
 
   const stats = [

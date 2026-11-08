@@ -94,15 +94,12 @@ import { createCopyFeedback, writeClipboard } from "../components/copy"
 type MetaItem = { label: string; variant?: boolean }
 
 // The variant follows the model name without a separator, so the model leads.
-function modelItems(data: ReturnType<typeof useData>, model: SessionMessageAssistant["model"]): MetaItem[] {
-  const name = data.store.provider?.all?.get(model.providerID)?.models?.[model.id]?.name ?? model.id
-
+// The router picks the model silently, so the meta line never names it: every message shows "Automatic".
+function modelItems(automatic: string, model: SessionMessageAssistant["model"]): MetaItem[] {
   // A prompt held for its Location's catalog names no model yet.
-  if (!name) return []
+  if (!model.id) return []
 
-  if (!model.variant || model.variant === "default") return [{ label: name }]
-
-  return [{ label: name }, { label: model.variant[0]?.toUpperCase() + model.variant.slice(1), variant: true }]
+  return [{ label: automatic }]
 }
 
 function MetaItems(props: { items: MetaItem[]; slot: "user-message" | "text-part" }) {
@@ -336,7 +333,7 @@ export function CurrentUserMessageDisplay(props: {
   })
 
   // A waiting steer reads agent · model · Pending; mobile shows the agent and model in the composer instead.
-  const metaLabels = createMemo(() => (mobile() ? [] : [...agentItems(), ...modelItems(data, props.model)]))
+  const metaLabels = createMemo(() => (mobile() ? [] : [...agentItems(), ...modelItems(i18n.t("ui.common.automatic"), props.model)]))
 
   // In a run, only the last message keeps the meta line; every bubble offers its actions from its own chevron.
   // Bubble corners tighten where two bubbles meet, as in the iOS app's grouped corners.
@@ -1139,7 +1136,7 @@ export function AssistantTextContent(props: {
   const labels = createMemo<MetaItem[]>(() => {
     const agent = agentLabel(props.message.agent, data.agents)
 
-    return [...(agent ? [{ label: agent }] : []), ...modelItems(data, props.message.model)]
+    return [...(agent ? [{ label: agent }] : []), ...modelItems(i18n.t("ui.common.automatic"), props.message.model)]
   })
 
   const duration = createMemo(() => {

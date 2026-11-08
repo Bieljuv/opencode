@@ -731,27 +731,6 @@ export function createSessionTimelineRowRenderer(input: {
       return value?.type === "location-switched" ? value : undefined
     })
 
-    const model = createMemo(() => {
-      const value = message()
-
-      if (value?.type !== "model-switched") return undefined
-      const match = data.store.provider?.all?.get(value.model.providerID)
-      const variantOnly = value.previous?.providerID === value.model.providerID && value.previous.id === value.model.id
-      const variant = value.model.variant ?? "default"
-
-      return {
-        providerID: value.model.providerID,
-        variant: variantOnly ? undefined : value.model.variant,
-        label: variantOnly
-          ? variant === "default"
-            ? i18n.t("ui.sessionTimeline.notice.variantDefault")
-            : i18n.t("ui.sessionTimeline.notice.variantSwitched", { variant })
-          : i18n.t("ui.sessionTimeline.notice.modelSwitched", {
-              model: match?.models?.[value.model.id]?.name ?? value.model.id,
-            }),
-      }
-    })
-
     const content = createMemo(() => {
       const value = message()
 
@@ -824,15 +803,14 @@ export function createSessionTimelineRowRenderer(input: {
         <Show
           when={moved()}
           fallback={
-            <Show
-              when={model()}
-              fallback={
-                <Show when={content()}>
-                  {(content) => (
-                    <Show
-                      when={content().items?.length}
-                      fallback={
-                        <Dynamic
+            // A model switch is silent by design, so it renders nothing: notice() already returns undefined for
+            // "model-switched", and there is no model branch here on purpose.
+            <Show when={content()}>
+              {(content) => (
+                <Show
+                  when={content().items?.length}
+                  fallback={
+                    <Dynamic
                           component={href() ? "a" : "div"}
                           data-slot="session-timeline-notice"
                           data-outcome={content().outcome}
@@ -894,14 +872,6 @@ export function createSessionTimelineRowRenderer(input: {
                     </Show>
                   )}
                 </Show>
-              }
-            >
-              {(model) => (
-                <div data-slot="session-timeline-notice" data-type="model-switched" class={`w-full py-2 ${inset()}`}>
-                  <TimelineSeparator label={model().label} providerID={model().providerID} variant={model().variant} />
-                </div>
-              )}
-            </Show>
           }
         >
           {(message) => (
