@@ -3,7 +3,6 @@ import { Option } from "effect"
 import {
   allBetaNotes,
   betaBuild,
-  betaHistory,
   decodeEmbeddedNotes,
   sliceBetaNotes,
   visualSource,
@@ -122,7 +121,7 @@ test("sources a visual with the page's colour, and its still copy for reduced mo
   expect(source(true)).toBe('<svg viewBox="0 0 240 72"><style>svg{color:rgb(1, 2, 3)}</style><rect/></svg>')
 })
 
-test("lists every change the build carries for the What's new page, and links its history", () => {
+test("lists every change the build carries for the What's new page", () => {
   const value = embedded({ notes: (n) => (["feat", "fix", "chore"] as const)[n % 3]! })
   const notes = allBetaNotes(value)
 
@@ -131,5 +130,4 @@ test("lists every change the build carries for the What's new page, and links it
   )
   expect(notes.fixed).toHaveLength(10)
   expect([notes.total, notes.more]).toEqual([20, false])
-  expect(betaHistory(value)).toBe(`https://github.com/anomalyco/opencode/commits/${sha(30)}`)
 })

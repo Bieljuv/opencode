@@ -100,9 +100,6 @@ export function allBetaNotes(embedded: EmbeddedNotes): BetaNotes {
   }
 }
 
-/** The build's commit history on GitHub. */
-export const betaHistory = (embedded: EmbeddedNotes) => `${REPOSITORY}/commits/${embedded.sha}`
-
 /** The beta run number of a version such as `0.0.0-beta-21180`, or the version itself. */
 export function betaBuild(version: string) {
   return version.match(/^v?0\.0\.0-(?:beta|next)-(\d+(?:\.\d+)?)$/)?.[1] ?? version

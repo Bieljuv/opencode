@@ -1,25 +1,19 @@
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import { createMediaQuery } from "@solid-primitives/media"
 import { Option } from "effect"
-import { Button } from "@opencode/ui/button"
 import { usePlugin } from "@opencode/plugin/gui"
 import { Meta, Visual } from "./beta-dialog"
-import { allBetaNotes, betaHistory, decodeEmbeddedNotes, type BetaNote, type EmbeddedNotes } from "./beta-notes"
+import { allBetaNotes, decodeEmbeddedNotes, type BetaNote, type EmbeddedNotes } from "./beta-notes"
 import type definition from "./index"
 
 /** Settings > What's new in beta: every change this build carries, in the host's settings list markup. */
 export default function BetaNotesPage() {
-  const ctx = usePlugin<typeof definition>()
-
   return (
-    <BetaNotesView
-      embedded={Option.getOrUndefined(decodeEmbeddedNotes(import.meta.env.OPENCODE_BETA_NOTES))}
-      open={(href) => ctx.system.openExternal(href)}
-    />
+    <BetaNotesView embedded={Option.getOrUndefined(decodeEmbeddedNotes(import.meta.env.OPENCODE_BETA_NOTES))} />
   )
 }
 
-export function BetaNotesView(props: { embedded: EmbeddedNotes | undefined; open: (href: string) => void }) {
+export function BetaNotesView(props: { embedded: EmbeddedNotes | undefined }) {
   const ctx = usePlugin<typeof definition>()
   // Below 640px a row's control slot wraps under its title, so narrow windows leave the visuals to the dialog.
   const wide = createMediaQuery("(min-width: 640px)")
@@ -38,21 +32,11 @@ export function BetaNotesView(props: { embedded: EmbeddedNotes | undefined; open
                   <h2 class="settings-tab-title">{ctx.t("beta.title")}</h2>
                   <span class="text-11-regular text-v2-text-text-muted">{ctx.t("beta.page.description")}</span>
                 </div>
-                <div class="settings-tab-header-actions">
-                  <Button
-                    type="button"
-                    variant="ghost-muted"
-                    class="whitespace-nowrap"
-                    onClick={() => props.open(betaHistory(embedded()))}
-                  >
-                    {ctx.t("beta.github")}
-                  </Button>
-                </div>
               </div>
             </div>
             <div class="settings-tab-body settings-tab-body--sectioned">
-              <Notes title={ctx.t("beta.added")} notes={notes.added} open={props.open} wide={wide()} watch={watch} />
-              <Notes title={ctx.t("beta.fixed")} notes={notes.fixed} open={props.open} wide={wide()} watch={watch} />
+              <Notes title={ctx.t("beta.added")} notes={notes.added} wide={wide()} watch={watch} />
+              <Notes title={ctx.t("beta.fixed")} notes={notes.fixed} wide={wide()} watch={watch} />
             </div>
           </>
         )
@@ -66,7 +50,6 @@ type Watch = (element: Element, inView: (value: boolean) => void) => () => void
 function Notes(props: {
   title: string
   notes: readonly BetaNote[]
-  open: (href: string) => void
   wide: boolean
   watch: Watch
 }) {
@@ -84,7 +67,7 @@ function Notes(props: {
                   </div>
                   <Show when={note.author || note.pr}>
                     <div data-slot="settings-row-description">
-                      <Meta note={note} open={props.open} class="" />
+                      <Meta note={note} class="" />
                     </div>
                   </Show>
                 </div>
