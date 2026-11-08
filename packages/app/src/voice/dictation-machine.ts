@@ -6,7 +6,7 @@ export const DICTATION_JOIN_TIMEOUT = 35_000
 /** Bounds the `session.close` -> `session.closed` handshake before the peer is closed anyway. */
 export const DICTATION_CLOSE_TIMEOUT = 1_000
 
-export type DictationJoinFailure = "unavailable" | "microphone" | "connection"
+export type DictationJoinFailure = "unavailable" | "microphone" | "connection" | "offline"
 
 type ConnectStep =
   /** Checking `voice.models` and setting the local offer. */

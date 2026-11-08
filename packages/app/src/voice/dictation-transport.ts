@@ -17,6 +17,12 @@ export class DictationFailure extends Error {
   }
 }
 
+/** What the composer button drives: either dictation engine joins, records and closes the same way. */
+export interface DictationEngine {
+  join(): Promise<void>
+  close(): Promise<void>
+}
+
 /** The Realtime model that transcribes; the session never speaks or acts. */
 export const DICTATION_MODEL = "gpt-realtime-2.1"
 
@@ -32,7 +38,7 @@ const DICTATION_SESSION = {
 }
 
 /** One dictation of a WebRTC transcription session; `dictation-machine.ts` owns its lifecycle. */
-export class DictationTransport {
+export class DictationTransport implements DictationEngine {
   private readonly abort = new AbortController()
   private peer = new RTCPeerConnection({ iceServers: [], bundlePolicy: "max-bundle", rtcpMuxPolicy: "require" })
   private channel = this.peer.createDataChannel("oai-events", { negotiated: true, id: 4, ordered: true })

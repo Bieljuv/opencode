@@ -8,7 +8,8 @@ import type { ComposerEditorModel } from "@/composer/editor/interaction"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useServer } from "@/runtime/server/current"
 import { showToast } from "@/shell/notifications/toast"
-import { DictationFailure, DictationTransport } from "./dictation-transport"
+import { DictationFailure, DictationTransport, type DictationEngine } from "./dictation-transport"
+import { BrowserDictationTransport } from "./browser-dictation-transport"
 import type { DictationJoinFailure } from "./dictation-machine"
 import type { VoiceEvent } from "./protocol"
 
@@ -18,6 +19,7 @@ const failureTitle = {
   unavailable: "composer.dictation.failure.unavailable",
   microphone: "composer.dictation.failure.microphone",
   connection: "composer.dictation.failure.connection",
+  offline: "composer.dictation.failure.offline",
   dropped: "composer.dictation.failure.dropped",
 } as const
 
@@ -30,7 +32,7 @@ export function DictationButton(props: { controller: ComposerEditorModel }) {
   const server = useServer()
   const [status, setStatus] = createSignal<DictationStatus>("idle")
 
-  let transport: DictationTransport | undefined
+  let transport: DictationEngine | undefined
   // The current utterance's interim text, already typed into the draft.
   let pending = ""
   // The user ended the recording while it was still connecting; its failure is not an error.
@@ -71,20 +73,14 @@ export function DictationButton(props: { controller: ComposerEditorModel }) {
     }
   }
 
-  const start = () => {
-    if (status() !== "idle") return
-    setStatus("connecting")
-    stopping = false
-    pending = ""
-    transport = new DictationTransport({
-      voice: server.ctx.sdk.api.experimental.voice,
-      event: onEvent,
-      dropped: () => {
-        if (status() !== "recording") return
-        transport = undefined
-        fail("dropped")
-      },
-    })
+  const dropped = () => {
+    if (status() !== "recording") return
+    transport = undefined
+    fail("dropped")
+  }
+
+  const startEngine = (engine: DictationEngine) => {
+    transport = engine
     const current = transport
     void current.join().then(
       () => {
@@ -94,9 +90,30 @@ export function DictationButton(props: { controller: ComposerEditorModel }) {
       },
       (error) => {
         if (transport !== current || stopping) return
+        const reason = error instanceof DictationFailure ? error.reason : "connection"
+        // The Realtime engine is not available; the browser's own recognition takes over
+        // silently — the user never sees which engine is behind the microphone.
+        if (reason === "unavailable" && current instanceof DictationTransport) {
+          startEngine(new BrowserDictationTransport({ event: onEvent, dropped }))
+          return
+        }
         transport = undefined
-        fail(error instanceof DictationFailure ? error.reason : "connection")
+        fail(reason)
       },
+    )
+  }
+
+  const start = () => {
+    if (status() !== "idle") return
+    setStatus("connecting")
+    stopping = false
+    pending = ""
+    startEngine(
+      new DictationTransport({
+        voice: server.ctx.sdk.api.experimental.voice,
+        event: onEvent,
+        dropped,
+      }),
     )
   }
 
