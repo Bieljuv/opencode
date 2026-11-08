@@ -668,7 +668,6 @@ export const dict = {
   "settings.about.version": "ვერსია {{version}}",
   "settings.about.devVersion": "დეველოპერული",
   "settings.about.license": "გამოშვებულია MIT ლიცენზიით",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, ღია კოდის მქონე კოდირების აგენტი",
   "project.settings.title": "პროექტის რედაქტირება",
   "settings.timeline.title": "დროის ხაზი",

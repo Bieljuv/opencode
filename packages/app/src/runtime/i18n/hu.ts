@@ -678,7 +678,6 @@ export const dict = {
   "settings.about.version": "{{version}} verzió",
   "settings.about.devVersion": "fejlesztői verzió",
   "settings.about.license": "MIT licenc alatt jelent meg",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, a nyílt forráskódú kódoló ügynök",
   "project.settings.title": "Projekt szerkesztése",
   "settings.timeline.title": "Idővonal",

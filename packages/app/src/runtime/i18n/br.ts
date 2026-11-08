@@ -147,7 +147,6 @@ export const dict = {
   "settings.about.version": "Versão {{version}}",
   "settings.about.devVersion": "desenvolvimento",
   "settings.about.license": "Lançado sob a Licença MIT",
-  "settings.about.website": "www.manostech-system.com.br",
   "settings.about.description": "Editor IA ManosTech, o editor com IA da ManosTech",
   "project.settings.title": "Editar projeto",
   "settings.timeline.title": "Linha do tempo",

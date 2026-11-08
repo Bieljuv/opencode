@@ -678,7 +678,6 @@ export const dict = {
   "settings.about.version": "Έκδοση {{version}}",
   "settings.about.devVersion": "ανάπτυξη",
   "settings.about.license": "Κυκλοφόρησε υπό την άδεια MIT",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, ο παράγοντας κωδικοποίησης ανοιχτού κώδικα",
   "project.settings.title": "Επεξεργασία έργου",
   "settings.timeline.title": "Χρονολόγιο",

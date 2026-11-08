@@ -143,7 +143,6 @@ export const dict = {
   "settings.about.version": "Versie {{version}}",
   "settings.about.devVersion": "ontwikkeling",
   "settings.about.license": "Uitgebracht onder de MIT-licentie",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, de open-source programmeeragent",
   "project.settings.title": "Project bewerken",
   "settings.timeline.title": "Tijdlijn",

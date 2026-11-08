@@ -672,7 +672,6 @@ export const dict = {
   "settings.about.version": "Версияи {{version}}",
   "settings.about.devVersion": "таҳия",
   "settings.about.license": "Таҳти иҷозатномаи MIT нашр шудааст",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, агенти рамзнависии манбаи кушода",
   "project.settings.title": "Таҳрири лоиҳа",
   "settings.timeline.title": "Ҷадвали вақт",

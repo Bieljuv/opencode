@@ -681,7 +681,6 @@ export const dict = {
   "settings.about.version": "ورژن \u2068{{version}}\u2069",
   "settings.about.devVersion": "ترقیاتی",
   "settings.about.license": "MIT لائسنس کے تحت جاری کردہ",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode، اوپن سورس کوڈنگ ایجنٹ",
   "project.settings.title": "پروجیکٹ میں ترمیم کریں",
   "settings.timeline.title": "ٹائم لائن",

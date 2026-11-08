@@ -686,7 +686,6 @@ export const dict = {
   "settings.about.version": "ވާޝަން \u2068{{version}}\u2069",
   "settings.about.devVersion": "ޑެވެލޮޕްމަންޓް",
   "settings.about.license": "MIT ލައިސަންސްގެ ދަށުން ނެރެފައި",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode، އޯޕަން ސޯސް ކޯޑިންގ އޭޖެންޓް",
   "project.settings.title": "ޕްރޮޖެކްޓް އެޑިޓްކުރައްވާ",
   "settings.timeline.title": "ޓައިމްލައިން",

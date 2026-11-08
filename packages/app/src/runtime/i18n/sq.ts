@@ -669,7 +669,6 @@ export const dict = {
   "settings.about.version": "Versioni {{version}}",
   "settings.about.devVersion": "version zhvillimi",
   "settings.about.license": "Lëshuar nën licencën MIT",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, agjenti kodues me burim të hapur",
   "project.settings.title": "Redakto projektin",
   "settings.timeline.title": "Afati kohor",

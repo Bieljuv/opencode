@@ -685,7 +685,6 @@ export const dict = {
   "settings.about.version": "{{version}} versija",
   "settings.about.devVersion": "kūrimo versija",
   "settings.about.license": "Išleistas pagal MIT licenciją",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, atvirojo kodo kodavimo agentas",
   "project.settings.title": "Redaguoti projektą",
   "settings.timeline.title": "Laiko juosta",

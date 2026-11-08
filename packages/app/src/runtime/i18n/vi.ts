@@ -679,7 +679,6 @@ export const dict = {
   "settings.about.version": "Phiên bản {{version}}",
   "settings.about.devVersion": "phát triển",
   "settings.about.license": "Được phát hành theo Giấy phép MIT",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, tác nhân mã hóa nguồn mở",
   "project.settings.title": "Chỉnh sửa dự án",
   "settings.timeline.title": "Dòng thời gian",

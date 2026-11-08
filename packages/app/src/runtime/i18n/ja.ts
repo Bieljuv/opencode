@@ -684,7 +684,6 @@ export const dict = {
   "settings.about.version": "バージョン{{version}}",
   "settings.about.devVersion": "開発",
   "settings.about.license": "MITライセンスの下でリリースされました",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "オープンソースのコーディングエージェントであるOpenCode",
   "project.settings.title": "プロジェクトを編集",
   "settings.timeline.title": "タイムライン",

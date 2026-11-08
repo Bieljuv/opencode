@@ -681,7 +681,6 @@ export const dict = {
   "settings.about.version": "גרסה \u2068{{version}}\u2069",
   "settings.about.devVersion": "פיתוח",
   "settings.about.license": "פורסם ברישיון \u2068MIT\u2069",
-  "settings.about.website": "\u2068www.opencode.ai\u2069",
   "settings.about.description": "\u2068OpenCode\u2069, סוכן הקוד בקוד פתוח",
   "project.settings.title": "ערוך פרויקט",
   "settings.timeline.title": "ציר זמן",

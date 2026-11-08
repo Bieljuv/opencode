@@ -656,7 +656,6 @@ export const dict = {
   "settings.about.version": "ስሪት {{version}}",
   "settings.about.devVersion": "ልማት",
   "settings.about.license": "በMIT ፈቃድ የተለቀቀ",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode፣ ክፍት ምንጭ የኮድ ወኪል",
   "project.settings.title": "ፕሮጀክት አርትዕ",
   "settings.timeline.title": "የጊዜ መስመር",

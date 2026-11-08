@@ -4,7 +4,6 @@ import { useDialog } from "@opencode/ui/context/dialog"
 import { Tooltip } from "@opencode/ui/tooltip"
 import { useLanguage } from "@/runtime/i18n/language"
 import { usePlatform } from "@/runtime/platform/platform"
-import { ExternalLink } from "@/runtime/platform/external-link"
 import { showToast } from "@/shell/notifications/toast"
 import manostechLogo from "@/assets/manostech-logo.png"
 import {
@@ -105,12 +104,6 @@ export function SettingsAbout(props: { active: boolean }) {
       <div class="mx-auto w-fit" aria-hidden="true">
         <img src={manostechLogo} alt="" class="size-28" />
       </div>
-
-      <p class="settings-about-faint">
-        <ExternalLink href="https://manostech-system.com.br">
-          <bdi dir="ltr">{language.t("settings.about.website")}</bdi>
-        </ExternalLink>
-      </p>
 
       <div class="settings-about-details">
         <p>{language.t("settings.about.description")}</p>

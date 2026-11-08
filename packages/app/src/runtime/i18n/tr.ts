@@ -746,7 +746,6 @@ export const dict = {
   "settings.about.version": "Sürüm {{version}}",
   "settings.about.devVersion": "geliştirme sürümü",
   "settings.about.license": "MIT Lisansı altında yayınlandı",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, açık kaynak kodlama aracısı",
   "project.settings.title": "Projeyi düzenle",
   "settings.timeline.title": "Zaman çizelgesi",

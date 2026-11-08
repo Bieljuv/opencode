@@ -671,7 +671,6 @@ export const dict = {
   "settings.about.version": "Útgáfa {{version}}",
   "settings.about.devVersion": "þróunarútgáfa",
   "settings.about.license": "Gefið út undir MIT leyfinu",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, opinn kóðunaraðili",
   "project.settings.title": "Breyta verkefni",
   "settings.timeline.title": "Tímalína",

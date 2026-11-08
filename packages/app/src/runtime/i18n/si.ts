@@ -668,7 +668,6 @@ export const dict = {
   "settings.about.version": "අනුවාදය {{version}}",
   "settings.about.devVersion": "සංවර්ධන",
   "settings.about.license": "MIT බලපත්‍රය යටතේ නිකුත් කර ඇත",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, විවෘත මූලාශ්‍ර කේතකරණ නියෝජිතයා",
   "project.settings.title": "ව්‍යාපෘතිය සංස්කරණය කරන්න",
   "settings.timeline.title": "කාලරේඛාව",

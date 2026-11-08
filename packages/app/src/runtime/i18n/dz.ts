@@ -680,7 +680,6 @@ export const dict = {
   "settings.about.version": "ཐོན་རིམ་ {{version}} .",
   "settings.about.devVersion": "གོང་འཕེལ།",
   "settings.about.license": "ཨེམ་ཨའི་ཊི་ཆོག་ཐམ་གྱི་འོག་ལུ་བཏོན་ཡོདཔ།",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, ཁ་ཕྱེ་ཡོད་པའི་ཐོན་ཁུངས་གསང་ཡིག་ལས་ཚབ་པ།",
   "project.settings.title": "ཞུན་དག་ལས་གཞི།",
   "settings.timeline.title": "དུས་ཚོད།",

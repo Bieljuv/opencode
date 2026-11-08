@@ -673,7 +673,6 @@ export const dict = {
   "settings.about.version": "Versiya {{version}}",
   "settings.about.devVersion": "dasturlash",
   "settings.about.license": "MIT litsenziyasi asosida chiqarilgan",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, ochiq manbali kodlash agenti",
   "project.settings.title": "Loyihani tahrirlash",
   "settings.timeline.title": "Vaqt jadvali",

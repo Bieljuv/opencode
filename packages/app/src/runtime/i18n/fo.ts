@@ -668,7 +668,6 @@ export const dict = {
   "settings.about.version": "Útgáva {{version}}",
   "settings.about.devVersion": "menningarútgáva",
   "settings.about.license": "Útgivið undir MIT-loyvinum",
-  "settings.about.website": "www.opna koda.ai",
   "settings.about.description": "OpenCode, opna keldukoduumboðnum",
   "project.settings.title": "Rætta verkætlan",
   "settings.timeline.title": "Tíðarlinja",

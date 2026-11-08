@@ -730,7 +730,6 @@ export const dict = {
   "settings.about.version": "版本{{version}}",
   "settings.about.devVersion": "发展",
   "settings.about.license": "根据麻省理工学院许可证发布",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode ，开源编码代理",
   "project.settings.title": "编辑项目",
   "settings.timeline.title": "时间表",

@@ -741,7 +741,6 @@ export const dict = {
   "settings.about.version": "Versi {{version}}",
   "settings.about.devVersion": "perkembangan",
   "settings.about.license": "Dirilis di bawah Lisensi MIT",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, agen pengkodean sumber terbuka",
   "project.settings.title": "Sunting proyek",
   "settings.timeline.title": "Garis Waktu",

@@ -732,7 +732,6 @@ export const dict = {
   "settings.about.version": "เวอร์ชัน {{version}}",
   "settings.about.devVersion": "การพัฒนา",
   "settings.about.license": "เผยแพร่ภายใต้ใบอนุญาต MIT",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode เอเจนต์การเข้ารหัสโอเพ่นซอร์ส",
   "project.settings.title": "แก้ไขโครงการ",
   "settings.timeline.title": "ไทม์ไลน์",

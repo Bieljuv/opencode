@@ -669,7 +669,6 @@ export const dict = {
   "settings.about.version": "កំណែ {{version}}",
   "settings.about.devVersion": "ការអភិវឌ្ឍន៍",
   "settings.about.license": "ចេញផ្សាយក្រោមអាជ្ញាប័ណ្ណ MIT",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode ដែលជាភ្នាក់ងារសរសេរកូដប្រភពបើកចំហ",
   "project.settings.title": "កែសម្រួលគម្រោង",
   "settings.timeline.title": "បន្ទាត់ពេលវេលា",

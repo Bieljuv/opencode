@@ -683,7 +683,6 @@ export const dict = {
   "settings.about.version": "버전 {{version}}",
   "settings.about.devVersion": "개발",
   "settings.about.license": "MIT 라이센스에 따라 출시됨",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "오픈소스 코딩 에이전트 OpenCode",
   "project.settings.title": "프로젝트 편집",
   "settings.timeline.title": "타임라인",

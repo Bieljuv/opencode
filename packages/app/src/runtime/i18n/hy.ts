@@ -669,7 +669,6 @@ export const dict = {
   "settings.about.version": "Տարբերակ {{version}}",
   "settings.about.devVersion": "մշակում",
   "settings.about.license": "Թողարկվել է MIT արտոնագրով",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode՝ բաց կոդով կոդավորման գործակալ",
   "project.settings.title": "Խմբագրել նախագիծը",
   "settings.timeline.title": "Ժամանակագիծ",

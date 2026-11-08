@@ -682,7 +682,6 @@ export const dict = {
   "settings.about.version": "نسخه \u2068{{version}}\u2069",
   "settings.about.devVersion": "توسعه",
   "settings.about.license": "منتشرشده تحت مجوز \u2068MIT\u2069",
-  "settings.about.website": "\u2068www.opencode.ai\u2069",
   "settings.about.description": "\u2068OpenCode\u2069، عامل کدنویسی متن‌باز",
   "project.settings.title": "ویرایش پروژه",
   "settings.timeline.title": "خط زمانی",

@@ -673,7 +673,6 @@ export const dict = {
   "settings.about.version": "Хувилбар {{version}}",
   "settings.about.devVersion": "хөгжүүлэлт",
   "settings.about.license": "MIT лицензээр гаргасан",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, нээлттэй эхийн кодчиллын агент",
   "project.settings.title": "Төслийг засах",
   "settings.timeline.title": "Цагийн шугам",

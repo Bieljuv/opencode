@@ -669,7 +669,6 @@ export const dict = {
   "settings.about.version": "ລຸ້ນ {{version}}",
   "settings.about.devVersion": "ການພັດທະນາ",
   "settings.about.license": "ປ່ອຍອອກມາພາຍໃຕ້ໃບອະນຸຍາດ MIT",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, ຕົວແທນລະຫັດແຫຼ່ງເປີດ",
   "project.settings.title": "ແກ້ໄຂໂຄງການ",
   "settings.timeline.title": "ທາມລາຍ",

@@ -875,7 +875,6 @@ export const dict = {
   "settings.about.devVersion": "development",
   "settings.about.copyVersionFailed": "Failed to copy version",
   "settings.about.license": "Released under the MIT License",
-  "settings.about.website": "www.manostech-system.com.br",
   "settings.about.description": "Editor IA ManosTech, the ManosTech AI editor",
   "settings.about.notices.title": "Third-party notices",
   "settings.about.notices.description": "Editor IA ManosTech includes the following open source software.",

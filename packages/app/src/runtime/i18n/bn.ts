@@ -673,7 +673,6 @@ export const dict = {
   "settings.about.version": "সংস্করণ {{version}}",
   "settings.about.devVersion": "ডেভেলপমেন্ট",
   "settings.about.license": "MIT লাইসেন্সের অধীনে প্রকাশিত",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, ওপেন সোর্স কোডিং এজেন্ট",
   "project.settings.title": "প্রকল্প সম্পাদনা করুন",
   "settings.timeline.title": "টাইমলাইন",

@@ -722,7 +722,6 @@ export const dict = {
   "settings.about.version": "版本{{version}}",
   "settings.about.devVersion": "發展",
   "settings.about.license": "根據MIT許可證發布",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode ，開源編碼代理",
   "project.settings.title": "編輯專案",
   "settings.timeline.title": "時間軸",

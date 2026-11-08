@@ -680,7 +680,6 @@ export const dict = {
   "settings.about.version": "ဗားရှင်း {{version}}",
   "settings.about.devVersion": "ဖွံ့ဖြိုးတိုးတက်မှု",
   "settings.about.license": "MIT လိုင်စင်ဖြင့် ထုတ်ဝေခဲ့သည်။",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode၊ ပွင့်လင်းရင်းမြစ် ကုဒ်နံပါတ် အေးဂျင့်",
   "project.settings.title": "ပရောဂျက်ကို တည်းဖြတ်ပါ။",
   "settings.timeline.title": "အချိန်ဇယား",

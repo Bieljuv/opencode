@@ -716,7 +716,6 @@ export const dict = {
   "settings.about.version": "الإصدار \u2068{{version}}\u2069",
   "settings.about.devVersion": "إصدار تطوير",
   "settings.about.license": "صدر بموجب ترخيص \u2068MIT\u2069",
-  "settings.about.website": "\u2068www.opencode.ai\u2069",
   "settings.about.description": "\u2068OpenCode\u2069، وكيل البرمجة مفتوح المصدر",
   "project.settings.title": "تحرير المشروع",
   "settings.timeline.title": "المخطط الزمني",

@@ -664,7 +664,6 @@ export const dict = {
   "settings.about.version": "Versioon {{version}}",
   "settings.about.devVersion": "arendus",
   "settings.about.license": "Välja antud MIT-i litsentsi alusel",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, avatud lähtekoodiga kodeerimisagent",
   "project.settings.title": "Redigeeri projekti",
   "settings.timeline.title": "Ajaskaala",

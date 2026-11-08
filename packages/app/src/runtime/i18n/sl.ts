@@ -692,7 +692,6 @@ export const dict = {
   "settings.about.version": "Različica {{version}}",
   "settings.about.devVersion": "razvoj",
   "settings.about.license": "Izdano pod MIT License",
-  "settings.about.website": "www.opencode.ai",
   "settings.about.description": "OpenCode, odprtokodni agent za kodiranje",
   "project.settings.title": "Uredi projekt",
   "settings.timeline.title": "Časovnica",
