@@ -54,7 +54,9 @@ export function settingsSearchIndex(input: {
       id: JSON.stringify([server, project, view.tab, view.target, view.subtab, entry.label]),
       title: input.translate(entry.label),
       description: entry.description ? input.translate(entry.description) : "",
-      keywords: entry.keywords ?? "",
+      keywords: [entry.keywords ?? "", entry.keywordsKey ? (input.translate(entry.keywordsKey) ?? "") : ""]
+        .filter(Boolean)
+        .join(" "),
       owner,
       page,
       server,

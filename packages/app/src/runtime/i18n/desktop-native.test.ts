@@ -49,6 +49,11 @@ describe("desktop native locale detection", () => {
     expect(detectDesktopNativeLocale(["eo", "de-DE"])).toBe("de")
   })
 
+  test("falls back to pt-BR when no preference matches a supported locale", () => {
+    expect(detectDesktopNativeLocale(["eo"])).toBe("br")
+    expect(detectDesktopNativeLocale([])).toBe("br")
+  })
+
   test.each([
     [["zh-TW"], "zht"],
     [["zh-SG"], "zh"],
