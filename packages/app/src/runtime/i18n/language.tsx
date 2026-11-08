@@ -199,13 +199,13 @@ export function loadLocaleDict(locale: Locale) {
 
 function detectLocale(): Locale {
   // oxlint-disable-next-line anti-slop/no-runtime-typeof -- probing for a browser global
-  if (typeof navigator !== "object") return "en"
+  if (typeof navigator !== "object") return "br"
 
   return detectDesktopNativeLocale(navigator.languages?.length ? navigator.languages : [navigator.language])
 }
 
 export function normalizeLocale(value: string): Locale {
-  return Option.getOrElse(Schema.decodeUnknownOption(LocaleSchema)(value), () => "en")
+  return Option.getOrElse(Schema.decodeUnknownOption(LocaleSchema)(value), () => "br")
 }
 
 export const languageSchema = Persistence.struct({
@@ -237,7 +237,7 @@ const initialLocale =
     ? Promise.resolve(warm)
     : loadDict(warm).then(
         () => warm,
-        () => "en" as const,
+        () => "br" as const,
       )
 
 export function loadInitialLocale() {

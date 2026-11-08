@@ -217,7 +217,8 @@ export function detectDesktopNativeLocale(languages: readonly string[]): Desktop
     if (match) return match
   }
 
-  return "en"
+  // ManosTech default: fresh installs open in pt-BR when no browser preference matches a supported locale.
+  return "br"
 }
 
 function locale(value: string) {

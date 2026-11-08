@@ -86,6 +86,20 @@ describe("settings search index", () => {
     expect(items.some((item) => item.view.target === "settings-project-startup")).toBe(false)
   })
 
+  test("matches localized keywords alongside the English ones", () => {
+    const ptKeywords = new Map(
+      Object.entries({
+        "settings.search.keywords.shortcuts": "atalho atalhos teclado tecla",
+        "settings.search.keywords.colorScheme": "modo escuro modo claro sistema",
+      }),
+    )
+    const items = index({ translate: (key) => ptKeywords.get(key) ?? strings.get(key) ?? key })
+    expect(rankSettings("atalhos", items)[0].view.tab).toBe("shortcuts")
+    expect(rankSettings("hotkey", items)[0].view.tab).toBe("shortcuts")
+    expect(rankSettings("modo escuro", items)[0].view.target).toBe("settings-color-scheme")
+    expect(rankSettings("dark mode", items)[0].view.target).toBe("settings-color-scheme")
+  })
+
   test("retains project avatars and excludes color when a custom icon owns its appearance", () => {
     const withIcon = { ...project, icon: { color: "orange", override: "data:image/png;base64,example" } }
     const items = index({ servers: [{ ...servers[0], projects: [withIcon] }] })
