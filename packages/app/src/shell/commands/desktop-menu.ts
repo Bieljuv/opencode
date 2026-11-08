@@ -277,12 +277,12 @@ export const DESKTOP_MENU: DesktopMenu[] = [
       {
         type: "item",
         labelKey: "desktop.menu.shareFeedback",
-        href: "https://github.com/BielJuv/opencode/issues/new?template=feature-request.yml",
+        href: "mailto:contato@manostech-system.com.br?subject=Coment%C3%A1rios%20sobre%20o%20Editor%20IA%20ManosTech",
       },
       {
         type: "item",
         labelKey: "desktop.menu.reportBug",
-        href: "https://github.com/BielJuv/opencode/issues/new?template=bug-report.yml",
+        href: "mailto:contato@manostech-system.com.br?subject=Relato%20de%20bug%20no%20Editor%20IA%20ManosTech",
       },
     ],
   },
