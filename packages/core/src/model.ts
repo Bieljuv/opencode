@@ -80,6 +80,12 @@ export interface Interface extends State.Transformable<Editor> {
   /** Enabled models of the given types, chat when none are given. Only chat models are offered for sessions. */
   readonly available: (types?: readonly Model.Type[]) => Effect.Effect<readonly Info[]>
   readonly default: () => Effect.Effect<Info | undefined>
+  /**
+   * The model pinned in opencode.json, when one is set. Unlike `default`,
+   * this never falls back to the first available model, so callers can tell
+   * an explicit choice apart from the automatic fallback.
+   */
+  readonly configuredDefault: () => Effect.Effect<{ providerID: Provider.ID; modelID: ID } | undefined>
   readonly small: (providerID: Provider.ID) => Effect.Effect<Info | undefined>
 }
 
@@ -302,6 +308,10 @@ const layer = Layer.effect(
         const requested = value.data.defaultModel
         const model = requested && value.byProvider.get(requested.providerID)?.get(requested.modelID)
         return model?.enabled ? model : value.available.find(supportsText)
+      }),
+      configuredDefault: Effect.fn("Model.configuredDefault")(function* () {
+        const value = yield* read()
+        return value.data.defaultModel
       }),
       small: Effect.fn("Model.small")(function* (providerID) {
         const value = yield* read()

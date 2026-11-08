@@ -223,15 +223,8 @@ export function UsageDialogContent(props: {
         price: format.money(value.price, "auto"),
       })
 
-    const models =
-      value.names.length > 2
-        ? language.plural("usage.budget.modelsMore", value.names.length - 2, {
-            first: value.names[0],
-            second: value.names[1],
-          })
-        : vendors(value.names)
-
-    return value.each ? language.t("usage.budget.modelsEach", { models }) : models
+    // The router picks the model silently, so a budget over named models never lists them.
+    return language.t("ui.common.automatic")
   }
 
   const scope = (row: BudgetRow) => {
@@ -256,7 +249,7 @@ export function UsageDialogContent(props: {
     if (value.kind === "paused-by")
       return language.t(value.shared ? "usage.note.pausedByWorkspace" : "usage.note.pausedByBudget")
 
-    return language.t("usage.note.currentModel", { model: value.name })
+    return language.t("usage.note.currentModel", { model: language.t("ui.common.automatic") })
   }
 
   const footer = () => {
@@ -308,7 +301,7 @@ export function UsageDialogContent(props: {
       body: value.suggestion
         ? language.t("usage.action.each.suggestion", {
             limit,
-            model: value.suggestion.name,
+            model: language.t("ui.common.automatic"),
             left: format.money(value.suggestion.left),
           })
         : language.t("usage.action.each.body", { limit }),

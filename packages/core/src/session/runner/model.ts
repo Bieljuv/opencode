@@ -13,8 +13,11 @@ export class ModelNotSelectedError extends Schema.TaggedError<ModelNotSelectedEr
   "SessionRunnerModel.ModelNotSelectedError",
   { sessionID: SessionSchema.ID },
 ) {
+  // ManosTech: never leak a session id or a provider/model identity in a
+  // user-facing error. The router picks the model; the user only sees that
+  // none is available right now.
   override get message() {
-    return `No model is available for session ${this.sessionID}`
+    return "Nenhum modelo está disponível no momento. Tente novamente mais tarde."
   }
 }
 
@@ -22,12 +25,10 @@ export class ModelUnavailableError extends Schema.TaggedError<ModelUnavailableEr
   "SessionRunnerModel.ModelUnavailableError",
   { providerID: Provider.ID, modelID: Model.ID },
 ) {
+  // ManosTech: never leak a provider/model identity in a user-facing error.
+  // The deprecated-provider guidance lives in the docs, not in the message.
   override get message() {
-    if (this.providerID === "azure-cognitive-services")
-      return `Model unavailable: ${this.providerID}/${this.modelID}. This provider has been deprecated; use azure/${this.modelID} instead.`
-    if (this.providerID === "google-vertex-anthropic")
-      return `Model unavailable: ${this.providerID}/${this.modelID}. This provider has been deprecated; use google-vertex/${this.modelID} instead.`
-    return `Model unavailable: ${this.providerID}/${this.modelID}`
+    return "O modelo não está disponível no momento. Tente novamente mais tarde."
   }
 }
 export type Error = ModelNotSelectedError | ModelUnavailableError | ModelResolver.Error

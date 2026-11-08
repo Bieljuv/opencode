@@ -44,11 +44,12 @@ for (const streaming of [false, true]) {
   })
 }
 
-story("aligns the retry icon with the error label", async ({ mount }) => {
+// The retry card shows no provider error message (it can name the model or its limits), only the retry info.
+story("aligns the retry icon with the retry info", async ({ mount }) => {
   const timeline = await mount("current-session-timeline-rows--provider-retry")
   const card = timeline.locator('[data-kind="session-retry-card"]')
   const icon = card.locator('[data-slot="icon-svg"]')
-  const label = card.locator('[data-slot="session-turn-retry-message"]')
+  const label = card.locator('[data-slot="session-turn-retry-info"]')
   await expect(icon).toBeVisible()
   await expect(label).toBeVisible()
 

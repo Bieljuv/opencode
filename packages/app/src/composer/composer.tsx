@@ -1,7 +1,13 @@
+import { For } from "solid-js"
 import { formatKeybind, useCommand } from "@/shell/commands/command"
 import { useLanguage } from "@/runtime/i18n/language"
 import { DictationButton } from "@/voice/dictation"
+import { Button } from "@opencode/ui/button"
+import { Icon } from "@opencode/ui/icon"
+import { Menu } from "@opencode/ui/menu"
+import { Tooltip } from "@opencode/ui/tooltip"
 import { ComposerEditor } from "./editor/editor"
+import { ROUTER_EFFORTS, ROUTER_EFFORT_LABEL_KEYS, parseRouterEffort } from "./effort"
 import type { ComposerModel } from "./model"
 
 export function Composer(props: {
@@ -29,10 +35,50 @@ export function Composer(props: {
         exitShellKeybind={[formatKeybind("esc", language.t)]}
         suggestionBoundary={props.suggestionBoundary}
         modelControl={
-          <span class="flex h-[28px] items-center text-[13px] font-[440] leading-4 text-v2-text-text-faint">
-            {"✦ "}
-            {language.t("composer.model.automatic")}
-          </span>
+          <>
+            <span class="flex h-[28px] items-center text-[13px] font-[440] leading-4 text-v2-text-text-faint">
+              {"✦ "}
+              {language.t("composer.model.automatic")}
+            </span>
+            <Tooltip placement="top" value={language.t("composer.effort.label")}>
+              <Menu gutter={6} modal={false} placement="top-start">
+                <Menu.Trigger
+                  as={Button}
+                  variant="ghost-muted"
+                  size="normal"
+                  class="max-w-[220px] justify-start ![font-weight:440]"
+                  aria-label={language.t("composer.effort.label")}
+                >
+                  <span class="truncate capitalize leading-5">
+                    {language.t(ROUTER_EFFORT_LABEL_KEYS[props.model.effort.current()])}
+                  </span>
+                  <span class="-ms-0.5 -me-1 flex shrink-0">
+                    <Icon name="chevron-down" />
+                  </span>
+                </Menu.Trigger>
+                <Menu.Portal>
+                  <Menu.Content>
+                    <Menu.RadioGroup
+                      value={props.model.effort.current()}
+                      onChange={(value) => {
+                        const effort = parseRouterEffort(value)
+
+                        if (effort) props.model.effort.set(effort)
+                      }}
+                    >
+                      <For each={ROUTER_EFFORTS}>
+                        {(effort) => (
+                          <Menu.RadioItem value={effort} class="capitalize" closeOnSelect>
+                            {language.t(ROUTER_EFFORT_LABEL_KEYS[effort])}
+                          </Menu.RadioItem>
+                        )}
+                      </For>
+                    </Menu.RadioGroup>
+                  </Menu.Content>
+                </Menu.Portal>
+              </Menu>
+            </Tooltip>
+          </>
         }
       />
     </div>

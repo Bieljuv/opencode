@@ -13,6 +13,7 @@ import { useData } from "@/runtime/server/current"
 import { useServerSDK } from "@/runtime/server/client"
 import { useWorkspaceLocation } from "@/workspaces/location"
 import { useLanguage } from "@/runtime/i18n/language"
+import type { RouterEffort } from "@/composer/effort"
 import { showToast } from "@/shell/notifications/toast"
 import {
   createQueueState,
@@ -39,11 +40,14 @@ export function createSessionQueue(input: {
   behavior: Accessor<ComposerDelivery>
   restoreFocus: (cursor: number) => void
   background: NonNullable<ComposerSession["background"]>
+  /** The effort picked for the automatic router; re-admissions carry the current one. */
+  effort?: Accessor<RouterEffort>
 }) {
   const data = useData()
   const server = useServerSDK()
   const location = useWorkspaceLocation()
   const language = useLanguage()
+  const effort = () => input.effort?.() ?? "automatico"
 
   const queued = createMemo(() =>
     data.session.pending
@@ -305,7 +309,7 @@ export function createSessionQueue(input: {
     // A steered replacement can be delivered before a withdrawal reaches it, so the bound waits for the admission and
     // the edit returns to the composer only if it really did not go out.
     progress.stage = "committed"
-    await data.session.prompt(admission)
+    await data.session.prompt({ ...admission, metadata: { ...admission.metadata, manostechEffort: effort() } })
     void background?.move()
     dispatch({ type: "mutation.admitted", attempt: operation.attempt })
     // Cancelling is a no-op once the original is gone, so one retry is safe.
@@ -387,7 +391,7 @@ export function createSessionQueue(input: {
               })),
               agents: item.payload.agents,
               skills: item.payload.skills,
-              metadata: item.payload.metadata,
+              metadata: { ...item.payload.metadata, manostechEffort: effort() },
               delivery: "queue" as const,
               resume: false,
             }

@@ -42,6 +42,7 @@ import { SessionEvent } from "@opencode/core/session/event"
 import { SessionCompaction } from "@opencode/core/session/compaction"
 import { SessionInbox } from "@opencode/core/session/inbox"
 import { SessionMessage } from "@opencode/core/session/message"
+import { SessionModelRequest } from "@opencode/core/session/model-request"
 import { SessionModelTransport } from "@opencode/core/session/model-transport"
 import { Money } from "@opencode/schema/money"
 import { SessionProjector } from "@opencode/core/session/projector"
@@ -421,6 +422,7 @@ const layer = Layer.unwrap(
       all: () => Effect.succeed([]),
       available: () => Effect.succeed([]),
       default: () => Effect.undefined,
+      configuredDefault: () => Effect.undefined,
       small: () => Effect.undefined,
     })
     const replacements: LayerNode.Replacements = [
@@ -1837,7 +1839,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.session.prompt({ sessionID: forked.id, text: "Forked", resume: false })
     yield* s.session.resume(forked.id)
 
-    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, fakeIdentity, "Latest context"])
+    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, fakeIdentity, "Latest context", SessionModelRequest.TOKEN_ECONOMY])
     // Copied history keeps the frozen chronological update; no new update is emitted.
     expect(systemTexts(s.requests.at(-1)!)).toContain("Changed context")
     expect(systemTexts(s.requests.at(-1)!)).not.toContain("Latest context")
@@ -1900,7 +1902,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.resume
 
     expect(s.requests).toHaveLength(1)
-    expect(s.requests[0]?.system.map((part) => part.text)).toEqual([defaultSystem, fakeIdentity, "Initial context"])
+    expect(s.requests[0]?.system.map((part) => part.text)).toEqual([defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY])
     expect(messageRoles(s.requests[0])).toEqual(["user", "user"])
     // The projected row is authoritative: a missing row admits a fresh baseline
     // instead of rebuilding from durable events.
@@ -1944,8 +1946,8 @@ describe("SessionRunnerLLM", () => {
     expect(s.requests[0].messages).toHaveLength(1)
     expect(s.requests[1].messages.slice(0, 1)).toEqual([...s.requests[0].messages])
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, fakeIdentity, "Initial context"],
-      [defaultSystem, fakeIdentity, "Initial context"],
+      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
+      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
     ])
     expect(messageRoles(s.requests[1])).toEqual(["user", "system", "user"])
     expect(s.requests[1]?.messages.at(1)?.content).toEqual([Expected.text("Changed context")])
@@ -1981,7 +1983,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Second")
     const third = yield* s.runPrompt("Third")
     const before = s.requests.at(-1)?.system.map((part) => part.text)
-    expect(before).toEqual([defaultSystem, fakeIdentity, "Initial context"])
+    expect(before).toEqual([defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY])
 
     yield* s.bus.publish(SessionEvent.RevertEvent.Committed, { sessionID, to: third.id })
     yield* s.runPrompt("Fourth")
@@ -2000,7 +2002,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.bus.publish(SessionEvent.RevertEvent.Committed, { sessionID, to: second.id })
     yield* s.runPrompt("Fourth")
 
-    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, fakeIdentity, "Latest context"])
+    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, fakeIdentity, "Latest context", SessionModelRequest.TOKEN_ECONOMY])
   })
 
   scenario("uses the selected model family prompt when the agent does not override it", function* (s) {
@@ -2014,6 +2016,7 @@ describe("SessionRunnerLLM", () => {
       expect.stringContaining("# Delegation"),
       gptIdentity,
       "Initial context",
+      SessionModelRequest.TOKEN_ECONOMY,
     ])
   })
 
@@ -2035,6 +2038,7 @@ describe("SessionRunnerLLM", () => {
       expect.stringContaining("# Delegation"),
       gptIdentity,
       "Initial context",
+      SessionModelRequest.TOKEN_ECONOMY,
     ])
   })
 
@@ -2055,6 +2059,7 @@ describe("SessionRunnerLLM", () => {
       "Build agent instructions",
       fakeIdentity,
       "Initial context",
+      SessionModelRequest.TOKEN_ECONOMY,
     ])
   })
 
@@ -2080,6 +2085,7 @@ describe("SessionRunnerLLM", () => {
       "Reviewer instructions",
       fakeIdentity,
       "Initial context",
+      SessionModelRequest.TOKEN_ECONOMY,
     ])
     expect((yield* s.messages)[0]).toMatchObject({ type: "assistant", agent: "reviewer" })
   })
@@ -2107,6 +2113,7 @@ describe("SessionRunnerLLM", () => {
       "Reviewer instructions",
       fakeIdentity,
       "Initial context",
+      SessionModelRequest.TOKEN_ECONOMY,
     ])
     expect((yield* s.messages)[0]).toMatchObject({ type: "assistant", agent: "reviewer" })
   })
@@ -2149,8 +2156,8 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Second")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, fakeIdentity, "Build skills\n\nInitial context"],
-      [defaultSystem, fakeIdentity, "Build skills\n\nInitial context"],
+      [defaultSystem, fakeIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY],
+      [defaultSystem, fakeIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY],
     ])
     expect(systemTexts(s.requests[1])).toContainEqual(expect.stringContaining("Reviewer skills"))
   })
@@ -2172,7 +2179,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("First")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, fakeIdentity, "Build skills\n\nInitial context"],
+      [defaultSystem, fakeIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY],
     ])
   })
 
@@ -2191,7 +2198,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("First")
     expect(s.requests.map((request) => request.model)).toEqual([model])
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, fakeIdentity, "Initial context"],
+      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
     ])
   })
 
@@ -2217,10 +2224,11 @@ describe("SessionRunnerLLM", () => {
       defaultSystem,
       fakeIdentity,
       ["Initial context", "", '<context key="deploy-target">', "production", "</context>"].join("\n"),
+      SessionModelRequest.TOKEN_ECONOMY,
     ])
     // Each source stays keyed, so a provider can leave out what its own harness already supplies.
     // `testLLM` strips the empty Code Mode notice from the text only.
-    expect(s.requests[0]?.system.at(-1)?.metadata?.experimental).toEqual({
+    expect(s.requests[0]?.system.at(-2)?.metadata?.experimental).toEqual({
       instructions: [
         expect.objectContaining({ key: "core/codemode" }),
         { key: "test/context", text: "Initial context" },
@@ -2312,9 +2320,9 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Third")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, fakeIdentity, "Initial context"],
-      [defaultSystem, fakeIdentity, "Initial context"],
-      [defaultSystem, replacementIdentity, "Initial context"],
+      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
+      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
+      [defaultSystem, replacementIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
     ])
     expect(messageRoles(s.requests[1])).toEqual(["user", "system", "user"])
     expect(s.requests[2]?.messages.filter((message) => message.role === "system")).toHaveLength(2)
@@ -2376,9 +2384,9 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Third")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, fakeIdentity, "Initial context"],
-      [defaultSystem, replacementIdentity, "Initial context"],
-      [defaultSystem, replacementIdentity, "Initial context"],
+      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
+      [defaultSystem, replacementIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
+      [defaultSystem, replacementIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
     ])
   })
 
@@ -2394,9 +2402,9 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Second")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, fakeIdentity, "Initial context"],
-      [defaultSystem, fakeIdentity, "Initial context"],
-      [defaultSystem, fakeIdentity, "Initial context"],
+      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
+      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
+      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
     ])
     expect(messageRoles(s.requests[2])).toEqual(["user", "system", "user"])
     expect(s.requests[2]?.messages.at(1)?.content).toEqual([Expected.text("Replacement context")])
@@ -3461,7 +3469,7 @@ describe("SessionRunnerLLM", () => {
       type: "compaction",
       status: "failed",
       reason: "manual",
-      error: { type: "provider.no-route", message: "Model unavailable: test/missing" },
+      error: { type: "provider.no-route", message: "O modelo não está disponível no momento. Tente novamente mais tarde." },
     })
   })
 
@@ -3726,6 +3734,7 @@ describe("SessionRunnerLLM", () => {
       defaultSystem,
       replacementIdentity,
       "Initial context",
+      SessionModelRequest.TOKEN_ECONOMY,
     ])
     expect(systemTexts(s.requests[2])).toContain("Changed during compaction")
     expect(userTexts(s.requests[2])[0]).toContain("<summary>\n## Objective\n- Overflow summary\n</summary>")
@@ -3974,7 +3983,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Third")
 
     // Compaction already moved current values into the new epoch before the unavailable read.
-    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, fakeIdentity, "Changed context"])
+    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, fakeIdentity, "Changed context", SessionModelRequest.TOKEN_ECONOMY])
     expect(systemTexts(s.requests.at(-1)!)).not.toContain("Changed context")
   })
 
@@ -4109,8 +4118,8 @@ describe("SessionRunnerLLM", () => {
 
     expect(s.requests.map((request) => request.model)).toEqual([model, replacementModel])
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, fakeIdentity, "Initial context"],
-      [defaultSystem, replacementIdentity, "Initial context"],
+      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
+      [defaultSystem, replacementIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
     ])
     expect(systemTexts(s.requests[1])).toContain("Replacement context")
   })
@@ -6699,7 +6708,7 @@ describe("SessionRunnerLLM", () => {
     expect(yield* recordedEventTypes(sessionID)).not.toContain("session.retry.scheduled.1")
   })
 
-  scenario("records OpenCode Console's Go usage limit 429 as a typed step failure without retrying", function* (s) {
+  scenario("records a Go usage limit 429 as a generic exhausted step failure without retrying", function* (s) {
     // The exact refusal Console sends a Go subscriber at a limit.
     const body = JSON.stringify({
       type: "error",
@@ -6725,12 +6734,8 @@ describe("SessionRunnerLLM", () => {
         type: "session.step.failed.1",
         data: {
           error: {
-            type: "provider.go-limit",
-            message:
-              "OpenCode Go 5 hour usage limit reached. Switch to a free model, or turn on Extra Usage on the Go page in OpenCode Console to keep going.",
-            status: 429,
-            response: { body },
-            retryAfterMs: 3_600_000,
+            type: "provider.exhausted",
+            message: "Tente novamente mais tarde.",
           },
         },
       },

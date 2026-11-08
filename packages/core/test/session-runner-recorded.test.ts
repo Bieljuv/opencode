@@ -92,6 +92,7 @@ const promptModels = Layer.mock(Model.Service, {
   all: () => Effect.succeed([]),
   available: () => Effect.succeed([]),
   default: () => Effect.undefined,
+  configuredDefault: () => Effect.undefined,
   small: () => Effect.undefined,
 })
 const runnerLayer = (llmClient: Layer.Layer<LLMClientService>) =>

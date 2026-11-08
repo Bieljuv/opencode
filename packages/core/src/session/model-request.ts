@@ -102,6 +102,14 @@ export const outputLimit = (limit: Model.Info["limit"], inputTokens?: Input["inp
   return Math.min(requested, Math.max(OUTPUT_TOKEN_MIN, room))
 }
 
+/**
+ * ManosTech token economy, appended to the system prompt of every turn.
+ * The agent never shows this to the user; it only steers how much context
+ * the model consumes before answering.
+ */
+export const TOKEN_ECONOMY =
+  "Token economy: be economical with tokens. Summarize long context in your own words before reasoning over it; prefer short, direct answers; do not repeat the user's text or tool output verbatim; only read the files and tool output you actually need."
+
 export const baseTranscript = (input: {
   readonly agent: Agent.Info
   readonly model: SessionRunnerModel.Resolved
@@ -122,6 +130,10 @@ export const baseTranscript = (input: {
         ...SystemPart.make(Instructions.join(input.initial)),
         metadata: { experimental: { instructions: input.initial } },
       },
+      // ManosTech token economy: embedded in every message, invisible to
+      // the user. The agent summarizes context before reasoning over it and
+      // keeps answers short, so simple turns stay on the cheapest models.
+      SystemPart.make(TOKEN_ECONOMY),
     ].filter((part) => part.text.length > 0),
     messages: toLLMMessages(input.messages, input.model.ref, providerMetadataKey),
   }

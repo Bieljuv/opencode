@@ -465,41 +465,21 @@ story("renders interruption independently when the turn is not compacted", async
 })
 
 // Moved from packages/app/e2e/regression/session-timeline-projection.spec.ts
-story("renders aliased and long custom model notices", async ({ mount, page }) => {
+// Model switches are silent by design: the router never tells the user which model answered, so a switch
+// renders no notice at all — no model name, variant, or provider id may leak into the timeline.
+story("model switches stay silent in the timeline", async ({ mount, page }) => {
   await page.setViewportSize({ width: 420, height: 700 })
   const timeline = await mount("current-session-timeline-rows--conversation", { args: { scenario: "models" } })
-  const shortName = "GPT-5.4 nano"
-  const longName = "Company Gateway Extra Long Context Model for Narrow Timeline Layouts"
-
-  const short = timeline
-    .locator('[data-slot="session-timeline-notice"]')
-    .filter({ hasText: shortName })
-    .filter({ hasText: "xhigh" })
-
-  const long = timeline.locator('[data-slot="session-timeline-notice"]').filter({ hasText: longName })
-  await expect(short).toBeVisible()
-  await expect(short.getByText(`Switched to ${shortName}`, { exact: true })).toBeVisible()
-  await expect(short.locator('[data-slot="session-timeline-notice-variant"]')).toHaveText("xhigh")
+  await expect(timeline.getByText("Switched to GPT-5.4 nano", { exact: true })).toHaveCount(0)
+  await expect(timeline.getByText("Switched variant to Default", { exact: true })).toHaveCount(0)
+  await expect(timeline.getByText("Switched variant to high", { exact: true })).toHaveCount(0)
+  await expect(
+    timeline.getByText("Company Gateway Extra Long Context Model for Narrow Timeline Layouts", { exact: true }),
+  ).toHaveCount(0)
   await expect(timeline.getByText("fast-nano", { exact: true })).toHaveCount(0)
-  await expect(short.locator('[data-component="provider-icon"]')).toBeVisible()
-
-  const variantDefault = timeline
-    .locator('[data-slot="session-timeline-notice"]')
-    .filter({ hasText: "Switched variant to Default" })
-
-  const variantHigh = timeline
-    .locator('[data-slot="session-timeline-notice"]')
-    .filter({ hasText: "Switched variant to high" })
-
-  await expect(variantDefault.getByText("Switched variant to Default", { exact: true })).toBeVisible()
-  await expect(variantHigh.getByText("Switched variant to high", { exact: true })).toBeVisible()
-  await expect(variantDefault.locator('[data-slot="session-timeline-notice-variant"]')).toHaveCount(0)
-  await expect(variantHigh.locator('[data-slot="session-timeline-notice-variant"]')).toHaveCount(0)
-  await expect(long).toBeVisible()
-  await expect(long.locator('[data-component="provider-icon"]')).toBeVisible()
-  await expect(long.locator('[data-slot="session-timeline-notice-variant"]')).toHaveCount(0)
-  await expect(long.locator("[title]")).toHaveAttribute("title", `Switched to ${longName}`)
-  await expect.poll(() => long.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  await expect(
+    timeline.locator('[data-slot="session-timeline-notice"]').filter({ hasText: "Switched" }),
+  ).toHaveCount(0)
 })
 
 // Moved from packages/app/e2e/regression/session-timeline-projection.spec.ts

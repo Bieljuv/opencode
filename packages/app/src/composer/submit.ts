@@ -30,6 +30,7 @@ import {
   type SubmitSnapshot,
 } from "./machine"
 import { retryFingerprint } from "./retry"
+import type { RouterEffort } from "./effort"
 import {
   SERVER_PROMPT_STATUS,
   transitionPromptStatus,
@@ -47,6 +48,8 @@ const statuses = new Map<string, PromptStatusState>()
 type ComposerSubmitInput = {
   adapter: ComposerAdapter
   mode: Accessor<"normal" | "shell">
+  /** The effort picked for the automatic router; every prompt it sends carries it as metadata. */
+  effort?: Accessor<RouterEffort>
   commands: Accessor<readonly { name: string }[] | undefined>
   editor: () => HTMLDivElement | undefined
   queueScroll: () => void
@@ -544,7 +547,12 @@ function dispatchPrompt(input: ComposerSubmitInput, session: ComposerSession, va
 
   updateStatus(session, { type: "dispatched", id: value.id, working })
 
-  const sending = sendPrompt(session, value, input.adapter.controls().model.selection.trackSessionCommit).then(
+  const sending = sendPrompt(
+    session,
+    value,
+    input.adapter.controls().model.selection.trackSessionCommit,
+    input.effort,
+  ).then(
     () => ({ ok: true as const }),
     (error) => ({ ok: false as const, error }),
   )
@@ -769,6 +777,7 @@ async function sendPrompt(
   session: ComposerSession,
   value: ComposerSubmission,
   track: ModelSelection["trackSessionCommit"] | undefined,
+  effort?: Accessor<RouterEffort>,
 ) {
   const request = await buildSubmissionRequest(session, value)
 
@@ -813,6 +822,8 @@ async function sendPrompt(
       attachments: request.attachments,
       agent: value.selection.agent,
       model: selectionModel(value.selection),
+      // The router reads this to pick how much effort the answer gets; "automatico" when no composer chose one.
+      manostechEffort: effort?.() ?? "automatico",
     },
     prepare: staged ? undefined : () => (committed ??= commit()),
   }

@@ -33,11 +33,14 @@ import type { PromptHistoryComment } from "./history/entry"
 import { createComposerHistory } from "./history/store"
 import { createComposerSubmit } from "./submit"
 import { composerSubmitView } from "./machine"
+import type { RouterEffortSelection } from "./effort"
 import { useAttachmentDestination } from "./attachments/destination"
 import { parseClientSlashCommand } from "./client-slash-command"
 
 export type ComposerModel = ComposerEditorModel & {
   readonly model: ComposerControls["model"]
+  /** The global effort selection for the automatic router, shown as a dropdown beside the chip. */
+  readonly effort: RouterEffortSelection
 }
 
 const sendFailedTitle = {
@@ -46,7 +49,10 @@ const sendFailedTitle = {
   prompt: "prompt.toast.promptSendFailed.title",
 } as const
 
-export function createComposerModel(adapter: ComposerAdapter, options?: { queue?: ComposerQueue }): ComposerModel {
+export function createComposerModel(
+  adapter: ComposerAdapter,
+  options: { queue?: ComposerQueue; effort: RouterEffortSelection },
+): ComposerModel {
   const sdk = useWorkspaceLocation()
   const data = useData()
   const server = useServer()
@@ -113,7 +119,7 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
   const placeholder = () => {
     if (mode() === "shell") return language.t("prompt.placeholder.shell", { example: "git status" })
 
-    if (adapter.working() || (options?.queue?.count() ?? 0) > 0)
+    if (adapter.working() || (options.queue?.count() ?? 0) > 0)
       return language.t("ui.promptInput.placeholder.followUp", { slash: "/", at: "@" })
 
     return language.t("ui.promptInput.placeholder.normal", { slash: "/", at: "@" })
@@ -295,6 +301,7 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
   const submission = createComposerSubmit({
     adapter,
     mode,
+    effort: options.effort.current,
     commands: () => data.location.command.list({ directory: sdk().directory }),
     editor: () => editor,
     queueScroll: () => requestAnimationFrame(() => editor?.scrollIntoView({ block: "nearest" })),
@@ -303,7 +310,7 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
     resetHistory: () => controller.resetHistory(),
     closePopover: () => controller.dispatch({ type: "popover.close" }),
     delivery: (alternate) => {
-      const queue = options?.queue
+      const queue = options.queue
 
       if (!queue) return "steer"
 
@@ -529,7 +536,7 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
         busy: () => submitView().busy,
         canSubmit: () => submitView().canSubmit,
         working: adapter.working,
-        queue: options?.queue,
+        queue: options.queue,
         quote:
           adapter.kind === "active-session"
             ? {
@@ -537,14 +544,14 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
                   available() &&
                   !adapter.controls().model.loading &&
                   submitView().canSubmit &&
-                  !options?.queue?.undoing(),
-                delivery: () => (adapter.working() ? (options?.queue?.alternate() ?? "steer") : undefined),
+                  !options.queue?.undoing(),
+                delivery: () => (adapter.working() ? (options.queue?.alternate() ?? "steer") : undefined),
                 onSubmit: submission.submitQuote,
               }
             : undefined,
         onSubmit: (submitOptions) => {
           if (!available()) return
-          const queue = options?.queue
+          const queue = options.queue
 
           if (queue?.undoing()) return
 
@@ -565,6 +572,7 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
   })
 
   Object.defineProperty(controller, "model", { get: () => adapter.controls().model })
+  Object.defineProperty(controller, "effort", { get: () => options.effort })
 
   command.register("composer-editor", () => [
     {

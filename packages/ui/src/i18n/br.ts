@@ -218,6 +218,7 @@ export const dict = {
   "ui.common.next": "Próximo",
   "ui.common.submit": "Enviar",
   "ui.common.showMore": "Mostrar mais",
+  "ui.common.automatic": "Automático",
 
   "ui.permission.deny": "Negar",
   "ui.permission.allowAlways": "Permitir sempre",

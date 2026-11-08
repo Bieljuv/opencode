@@ -269,6 +269,7 @@ const source = {
   "ui.common.next": "Next",
   "ui.common.submit": "Submit",
   "ui.common.showMore": "Show more",
+  "ui.common.automatic": "Automatic",
   "ui.common.moreCount.one": "+{{count}} more",
   "ui.common.moreCount.other": "+{{count}} more",
 

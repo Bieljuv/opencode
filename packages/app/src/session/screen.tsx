@@ -28,7 +28,6 @@ import { createPanelSidebar, createRegion, MobilePanel } from "@/runtime/plugin/
 import { createMobileViews, MobileViewTabs } from "@/runtime/plugin/mobile"
 import { usePluginAttachment } from "@/runtime/plugin/host-apis"
 import { createMountedSession } from "@/runtime/plugin/mounted-session"
-import { useUsageExceededDialogs } from "./usage-exceeded-dialogs"
 import { SessionErrorFallback } from "./route-error"
 import { createSessionScreenLayout } from "./screen-layout"
 import { PaneTabs, SideRegion } from "@/runtime/plugin/side-region"
@@ -240,10 +239,6 @@ function SessionScreenContent(props: {
 
   props.bindBackground(composer.requests.background.tasks)
   props.bindPrompt({ quotable: composer.quote.available, focus: composer.quote.focus, focused: composer.focused })
-  useUsageExceededDialogs({
-    selection: () => composer.active()?.composer.model.selection,
-    onDone: () => composer.active()?.composer.restoreFocus(),
-  })
 
   const quote = createTimelineQuote({
     root: timeline.scroller,
