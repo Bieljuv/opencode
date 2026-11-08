@@ -23,6 +23,9 @@ const Envelope = Schema.Struct({
     ),
   ),
   delta: Schema.optional(Schema.String),
+  // `conversation.item.input_audio_transcription.completed` carries the final text here.
+  transcript: Schema.optional(Schema.String),
+  item_id: Schema.optional(Schema.String),
   delegation_id: Schema.optional(Schema.NullOr(Schema.String)),
   delegation: Schema.optional(Schema.Struct({ id: Schema.String, target: Schema.String })),
   event: Schema.optional(

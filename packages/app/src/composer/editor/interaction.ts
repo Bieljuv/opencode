@@ -728,6 +728,16 @@ export function createComposerEditor(input: {
       input.onEditor?.(element)
     },
     restoreFocus,
+    /** Types text at the caret, as if typed: dictation appends its transcript through here. */
+    insertText(content: string) {
+      draft.addText(content)
+      dispatch(DRAFT_EDITED)
+    },
+    /** Removes `content` from just before the caret, when it is there: dictation reconciles an interim transcript. */
+    removeTextBefore(content: string) {
+      draft.removeTextBefore(content)
+      dispatch(DRAFT_EDITED)
+    },
     onInput(value: string, prompt?: ComposerPersistedState["prompt"], cursor?: number) {
       cancelFocus()
 
