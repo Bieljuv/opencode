@@ -94,7 +94,7 @@ export class BrowserDictationTransport implements DictationEngine {
   constructor(
     private readonly inputOptions: {
       event: (event: VoiceEvent) => void
-      dropped: () => void
+      failed: (reason: DictationJoinFailure) => void
     },
   ) {}
 
@@ -162,7 +162,7 @@ export class BrowserDictationTransport implements DictationEngine {
 
     if (effect.type === "join.reject") return this.joined.reject(new DictationFailure(effect.reason))
 
-    if (effect.type === "notify.dropped") return this.inputOptions.dropped()
+    if (effect.type === "notify.failed") return this.inputOptions.failed(effect.reason)
 
     this.released.resolve()
   }
@@ -189,10 +189,14 @@ export class BrowserDictationTransport implements DictationEngine {
   private startRecognition() {
     try {
       this.recognition?.start()
-    } catch {
-      // `start()` throws when the recognition is already running; that run is ending, so a
-      // live session drops instead of hanging on a start that never comes.
-      if (this.state.status === "live") return this.dispatch({ type: "recognition.error" })
+    } catch (error) {
+      if (this.state.status === "live") {
+        // `start()` throws InvalidStateError when the recognition is already running: the
+        // restart already took effect (an error restart, or the `end` of the previous run),
+        // so there is nothing to do. Any other failure means the service is broken.
+        if (error instanceof DOMException && error.name === "InvalidStateError") return
+        return this.dispatch({ type: "recognition.error", reason: "connection" })
+      }
       this.dispatch({ type: "step.failed", step: "starting", reason: "connection" })
     }
   }
@@ -248,7 +252,8 @@ export class BrowserDictationTransport implements DictationEngine {
         reason: mapRecognitionError(event.error),
       })
 
-    if (this.state.status === "live") return this.dispatch({ type: "recognition.error" })
+    if (this.state.status === "live")
+      return this.dispatch({ type: "recognition.error", reason: mapRecognitionError(event.error) })
   }
 
   private releaseRecognition() {

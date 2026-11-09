@@ -79,6 +79,14 @@ export function DictationButton(props: { controller: ComposerEditorModel }) {
     fail("dropped")
   }
 
+  // The browser engine reports the failure it actually hit (microphone, offline, ...), so the
+  // toast names the real cause instead of a generic drop.
+  const failed = (reason: DictationJoinFailure) => {
+    if (status() !== "recording") return
+    transport = undefined
+    fail(reason)
+  }
+
   const startEngine = (engine: DictationEngine) => {
     transport = engine
     const current = transport
@@ -94,7 +102,7 @@ export function DictationButton(props: { controller: ComposerEditorModel }) {
         // The Realtime engine is not available; the browser's own recognition takes over
         // silently — the user never sees which engine is behind the microphone.
         if (reason === "unavailable" && current instanceof DictationTransport) {
-          startEngine(new BrowserDictationTransport({ event: onEvent, dropped }))
+          startEngine(new BrowserDictationTransport({ event: onEvent, failed }))
           return
         }
         transport = undefined
