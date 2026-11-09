@@ -1,20 +1,22 @@
 ---
 name: arena
 description: >-
-  Make 100 versions of Claude fight to the death over one task. Spins up N
-  sub-agents (default 100, --quick for 16), gives every one the exact same
+  Make N agents fight to the death over one task. Spins up N
+  sub-agents (default 20, --quick for 16), gives every one the exact same
   task plus a different strategy card (reasoning mode, workflow, strategy),
   then runs a single-elimination bracket: they attack each other's solutions,
   defend and revise, and a judge scores every match on a written rubric until
   one solution survives. Use when the user is not satisfied with an answer,
   calls it a bad answer, says try again or do better, says "arena", or asks
-  to make them compete.
+  to make them compete. Also use when the user says, in Portuguese, "resposta
+  ruim", "tenta de novo", "não gostei", "faz de novo melhor", "arena", or
+  "faz eles competir".
 argument-hint: "[--agents N | --quick] [--seed S] <task>"
 ---
 
 # arena
 
-For when Claude keeps giving a bad answer. Instead of asking again and again, this runs a tournament:
+For when the editor keeps giving a bad answer. Instead of asking again and again, this runs a tournament:
 N sub-agents get the exact same task, each attacks it with a different reasoning mode, workflow and
 strategy, and then they attack each other in a bracket until one solution is left. You are the
 orchestrator. You never compete and you never judge.
@@ -26,16 +28,14 @@ conversation.
 
 ## The tool
 
-Every piece of bookkeeping goes through `bracket.py` in this skill's folder:
+Every piece of bookkeeping goes through the `arena` tool, which runs the
+tournament state machine in process. Call it with `command` set to the
+command name and `args` to its arguments, for example the `arena` tool with
+`command: "plan"` and `args: ["--agents", "20"]`.
 
-```bash
-python3 "${CLAUDE_SKILL_DIR}/bracket.py" <command>
-```
-
-Below, `ARENA` means exactly that command. If the path looks unexpanded, use the "Base directory for
-this skill" that Claude Code printed at the top of this skill. The state lives in
-`.arena/<run>/arena.json` in the current directory, and every command after `init` finds it through
-`.arena/LATEST`.
+Below, `ARENA` means exactly that: the `arena` tool with the command and
+arguments shown. The state lives in `.arena/<run>/arena.json` in the current
+directory, and every command after `init` finds it through `.arena/LATEST`.
 
 ## Step 1: size it, and get a yes if nobody asked for it
 
@@ -43,10 +43,10 @@ Read the flags out of the request. Everything that is not a flag is the task.
 
 | flag | meaning |
 | --- | --- |
-| `--agents N` | N competitors. Default 100. |
+| `--agents N` | N competitors. Default 20. Size it to the task: a simple task runs with fewer, a complex one with more. |
 | `--quick` | 16 competitors. The everyday setting. |
 | `--seed S` | Fixes the cards and the pairings. Default: random, and recorded. |
-| `--wave W` | Sub-agents per wave. Default 10. Only raise it if the user raised Claude Code's limit. |
+| `--wave W` | Sub-agents per wave. Default 10. Only raise it if the user raised the limit. |
 
 No task text at all means: the task is the user's most recent request in this conversation, and your
 last answer to it is the baseline to beat.
@@ -54,16 +54,18 @@ last answer to it is the baseline to beat.
 Run `ARENA plan --agents N` (or `--quick`). It prints the rounds, the sub-agent calls and the waves.
 
 - **The user asked for the arena** (typed `/arena`, said "arena", or asked to make them compete):
-  tell them in one line how big it is, for example "100 agents, 7 rounds, 595 sub-agent calls", and
-  start.
-- **This skill fired because the user is unhappy** ("that's wrong", "try again", "bad answer") and
-  never mentioned the arena: ask once before spending anything. Offer three options: the full arena
-  (100 agents, 595 sub-agent calls), `--quick` (16 agents, 91 calls), or an ordinary retry. Wait for
-  the answer.
+  tell them in one line, in Brazilian Portuguese, how big it is, for example "20 agentes, 5 rodadas,
+  115 chamadas de subagentes", and start.
+- **This skill fired because the user is unhappy** ("that's wrong", "try again", "bad answer", or in
+  Portuguese "resposta ruim", "tenta de novo", "não gostei") and never mentioned the arena: ask once
+  before spending anything. Offer three options: the arena with 20 agents (115 sub-agent calls),
+  `--quick` (16 agents, 91 calls), or an ordinary retry. Wait for the answer. Only run 100 agents
+  (595 sub-agent calls) when the user asks for it explicitly, and warn them first, in Brazilian
+  Portuguese, that it is the biggest tournament and takes the longest.
 
-Sub-agents write their work into `.arena/` in the current directory. In the default permission mode
-that is one approval per file, which is hundreds on a big run. Before the spawn phase, suggest
-accept-edits mode (Shift+Tab) for the run. Do not change the user's settings yourself.
+Sub-agents write their work into `.arena/` in the current directory. Before the spawn phase, ask
+the user to allow file writes inside `.arena/` for the duration of the run, so the tournament does
+not stop for one approval per file. Do not change the user's settings yourself.
 
 ## Step 2: write the task file
 
@@ -80,16 +82,14 @@ on its own:
 - If there is an answer to beat: what the user disliked about it, in their words.
 
 Do not add requirements the user never gave. Do not write your own view of the right answer into it:
-that pushes 100 agents the same way, which is the opposite of the point.
+that pushes every agent the same way, which is the opposite of the point.
 
 If there is an earlier answer the user was not satisfied with, write it word for word to
 `.arena/baseline.md`.
 
 ## Step 3: init
 
-```bash
-ARENA init --agents N --seed S --task-file .arena/task.md --baseline-file .arena/baseline.md
-```
+Call the `arena` tool with `command: "init"` and `args: ["--agents", "N", "--seed", "S", "--task-file", ".arena/task.md", "--baseline-file", ".arena/baseline.md"]`.
 
 Leave out `--baseline-file` when there is nothing to beat, and `--seed` to get a random one. `init`
 copies the task into the run folder, deals every competitor a different strategy card with no
@@ -103,14 +103,13 @@ exact command.
 Every phase that runs sub-agents works the same way:
 
 1. `ARENA prompts <phase>` writes one brief per job and lists the jobs still to run, in waves.
-2. Launch **one wave at a time**: a single message with one Agent tool call per job in that wave (the
-   Agent tool is called Task in older Claude Code versions). Each call is:
-   - `subagent_type`: `general-purpose`
+2. Launch **one wave at a time**: a single message with one `subagent` tool call per job in that wave.
+   Each call is:
    - `description`: `arena <job id>`
    - `prompt`: `Read <prompt path> and follow it exactly. It is your whole brief.`
-   - `run_in_background`: false, where the tool has that option, so the wave comes back together.
 
-   Wait until every agent in the wave has replied before you launch the next wave.
+   The `subagent` tool waits for the call to finish, so the wave comes back together. Wait until
+   every agent in the wave has replied before you launch the next wave.
 3. After the last wave, run `ARENA next`. If an output is missing it sends you back to the same
    phase, and `prompts` then lists only the missing jobs. Re-run those once. If a job fails twice,
    write the single line `NO OUTPUT` into each of its output files (`ARENA check <phase>` lists
@@ -126,12 +125,12 @@ The order `next` takes you through:
   user rejected, blind to which is which. Then `ARENA collect`.
 - `next` prints DONE: go to step 5.
 
-After each `advance`, give the user one line, such as "Round 2 done: 25 of 100 left." Nothing more.
-Never paste pairings, attacks, verdicts or solutions into the chat.
+After each `advance`, give the user one line, in Brazilian Portuguese, such as "Rodada 2 concluída:
+5 de 20 restantes." Nothing more. Never paste pairings, attacks, verdicts or solutions into the chat.
 
-Why waves: Claude Code runs at most 10 tool calls at once by default (the
-`CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY` setting). So a 100-agent spawn is 10 waves of 10, and a
-100-agent arena is 70 waves in total, 71 with the final check.
+Why waves: at most 10 sub-agents run at once by default. So a 20-agent spawn is 2 waves of 10, and a
+20-agent arena is 19 waves in total, 20 with the final check. A 100-agent arena is 70 waves, 71 with
+the final check.
 
 ## Step 5: the result
 
@@ -141,7 +140,7 @@ solution file you read in the whole run. Give the user:
 1. **The winning solution**, in full.
 2. **Why it won**: the attacks it survived, from `winner`, as a short list. Its card on one line
    (reasoning mode + workflow + strategy).
-3. **Rounds**: for example "7 rounds, 100 agents in, 1 left."
+3. **Rounds**: for example "5 rounds, 20 agents in, 1 left."
 4. **Against the answer you rejected**, if there was one: the final check's scores, honestly. If the
    old answer scored higher, say so plainly and show both.
 5. Where the full record lives: the run folder.
@@ -168,7 +167,7 @@ If the solution changes files in the user's project, do not apply it. Ask: apply
 
 ## The prompt templates
 
-`bracket.py` fills these in (the `{{placeholders}}`) and writes one brief per job, so what you see
+The `arena` tool fills these in (the `{{placeholders}}`) and writes one brief per job, so what you see
 here is exactly what every sub-agent is told. Never edit a brief for a single agent.
 
 ### Competitor, in the spawn phase

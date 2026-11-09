@@ -54,7 +54,7 @@ import rubricMd from "../skills/arena/rubric.md" with { type: "text" }
 
 export class ArenaError extends Error {}
 
-const DEFAULT_AGENTS = 100
+const DEFAULT_AGENTS = 20 // the editor's default: simple tasks run fewer, complex ones more
 const QUICK_AGENTS = 16
 const DEFAULT_WAVE = 10 // the agent runs at most 10 sub-agents at once by default
 const ROOT = ".arena"
@@ -1446,7 +1446,7 @@ async function cmdPrompts(cwd: string, args: ParsedArgs): Promise<ArenaResult> {
   })
   if (left.length > 0) {
     lines.push("")
-    lines.push('Each job is one Agent call: subagent_type general-purpose, description "arena <job id>",')
+    lines.push('Each job is one subagent tool call: description "arena <job id>",')
     lines.push('prompt "Read <prompt path> and follow it exactly. It is your whole brief."')
     lines.push("A wave is one message with all of its Agent calls. Let it finish before the next wave.")
   }
