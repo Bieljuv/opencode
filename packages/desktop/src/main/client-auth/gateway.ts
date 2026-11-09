@@ -7,14 +7,14 @@ import { SidecarCredentials } from "../service/sidecar-credentials"
  * diário no painel. O renderer nunca recebe a chave — só um booleano
  * (gateway ativo) e o uso já agregado (percentual + reset).
  *
- * Ativação (tudo tem que valer): a flag `manostech-gateway` ligada no
- * servidor, a chave API guardada e a URL do gateway. O painel nunca
- * devolve `gateway_url`, então a URL é a reportada (quando houver) ou o
- * default abaixo — o gateway ao vivo do painel, em /v1. O main não lê a
- * flag — ela vive no servidor — então `connected` é o proxy observável:
- * o sidecar só aceita a credencial quando a flag ligou o plugin e a
- * integração existe. Sem conexão, o gateway fica inativo e o app não
- * muda nada. Fail-open sempre: falha aqui nunca mostra erro.
+ * Ativação (tudo tem que valer): a chave API guardada, a URL do gateway
+ * e a credencial conectada no servidor. O painel nunca devolve
+ * `gateway_url`, então a URL é a reportada (quando houver) ou o default
+ * abaixo — o gateway ao vivo do painel, em /v1. Não há flag: o provedor
+ * registra sempre e só entra no pool quando a credencial conecta.
+ * `connected` é o proxy observável: o sidecar só aceita a credencial
+ * quando a integração existe. Sem conexão, o gateway fica inativo e o
+ * app não muda nada. Fail-open sempre: falha aqui nunca mostra erro.
  */
 
 /**
@@ -27,7 +27,7 @@ import { SidecarCredentials } from "../service/sidecar-credentials"
  */
 export const DEFAULT_GATEWAY_URL = "https://painel-manostech.manostech.workers.dev/v1"
 
-/** A ativação do gateway, como função pura: flag × chave × URL. */
+/** A ativação do gateway, como função pura: conexão × chave × URL. */
 export function isGatewayActive(input: {
   readonly connected: boolean
   readonly apiKey: string | undefined

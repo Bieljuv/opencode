@@ -3,7 +3,6 @@ import { define } from "@opencode/plugin/effect/plugin"
 import { Form } from "@opencode/schema/form"
 import { Integration } from "@opencode/schema/integration"
 import { Model } from "@opencode/schema/model"
-import { Flag } from "../../flag.js"
 import { Provider } from "../../provider.js"
 import { configuredSettings } from "./configured.js"
 import { credentialSettings, metadataSettings } from "./credential-settings.js"
@@ -18,8 +17,9 @@ import { credentialSettings, metadataSettings } from "./credential-settings.js"
  * Availability follows the normal rule: the provider record carries
  * integrationID `manostech`, so it only joins `Model.available()` while a
  * credential is connected — no key, no model, nothing to pick or leak.
- * The flag gates the whole registration: with `manostech-gateway` off (the
- * release default) the integration and the provider do not exist.
+ * The provider registers unconditionally (no flag — the product is the
+ * product): without a credential the registration is inert, so nothing
+ * changes for users who never log in.
  *
  * The panel-reported gateway URL reaches the provider settings through the
  * key method's hidden `gatewayUrl` form answer, which the main supplies
@@ -44,8 +44,6 @@ const gatewayUrlField = Form.StringField.make({
 export const ManosTechGatewayPlugin = define({
   id: "opencode.provider.manostech",
   effect: Effect.fn(function* (ctx) {
-    if (!(yield* Flag.enabled("manostech-gateway"))) return
-
     const configured = yield* configuredSettings(providerID)
     yield* ctx.integration.transform((editor) => {
       editor.update(providerID, (integration) => {

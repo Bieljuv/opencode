@@ -1,7 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Effect, Schedule } from "effect"
 import { Credential } from "@opencode/core/credential"
-import { Flag } from "@opencode/core/flag"
 import { Integration } from "@opencode/core/integration"
 import { Model } from "@opencode/core/model"
 import { Plugin } from "@opencode/core/plugin"
@@ -19,12 +18,6 @@ const addPlugin = Effect.fn(function* () {
   const host = yield* PluginHost.make(plugin, "test")
   yield* ManosTechGatewayPlugin.effect(host)
 })
-
-// The test app channel is "unknown", so flags are off by default and the
-// OPENCODE_FLAGS env read happens before the test body sets it — provide
-// the override directly instead.
-const withFlag = <A, E, R>(effect: () => Effect.Effect<A, E, R>) =>
-  effect().pipe(Effect.provideService(Flag.Overrides, "manostech-gateway"))
 
 const connectStoredKey = (gatewayUrl: string) =>
   Effect.gen(function* () {
@@ -51,61 +44,53 @@ const defaultWhen = (predicate: (model: Model.Info | undefined) => boolean) =>
 
 describe("ManosTechGatewayPlugin", () => {
   it.effect("leaves the default alone with no gateway credential", () =>
-    withFlag(() =>
-      Effect.gen(function* () {
-        yield* addPlugin()
-        const models = yield* Model.Service
-        expect(yield* models.configuredDefault()).toBeUndefined()
-        expect((yield* models.default())?.providerID).not.toBe(providerID)
-      }),
-    ),
+    Effect.gen(function* () {
+      yield* addPlugin()
+      const models = yield* Model.Service
+      expect(yield* models.configuredDefault()).toBeUndefined()
+      expect((yield* models.default())?.providerID).not.toBe(providerID)
+    }),
   )
 
   it.effect("defaults new sessions to the gateway model while a credential is connected", () =>
-    withFlag(() =>
-      Effect.gen(function* () {
-        yield* connectStoredKey("https://gw.exemplo/v1")
-        yield* addPlugin()
-        const models = yield* Model.Service
-        expect(yield* models.configuredDefault()).toEqual({ providerID, modelID: Model.ID.make("auto") })
-        const resolved = yield* models.default()
-        expect(resolved?.providerID).toBe(providerID)
-        expect(resolved?.id).toBe(Model.ID.make("auto"))
-      }),
-    ),
+    Effect.gen(function* () {
+      yield* connectStoredKey("https://gw.exemplo/v1")
+      yield* addPlugin()
+      const models = yield* Model.Service
+      expect(yield* models.configuredDefault()).toEqual({ providerID, modelID: Model.ID.make("auto") })
+      const resolved = yield* models.default()
+      expect(resolved?.providerID).toBe(providerID)
+      expect(resolved?.id).toBe(Model.ID.make("auto"))
+    }),
   )
 
   it.effect("keeps an explicitly configured default over the gateway model", () =>
-    withFlag(() =>
-      Effect.gen(function* () {
-        const models = yield* Model.Service
-        const explicit = { providerID: Provider.ID.make("company"), modelID: Model.ID.make("chat") }
-        yield* models.transform((editor) => {
-          editor.default.set(explicit.providerID, explicit.modelID)
-        })
-        yield* connectStoredKey("https://gw.exemplo/v1")
-        yield* addPlugin()
-        expect(yield* models.configuredDefault()).toEqual(explicit)
-      }),
-    ),
+    Effect.gen(function* () {
+      const models = yield* Model.Service
+      const explicit = { providerID: Provider.ID.make("company"), modelID: Model.ID.make("chat") }
+      yield* models.transform((editor) => {
+        editor.default.set(explicit.providerID, explicit.modelID)
+      })
+      yield* connectStoredKey("https://gw.exemplo/v1")
+      yield* addPlugin()
+      expect(yield* models.configuredDefault()).toEqual(explicit)
+    }),
   )
 
   it.live("defaults to the gateway model when the key connects after startup", () =>
-    withFlag(() =>
-      Effect.gen(function* () {
-        yield* addPlugin()
-        const integrations = yield* Integration.Service
-        yield* integrations.connection.key({
-          integrationID: Integration.ID.make("manostech"),
-          key: "key-1",
-          answer: { gatewayUrl: "https://gw.exemplo/v1" },
-        })
-        const resolved = yield* defaultWhen(
-          (model) => model?.providerID === providerID && model.id === "auto",
-        )
-        expect(resolved?.providerID).toBe(providerID)
-        expect(resolved?.id).toBe(Model.ID.make("auto"))
-      }),
-    ),
+    Effect.gen(function* () {
+      yield* addPlugin()
+      const integrations = yield* Integration.Service
+      yield* integrations.connection.key({
+        integrationID: Integration.ID.make("manostech"),
+        key: "key-1",
+        answer: { gatewayUrl: "https://gw.exemplo/v1" },
+      })
+      const resolved = yield* defaultWhen(
+        (model) => model?.providerID === providerID && model.id === "auto",
+      )
+      expect(resolved?.providerID).toBe(providerID)
+      expect(resolved?.id).toBe(Model.ID.make("auto"))
+    }),
   )
 })
