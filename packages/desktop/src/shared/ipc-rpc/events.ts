@@ -76,9 +76,16 @@ export class SidecarChanged extends Schema.TaggedClass<SidecarChanged>()("Sideca
   url: Schema.String,
 }) {}
 
+// The client's account changed (login, logout, password change, Google return); windows re-check the gate.
+export class ManosTechClientChanged extends Schema.TaggedClass<ManosTechClientChanged>()(
+  "ManosTechClientChanged",
+  {},
+) {}
+
 export const DesktopEvent = Schema.Union([
   DeepLinksOpened,
   SidecarChanged,
+  ManosTechClientChanged,
   MenuCommandTriggered,
   WindowFullscreenChanged,
   WindowFocusChanged,

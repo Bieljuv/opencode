@@ -1,0 +1,81 @@
+import { Schema } from "effect"
+import { Rpc, RpcGroup } from "effect/rpc"
+
+const ClientProfile = Schema.Struct({
+  name: Schema.String,
+  email: Schema.String,
+})
+
+const ClientStatus = Schema.Union([
+  Schema.Struct({ state: Schema.Literal("logged-out") }),
+  Schema.Struct({
+    state: Schema.Literal("ready"),
+    client: ClientProfile,
+    trialEndsAt: Schema.NullOr(Schema.String),
+  }),
+  Schema.Struct({ state: Schema.Literal("must-change"), client: ClientProfile }),
+  Schema.Struct({ state: Schema.Literal("trial-expired"), trialEndsAt: Schema.NullOr(Schema.String) }),
+])
+
+const ClientError = Schema.Struct({
+  tag: Schema.Union([
+    Schema.Literal("invalid-credentials"),
+    Schema.Literal("account-inactive"),
+    Schema.Literal("trial-expired"),
+    Schema.Literal("password-too-short"),
+    Schema.Literal("email-in-use"),
+    Schema.Literal("google-unavailable"),
+    Schema.Literal("network"),
+    Schema.Literal("unknown"),
+  ]),
+  trial_ends_at: Schema.optional(Schema.String),
+})
+
+export const ManosTechClientStatus = Rpc.make("ManosTechClientStatus", { success: ClientStatus })
+
+export const ManosTechClientLogin = Rpc.make("ManosTechClientLogin", {
+  payload: { email: Schema.String, password: Schema.String },
+  success: Schema.Union([
+    Schema.Struct({ ok: Schema.Literal(true), status: ClientStatus }),
+    Schema.Struct({ ok: Schema.Literal(false), error: ClientError }),
+  ]),
+})
+
+export const ManosTechClientChangePassword = Rpc.make("ManosTechClientChangePassword", {
+  payload: { current: Schema.String, next: Schema.String },
+  success: Schema.Union([
+    Schema.Struct({ ok: Schema.Literal(true) }),
+    Schema.Struct({ ok: Schema.Literal(false), error: ClientError }),
+  ]),
+})
+
+export const ManosTechClientLogout = Rpc.make("ManosTechClientLogout")
+
+export const ManosTechClientGoogleAvailable = Rpc.make("ManosTechClientGoogleAvailable", {
+  success: Schema.Boolean,
+})
+
+export const ManosTechClientGoogleStart = Rpc.make("ManosTechClientGoogleStart", {
+  success: Schema.Struct({ available: Schema.Boolean }),
+})
+
+export const ManosTechClientRpcs = RpcGroup.make(
+  ManosTechClientStatus,
+  ManosTechClientLogin,
+  ManosTechClientChangePassword,
+  ManosTechClientLogout,
+  ManosTechClientGoogleAvailable,
+  ManosTechClientGoogleStart,
+)
+
+export type ManosTechClientStatusValue = Schema.Schema.Type<typeof ClientStatus>
+
+export type ManosTechClientErrorValue = Schema.Schema.Type<typeof ClientError>
+
+export type ManosTechClientLoginValue =
+  | { readonly ok: true; readonly status: ManosTechClientStatusValue }
+  | { readonly ok: false; readonly error: ManosTechClientErrorValue }
+
+export type ManosTechClientChangePasswordValue =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly error: ManosTechClientErrorValue }

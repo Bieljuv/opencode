@@ -137,6 +137,12 @@ type PlatformBase = {
 
   /** GUI plugin bridge to the main-process plugin host (desktop only). */
   plugins?: Bridge
+
+  /** The signed-in client account, if any (desktop only) */
+  getClientAccount?(): Promise<{ name: string; email: string } | undefined>
+
+  /** Sign the client account out (desktop only) */
+  signOutClient?(): Promise<void>
 }
 
 export type Platform = PlatformBase &

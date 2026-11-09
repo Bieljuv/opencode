@@ -1,5 +1,10 @@
 import type { DesktopMenuAction, DesktopZoomLevel } from "@opencode/app/desktop-menu"
 import type { DesktopNativeBundle } from "@opencode/app/i18n/desktop-native"
+import type {
+  ManosTechClientChangePasswordValue,
+  ManosTechClientLoginValue,
+  ManosTechClientStatusValue,
+} from "../shared/ipc-rpc/manostech-client"
 import type { StorageSnapshot } from "../shared/ipc-transport"
 import type { WindowBootstrap } from "../shared/window-bootstrap"
 import type {
@@ -41,6 +46,13 @@ export type ElectronAPI = {
   themeReady(): Promise<void>
   onMenuCommand(cb: (id: string) => void): () => void
   onDeepLink(cb: (delivery: { attempt: number; urls: string[] }) => void): () => void
+  getClientStatus(): Promise<ManosTechClientStatusValue>
+  loginClient(email: string, password: string): Promise<ManosTechClientLoginValue>
+  changeClientPassword(current: string, next: string): Promise<ManosTechClientChangePasswordValue>
+  logoutClient(): Promise<void>
+  getClientGoogleAvailable(): Promise<boolean>
+  startClientGoogle(): Promise<{ available: boolean }>
+  onClientChanged(cb: () => void): () => void
   openDirectoryPicker(opts?: DirectoryPickerOptions): Promise<string | string[] | null>
   openFilePicker(opts?: FilePickerOptions): Promise<PickedFiles | null>
   readPickedFile(token: string, path: string): Promise<ArrayBuffer>

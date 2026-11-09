@@ -45,6 +45,13 @@ export const api: ElectronAPI = {
   themeReady: () => invoke("WindowThemeReady"),
   onMenuCommand: (cb) => listen("MenuCommandTriggered", (event) => cb(event.id)),
   onDeepLink: (cb) => listen("DeepLinksOpened", (event) => cb({ attempt: event.attempt, urls: mutable(event.urls) })),
+  getClientStatus: () => invoke("ManosTechClientStatus"),
+  loginClient: (email, password) => invoke("ManosTechClientLogin", { email, password }),
+  changeClientPassword: (current, next) => invoke("ManosTechClientChangePassword", { current, next }),
+  logoutClient: () => invoke("ManosTechClientLogout"),
+  getClientGoogleAvailable: () => invoke("ManosTechClientGoogleAvailable"),
+  startClientGoogle: () => invoke("ManosTechClientGoogleStart"),
+  onClientChanged: (cb) => listen("ManosTechClientChanged", () => cb()),
 
   openDirectoryPicker: (opts) => invoke("FilesOpenDirectoryPicker", { options: opts }).then(mutable),
   openFilePicker: (opts) => invoke("FilesOpenFilePicker", { options: opts }).then(mutable),

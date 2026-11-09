@@ -55,6 +55,10 @@ export default defineConfig(async ({ command }) => {
       define: {
         // Local renderer/server mode still uses the dev application identity and updater policy.
         "import.meta.env.OPENCODE_CHANNEL": JSON.stringify(channel === "local" ? "dev" : channel),
+        // ManosTech: baked into the main bundle; the release workflow sets it from the GitHub secret.
+        "import.meta.env.MANOSTECH_INGEST_SECRET": JSON.stringify(process.env.MANOSTECH_INGEST_SECRET ?? ""),
+        // ManosTech: the Google OAuth Client ID, baked in the same way. Empty until the Client ID exists.
+        "import.meta.env.MANOSTECH_GOOGLE_CLIENT_ID": JSON.stringify(process.env.MANOSTECH_GOOGLE_CLIENT_ID ?? ""),
       },
       build: {
         minify: command === "build",

@@ -15,3 +15,7 @@ export const BACKGROUND_COLOR_KEY = "backgroundColor"
 export const WINDOW_IDS_KEY = "windowIds"
 
 export const BUNDLED_CLI_VERSION_KEY = "bundledCliVersion"
+
+export const MANOSTECH_CLIENT_SESSION_KEY = "manostech.client.session"
+
+export const MANOSTECH_CLIENT_DEVICE_ID_KEY = "manostech.client.deviceId"

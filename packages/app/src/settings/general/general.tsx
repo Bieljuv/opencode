@@ -1,5 +1,6 @@
-import { Component, Show, createMemo } from "solid-js"
+import { Component, Show, createEffect, createMemo, createSignal } from "solid-js"
 import { createMediaQuery } from "@solid-primitives/media"
+import { Button } from "@opencode/ui/button"
 import { Select } from "@opencode/ui/select"
 import { Switch } from "@opencode/ui/switch"
 import { TimelineDetailControl } from "@/settings/timeline-detail"
@@ -251,6 +252,42 @@ export const SettingsGeneral: Component = () => {
     write: (checked) => platform.setSpellcheckEnabled?.(checked),
   })
 
+  // ManosTech: the signed-in client account, desktop only. The gate owns the
+  // session; this section only shows it and signs out.
+  const [account, setAccount] = createSignal<{ name: string; email: string } | undefined>(undefined)
+
+  createEffect(() => {
+    if (!desktop() || !platform.getClientAccount) return
+
+    void platform.getClientAccount().then(setAccount).catch(() => undefined)
+  })
+
+  const signOut = () => {
+    void platform.signOutClient?.().then(() => setAccount(undefined)).catch(() => undefined)
+  }
+
+  const AccountSection = () => (
+    <Show when={account()}>
+      {(current) => (
+        <section class="settings-section" aria-label={language.t("client.account.title")}>
+          <h3 class="settings-section-title">{language.t("client.account.title")}</h3>
+          <SettingsList>
+            <SettingsRow
+              title={language.t("client.account.signedInAs", { email: current().email })}
+              description={current().name}
+            >
+              <div data-action="settings-client-sign-out">
+                <Button variant="outline" onClick={signOut}>
+                  {language.t("client.account.signOut")}
+                </Button>
+              </div>
+            </SettingsRow>
+          </SettingsList>
+        </section>
+      )}
+    </Show>
+  )
+
   const GeneralSection = () => (
     <div class="settings-section">
       <h3 class="settings-section-title">{language.t("settings.general.section.general")}</h3>
@@ -327,6 +364,8 @@ export const SettingsGeneral: Component = () => {
       </div>
       <div class="settings-tab-body settings-tab-body--sectioned">
         <GeneralSection />
+
+        <AccountSection />
 
         <section class="settings-section" aria-label={language.t("settings.timeline.title")}>
           <h3 class="settings-section-title">{language.t("settings.timeline.title")}</h3>
