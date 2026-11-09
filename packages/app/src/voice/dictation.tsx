@@ -147,8 +147,20 @@ export function DictationButton(props: { controller: ComposerEditorModel }) {
     stopping = true
     const current = transport
     transport = undefined
-    setStatus("idle")
-    void current?.close()
+    // The status stays "recording" until the close settles: the final slice's
+    // transcription can still be in flight, and onEvent drops events once the
+    // status is idle — stopping must not eat the user's last words.
+    const closing = current?.close()
+    if (!closing) {
+      setStatus("idle")
+
+      return
+    }
+    void closing.then(() => {
+      // A new recording started meanwhile; its status is its own.
+      if (transport) return
+      setStatus("idle")
+    })
   }
 
   return (
