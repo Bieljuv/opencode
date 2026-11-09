@@ -48,10 +48,6 @@ export function runDesktopMenuAction(
       win?.reload()
 
       return
-    case "view.toggleDevTools":
-      win?.webContents.toggleDevTools()
-
-      return
     case "view.resetZoom":
       setZoomLevel(1)
 

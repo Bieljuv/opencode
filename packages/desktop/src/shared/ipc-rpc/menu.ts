@@ -12,7 +12,6 @@ const DesktopMenuAction = Schema.Literals([
   "edit.delete",
   "edit.selectAll",
   "view.reload",
-  "view.toggleDevTools",
   "view.resetZoom",
   "view.zoomIn",
   "view.zoomOut",

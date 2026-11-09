@@ -13,7 +13,6 @@ export type DesktopMenuAction =
   | "edit.delete"
   | "edit.selectAll"
   | "view.reload"
-  | "view.toggleDevTools"
   | "view.resetZoom"
   | "view.zoomIn"
   | "view.zoomOut"
@@ -35,7 +34,6 @@ export type DesktopMenuRole =
   | "redo"
   | "reload"
   | "selectAll"
-  | "toggleDevTools"
   | "togglefullscreen"
   | "undo"
   | "unhide"
@@ -202,12 +200,6 @@ export const DESKTOP_MENU: DesktopMenu[] = [
       },
       { type: "separator" },
       { type: "item", labelKey: "desktop.menu.reload", action: "view.reload", role: "reload" },
-      {
-        type: "item",
-        labelKey: "desktop.menu.toggleDeveloperTools",
-        action: "view.toggleDevTools",
-        role: "toggleDevTools",
-      },
       { type: "separator" },
       {
         type: "item",
