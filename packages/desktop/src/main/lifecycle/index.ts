@@ -106,8 +106,8 @@ const runtime = Layer.effect(
     // The Google sign-in return never reaches the renderer: main owns the
     // exchange with the panel, so the code and the PKCE verifier stay here.
     const receiveDeepLinks = (urls: readonly string[]) => {
-      const authUrls = urls.filter((url) => url.startsWith("manostech://auth/google"))
-      const otherUrls = urls.filter((url) => !url.startsWith("manostech://auth/google"))
+      const authUrls = urls.filter((url) => url.startsWith("com.manostech.editor:/auth/google"))
+      const otherUrls = urls.filter((url) => !url.startsWith("com.manostech.editor:/auth/google"))
 
       authUrls.forEach((url) =>
         ManosTechClientAuth.handleDeepLink(url).catch((error) =>
@@ -119,7 +119,7 @@ const runtime = Layer.effect(
     }
 
     const secondInstance = (_event: Event, argv: string[]) => {
-      const urls = argv.filter((arg) => arg.startsWith("manostech://"))
+      const urls = argv.filter((arg) => arg.startsWith("com.manostech.editor:/"))
 
       if (urls.length) {
         runFork(Effect.logInfo("deep link received via second-instance", { urls }))

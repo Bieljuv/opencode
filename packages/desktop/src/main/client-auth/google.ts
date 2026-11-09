@@ -2,16 +2,20 @@ import { createHash, randomBytes } from "node:crypto"
 
 /**
  * ManosTech: login com Google (OAuth 2.0 + PKCE) no navegador do sistema.
- * O retorno volta pelo deep-link `manostech://auth/google`, que o main
+ * O retorno volta pelo deep-link `com.manostech.editor:/auth/google`, que o main
  * intercepta antes de chegar ao renderer. O Client ID vem embutido no
  * build (MANOSTECH_GOOGLE_CLIENT_ID); sem ele, o botão não aparece.
+ *
+ * O esquema é o DNS reverso do appId porque o Google só aceita redirect
+ * customizado com ponto no esquema — `manostech://` é recusado no cadastro
+ * do Client ID (redirect_uri_mismatch).
  *
  * O painel aceita o ID token do Google (POST /api/auth/google), não o
  * código: o app troca o código pelo id_token no endpoint de token do
  * Google e só então chama o painel.
  */
 
-export const GOOGLE_REDIRECT_URI = "manostech://auth/google"
+export const GOOGLE_REDIRECT_URI = "com.manostech.editor:/auth/google"
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 

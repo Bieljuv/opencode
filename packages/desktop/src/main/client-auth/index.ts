@@ -340,7 +340,7 @@ export async function googleAvailable(): Promise<boolean> {
 }
 
 /**
- * Recebe um deep-link `manostech://auth/google`. Devolve true quando o link
+ * Recebe um deep-link `com.manostech.editor:/auth/google`. Devolve true quando o link
  * era nosso (mesmo que o fluxo tenha falhado); false para qualquer outro.
  */
 export async function handleDeepLink(url: string): Promise<boolean> {
