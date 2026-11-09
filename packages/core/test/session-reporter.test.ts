@@ -4,7 +4,7 @@ import { Effect, Logger } from "effect"
 import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { buildEvent, configSkipReason, parseClientIdentity, report, resolveConfig } from "@opencode/core/session/reporter"
+import { buildEvent, configSkipReason, makeReporter, parseClientIdentity, report, resolveConfig } from "@opencode/core/session/reporter"
 import { withEnv } from "./fixture/env"
 
 describe("resolveConfig", () => {
@@ -96,6 +96,9 @@ describe("report", () => {
 
   test("a missing identity file logs sem arquivo de identidade once", async () => {
     const { lines, logger } = captureLogs()
+    // A fresh reporter per test: the once-per-reason guard is instance
+    // state, so a rerun of this file must see the log again.
+    const reporter = makeReporter()
     const dir = mkdtempSync(path.join(tmpdir(), "opencode-reporter-"))
     const missing = path.join(dir, "ausente.json")
     const run = () =>
@@ -103,7 +106,7 @@ describe("report", () => {
         withEnv(
           { MANOSTECH_INGEST_SECRET: "s", MANOSTECH_CLIENT_FILE: missing, MANOSTECH_INGEST_URL: undefined },
           () =>
-            report({ model: "manostech/auto", tokens, cost: Money.USD.make(0.001) }).pipe(
+            reporter.report({ model: "manostech/auto", tokens, cost: Money.USD.make(0.001) }).pipe(
               Effect.provide(Logger.layer([logger])),
             ),
         ),
@@ -122,6 +125,7 @@ describe("report", () => {
 
   test("a step with no usage logs sem uso once", async () => {
     const { lines, logger } = captureLogs()
+    const reporter = makeReporter()
     const dir = mkdtempSync(path.join(tmpdir(), "opencode-reporter-"))
     const file = path.join(dir, "cliente.json")
     writeFileSync(file, JSON.stringify({ client_id: "abc", client_email: "a@b.com" }))
@@ -130,7 +134,7 @@ describe("report", () => {
         withEnv(
           { MANOSTECH_INGEST_SECRET: "s", MANOSTECH_CLIENT_FILE: file, MANOSTECH_INGEST_URL: undefined },
           () =>
-            report({ model: "manostech/auto", tokens: noUsage, cost: Money.USD.zero }).pipe(
+            reporter.report({ model: "manostech/auto", tokens: noUsage, cost: Money.USD.zero }).pipe(
               Effect.provide(Logger.layer([logger])),
             ),
         ),

@@ -124,17 +124,70 @@ export function configSkipReason(env: Record<string, string | undefined>): SkipR
 }
 
 /**
- * Cada motivo é registrado uma única vez por processo, em nível
+ * Cria um repórter com o seu próprio registro de motivos já avisados.
+ * Cada motivo é registrado uma única vez por repórter, em nível
  * informativo — o suficiente para aparecer no "Exportar logs" sem
  * encher o arquivo a cada passo.
  */
-const loggedSkipReasons = new Set<SkipReason>()
+export function makeReporter() {
+  const loggedSkipReasons = new Set<SkipReason>()
 
-function logSkippedOnce(reason: SkipReason) {
-  if (loggedSkipReasons.has(reason)) return Effect.void
-  loggedSkipReasons.add(reason)
-  return Effect.logInfo("relatório de uso desligado", { motivo: reason })
+  function logSkippedOnce(reason: SkipReason) {
+    if (loggedSkipReasons.has(reason)) return Effect.void
+    loggedSkipReasons.add(reason)
+    return Effect.logInfo("relatório de uso desligado", { motivo: reason })
+  }
+
+  /**
+   * Envia o evento de um passo concluído. Nunca falha: qualquer problema
+   * (sem configuração, sem identidade, painel fora do ar) vira silêncio
+   * no passo — mas a primeira vez que falta configuração, identidade ou
+   * uso, o motivo fica registrado em nível informativo, para aparecer no
+   * "Exportar logs". Quem chama dispara com `Effect.forkDetach` para o
+   * passo não esperar.
+   */
+  function report(input: {
+    readonly model: string
+    readonly tokens: SessionUsage.Recorded["tokens"]
+    readonly cost: SessionUsage.Recorded["cost"]
+  }): Effect.Effect<void, never, never> {
+    return Effect.gen(function* () {
+      const config = resolveConfig(process.env)
+
+      if (!config) {
+        yield* logSkippedOnce(configSkipReason(process.env) ?? "sem segredo")
+        return
+      }
+
+      const client = yield* readIdentity(config.clientFile)
+
+      if (!client) {
+        yield* logSkippedOnce("sem arquivo de identidade")
+        return
+      }
+
+      const event = buildEvent({ model: input.model, tokens: input.tokens, cost: Number(input.cost), client })
+
+      if (!event) {
+        yield* logSkippedOnce("sem uso")
+        return
+      }
+
+      yield* sendEvent(config, event)
+    }).pipe(
+      Effect.catchCause(() => Effect.logDebug("usage report skipped")),
+      Effect.asVoid,
+    )
+  }
+
+  return { report }
 }
+
+/**
+ * O repórter do processo: uma instância só, então cada motivo aparece no
+ * máximo uma vez por processo.
+ */
+export const report = makeReporter().report
 
 function readIdentity(file: string) {
   return Effect.tryPromise({
@@ -162,47 +215,5 @@ function sendEvent(config: Config, event: IngestEvent) {
   }).pipe(
     Effect.asVoid,
     Effect.catch(() => Effect.void),
-  )
-}
-
-/**
- * Envia o evento de um passo concluído. Nunca falha: qualquer problema
- * (sem configuração, sem identidade, painel fora do ar) vira silêncio
- * no passo — mas a primeira vez que falta configuração, identidade ou
- * uso, o motivo fica registrado em nível informativo, para aparecer no
- * "Exportar logs". Quem chama dispara com `Effect.forkDetach` para o
- * passo não esperar.
- */
-export function report(input: {
-  readonly model: string
-  readonly tokens: SessionUsage.Recorded["tokens"]
-  readonly cost: SessionUsage.Recorded["cost"]
-}): Effect.Effect<void, never, never> {
-  return Effect.gen(function* () {
-    const config = resolveConfig(process.env)
-
-    if (!config) {
-      yield* logSkippedOnce(configSkipReason(process.env) ?? "sem segredo")
-      return
-    }
-
-    const client = yield* readIdentity(config.clientFile)
-
-    if (!client) {
-      yield* logSkippedOnce("sem arquivo de identidade")
-      return
-    }
-
-    const event = buildEvent({ model: input.model, tokens: input.tokens, cost: Number(input.cost), client })
-
-    if (!event) {
-      yield* logSkippedOnce("sem uso")
-      return
-    }
-
-    yield* sendEvent(config, event)
-  }).pipe(
-    Effect.catchCause(() => Effect.logDebug("usage report skipped")),
-    Effect.asVoid,
   )
 }
