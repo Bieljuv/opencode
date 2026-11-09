@@ -118,6 +118,10 @@ jobs:
         run: bun run build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+          # Bakes the Google Client ID into the app so the Google button
+          # shows. Empty until the repo secret exists; the build passes
+          # and the button simply stays hidden.
+          MANOSTECH_GOOGLE_CLIENT_ID: ${{ secrets.MANOSTECH_GOOGLE_CLIENT_ID }}
 
       # Packs the unpacked app into dist/desktop/app (no installer yet).
       # Also writes resources/app-update.yml with the github feed, which the

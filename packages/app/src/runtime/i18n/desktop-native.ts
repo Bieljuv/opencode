@@ -244,6 +244,10 @@ export const DESKTOP_NATIVE_ENGLISH = {
   "desktop.removableVolumesUsage":
     "Editor IA ManosTech uses files on removable volumes for projects you open and commands you run there.",
   "desktop.menu.app": "Editor IA ManosTech",
+  "desktop.google.loopback.success.title": "Sign-in complete",
+  "desktop.google.loopback.success.message": "You can close this tab and return to Editor IA ManosTech.",
+  "desktop.google.loopback.error.title": "Sign-in not completed",
+  "desktop.google.loopback.error.message": "You can close this tab and return to Editor IA ManosTech.",
   "desktop.menu.file": "File",
   "desktop.menu.edit": "Edit",
   "desktop.menu.view": "View",
