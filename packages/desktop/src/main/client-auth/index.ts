@@ -17,7 +17,7 @@ import {
 import { connectGatewayCredential, disconnectGatewayCredential, isGatewayActive, resolveGatewayBaseUrl, todayInSaoPaulo, DEFAULT_GATEWAY_URL } from "./gateway"
 import * as Panel from "./panel"
 import * as Transcribe from "./transcribe"
-import { clearClientIdentity, writeClientIdentity } from "./reporter-file"
+import { clearClientIdentity, repairClientIdentity, writeClientIdentity } from "./reporter-file"
 import {
   clearApiKey,
   clearGatewayUrl,
@@ -249,6 +249,10 @@ export async function getStatus(): Promise<ClientStatus> {
     // Ela também nunca devolve a chave — só o fim do ciclo mensal.
     updateSession({ mustChange: info.mustChange, expires_at: info.expires_at })
     storeGatewayCredentials(info.apiKey, info.gatewayUrl)
+    // O arquivo de identidade só era escrito no login: se ele sumiu ou
+    // corrompeu desde então, o repórter fica mudo até o próximo login.
+    // A sessão guardada e validada é a fonte — reescreve o arquivo com ela.
+    repairClientIdentity({ id: stored.client.id, email: stored.client.email })
     // A chave em claro só existe quando o painel gera uma nova: sem chave
     // guardada, ou com o ciclo mensal vencido, busca uma em
     // /api/auth/cliente/api-key; com a chave corrente ainda válida o painel
