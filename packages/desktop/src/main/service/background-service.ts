@@ -8,7 +8,7 @@ import { getMainWindows } from "../windows"
 import { clientFilePath } from "../client-auth/reporter-file"
 import { BackgroundServiceMachine } from "./background-service-machine"
 import { cleanStages } from "./cli-stages"
-import { keptStages, serviceVersion, shouldRetryEnsure } from "./cli-version"
+import { keptStages, serviceVersion, shouldAdoptProbedService, shouldRetryEnsure } from "./cli-version"
 import { DesktopCli } from "./desktop-cli"
 import { SidecarCredentials } from "./sidecar-credentials"
 import { takeSidecarProbe } from "./sidecar-probe"
@@ -45,14 +45,27 @@ export const layer = Layer.effect(
 )
 
 // A compatible service the entry module already found is adopted at once; the machine still verifies it with
-// `ensure("initial")` (which also completes a terminal handoff), off the renderer's path.
+// `ensure("initial")` (which also completes a terminal handoff), off the renderer's path. A probed service
+// running a different version than the bundled CLI is not adopted at all: the machine runs `ensure("initial")`
+// instead, which stops the old engine and starts a new one. Adopting it and trusting the background
+// verification alone used to leave the old engine answering when that verification failed.
 const probe = Effect.fn("BackgroundService.probe")(function* () {
   const service = yield* Effect.promise(takeSidecarProbe)
 
   if (!service) return undefined
   const setup = yield* prepare("initial")
+  const ready = yield* adopt(setup, service, true)
 
-  return (yield* adopt(setup, service, true)).credentials
+  if (!shouldAdoptProbedService(ready.runningVersion, setup.version)) {
+    yield* Effect.logWarning("v2 CLI background service version mismatch after probe; starting a new service", {
+      runningVersion: ready.runningVersion,
+      version: setup.version,
+    })
+
+    return undefined
+  }
+
+  return ready.credentials
 })
 
 const ensure = Effect.fn("BackgroundService.ensure")(function* (mode: BackgroundServiceMachine.ConnectMode) {

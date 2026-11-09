@@ -30,6 +30,18 @@ export function shouldRetryEnsure(version: string | undefined, message: string) 
   )
 }
 
+/**
+ * The probe only adopts a service running the bundled version. When
+ * either version is unknown there is nothing to compare and the
+ * background verification decides; when both are known and differ, the
+ * probed service is the old engine and `ensure` replaces it instead of
+ * trusting the background verification alone.
+ */
+export function shouldAdoptProbedService(runningVersion: string | undefined, bundledVersion: string | undefined) {
+  if (runningVersion === undefined || bundledVersion === undefined) return true
+  return runningVersion === bundledVersion
+}
+
 export function stageName(version: string, arch = process.arch) {
   return `${version}-${arch}`.replace(/[^a-zA-Z0-9._-]/g, "-")
 }

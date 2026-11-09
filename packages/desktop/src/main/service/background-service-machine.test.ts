@@ -405,4 +405,75 @@ describe("background service driver", () => {
 
     expect(result).toEqual({ first: A, next: B, published: [A.url, B.url] })
   })
+
+  test("a failed verification after a probe is retried once and the replacement wins", async () => {
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const gate = yield* Deferred.make<void>()
+          const verified = yield* Deferred.make<void>()
+          const published: string[] = []
+          const calls: number[] = []
+
+          const machine = yield* BackgroundServiceMachine.make({
+            probe: Effect.succeed(A),
+            ensure: () =>
+              Effect.suspend(() => {
+                calls.push(1)
+
+                return calls.length === 1
+                  ? Effect.fail(new Error("handoff failed"))
+                  : Deferred.await(gate).pipe(Effect.as(B))
+              }),
+            publish: (data) => {
+              published.push(data.url)
+
+              if (data.url === B.url) Deferred.doneUnsafe(verified, Effect.void)
+            },
+          })
+
+          const first = yield* machine.connection
+          yield* Deferred.succeed(gate, undefined)
+          yield* Deferred.await(verified)
+
+          return { first, next: yield* machine.connection, published, calls: calls.length }
+        }),
+      ),
+    )
+
+    expect(result).toEqual({ first: A, next: B, published: [A.url, B.url], calls: 2 })
+  })
+
+  test("a verification that fails twice keeps the probed service", async () => {
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const secondAttempt = yield* Deferred.make<void>()
+          const published: string[] = []
+          let calls = 0
+
+          const machine = yield* BackgroundServiceMachine.make({
+            probe: Effect.succeed(A),
+            ensure: () =>
+              Effect.suspend(() => {
+                calls += 1
+
+                if (calls === 2) Deferred.doneUnsafe(secondAttempt, Effect.void)
+
+                return Effect.fail(new Error("handoff failed"))
+              }),
+            publish: (data) => published.push(data.url),
+          })
+
+          const first = yield* machine.connection
+          yield* Deferred.await(secondAttempt)
+          yield* Effect.yieldNow
+
+          return { first, next: yield* machine.connection, published, calls }
+        }),
+      ),
+    )
+
+    expect(result).toEqual({ first: A, next: A, published: [A.url], calls: 2 })
+  })
 })

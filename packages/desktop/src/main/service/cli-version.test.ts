@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { keptStages, serviceVersion, shouldRetryEnsure } from "./cli-version"
+import { keptStages, serviceVersion, shouldAdoptProbedService, shouldRetryEnsure } from "./cli-version"
 
 describe("cli-version", () => {
   test.each([
@@ -29,5 +29,14 @@ describe("cli-version", () => {
     { version: "2.0.32", message: "Background service failed to start", expected: false },
   ])("shouldRetryEnsure($version, $message) -> $expected", (input) => {
     expect(shouldRetryEnsure(input.version, input.message)).toBe(input.expected)
+  })
+
+  test.each([
+    { running: undefined, bundled: "2.0.32", expected: true },
+    { running: "2.0.32", bundled: undefined, expected: true },
+    { running: "2.0.32", bundled: "2.0.32", expected: true },
+    { running: "2.0.31", bundled: "2.0.32", expected: false },
+  ])("shouldAdoptProbedService($running, $bundled) -> $expected", (input) => {
+    expect(shouldAdoptProbedService(input.running, input.bundled)).toBe(input.expected)
   })
 })
