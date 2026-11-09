@@ -4,8 +4,18 @@ import { Effect, Logger } from "effect"
 import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { buildEvent, configSkipReason, makeReporter, parseClientIdentity, report, resolveConfig } from "@opencode/core/session/reporter"
+import {
+  GATEWAY_MODEL_ID,
+  buildEvent,
+  configSkipReason,
+  makeReporter,
+  parseClientIdentity,
+  report,
+  resolveConfig,
+} from "@opencode/core/session/reporter"
 import { withEnv } from "./fixture/env"
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 describe("resolveConfig", () => {
   test("needs the secret and the client file", () => {
@@ -173,7 +183,7 @@ describe("report", () => {
             MANOSTECH_INGEST_URL: `http://127.0.0.1:${server.port}/api/ingest`,
           },
           () =>
-            report({ model: "manostech/auto", tokens, cost: Money.USD.make(0.001) }).pipe(
+            report({ model: "openrouter/x", tokens, cost: Money.USD.make(0.001) }).pipe(
               Effect.provide(Logger.layer([logger])),
             ),
         ),
@@ -184,7 +194,8 @@ describe("report", () => {
         client_id: "abc",
         client_email: "a@b.com",
         origin: "desktop",
-        model: "manostech/auto",
+        model: "openrouter/x",
+        event_id: expect.any(String),
         tokens_in: 125,
         tokens_out: 60,
         cost_usd: 0.001,
@@ -201,7 +212,8 @@ describe("buildEvent", () => {
   const tokens = { input: 100, output: 50, reasoning: 10, cache: { read: 20, write: 5 } }
 
   test("sums input-side tokens and output-side tokens", () => {
-    expect(buildEvent({ model: "openrouter/x", tokens, cost: 0.001, client })).toEqual({
+    const event = buildEvent({ model: "openrouter/x", tokens, cost: 0.001, client })
+    expect(event).toMatchObject({
       client_id: "abc",
       client_email: "a@b.com",
       origin: "desktop",
@@ -210,6 +222,20 @@ describe("buildEvent", () => {
       tokens_out: 60,
       cost_usd: 0.001,
     })
+  })
+
+  test("every event carries a unique event_id UUID", () => {
+    const first = buildEvent({ model: "openrouter/x", tokens, cost: 0.001, client })
+    const second = buildEvent({ model: "openrouter/x", tokens, cost: 0.001, client })
+    expect(first?.event_id).toMatch(UUID_PATTERN)
+    expect(second?.event_id).toMatch(UUID_PATTERN)
+    expect(second?.event_id).not.toBe(first?.event_id)
+  })
+
+  test("a step served by the gateway sends nothing (the gateway already measures it)", () => {
+    expect(GATEWAY_MODEL_ID).toBe("manostech/auto")
+    expect(buildEvent({ model: GATEWAY_MODEL_ID, tokens, cost: 0.001, client })).toBeUndefined()
+    expect(buildEvent({ model: "manostech/auto", tokens, cost: 0, client })).toBeUndefined()
   })
 
   test("a free model still reports its tokens with zero cost", () => {
