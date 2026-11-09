@@ -51,6 +51,18 @@ export function createDesktopPlatform(api: ElectronAPI, windowState: DesktopWind
       return status.state === "ready" ? status.client : undefined
     },
     signOutClient: () => api.logoutClient(),
+    isClientGatewayActive: async () => {
+      const status = await api.getClientStatus()
+
+      return status.state === "ready" && status.gatewayActive
+    },
+    getClientUsage: async () => {
+      const usage = await api.getClientUsage()
+
+      return usage ?? undefined
+    },
+    markClientUsageWarned: () => api.markClientUsageWarned(),
+    onClientChanged: (callback) => api.onClientChanged(callback),
     onDragCancel: (callback) => {
       window.addEventListener(DragCancelEvent, callback)
 

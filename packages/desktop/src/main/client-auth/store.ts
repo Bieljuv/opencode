@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto"
 import { Option, Schema } from "effect"
 import { getStore } from "../storage/store"
-import { MANOSTECH_CLIENT_DEVICE_ID_KEY, MANOSTECH_CLIENT_SESSION_KEY } from "../storage/keys"
+import {
+  MANOSTECH_CLIENT_API_KEY_KEY,
+  MANOSTECH_CLIENT_DEVICE_ID_KEY,
+  MANOSTECH_CLIENT_SESSION_KEY,
+  MANOSTECH_GATEWAY_URL_KEY,
+  MANOSTECH_USAGE_WARNED_KEY,
+} from "../storage/keys"
 import type { SessionData } from "./panel"
 
 /**
@@ -52,6 +58,61 @@ export function updateSession(patch: Partial<Pick<StoredSession, "mustChange" | 
 
 export function clearSession(): void {
   getStore().delete(MANOSTECH_CLIENT_SESSION_KEY)
+}
+
+/**
+ * ManosTech gateway: a chave API do cliente, guardada no mesmo store do
+ * processo principal — o renderer nunca a vê. O painel a renova todo mês e
+ * a devolve em claro no login e em GET /api/auth/cliente/api-key, só quando
+ * gera uma nova; a validação da sessão só informa o fim do ciclo.
+ * Ausente = mantém a guardada, presente = atualiza.
+ */
+export function saveApiKey(apiKey: string): void {
+  getStore().set(MANOSTECH_CLIENT_API_KEY_KEY, apiKey)
+}
+
+export function loadApiKey(): string | undefined {
+  const current = getStore().get(MANOSTECH_CLIENT_API_KEY_KEY)
+
+  return typeof current === "string" && current.length > 0 ? current : undefined
+}
+
+export function clearApiKey(): void {
+  getStore().delete(MANOSTECH_CLIENT_API_KEY_KEY)
+}
+
+/** A URL do gateway reportada pelo painel, quando houver — o painel não reporta nenhuma, e o default (/v1) vale. */
+export function saveGatewayUrl(url: string): void {
+  getStore().set(MANOSTECH_GATEWAY_URL_KEY, url)
+}
+
+export function loadGatewayUrl(): string | undefined {
+  const current = getStore().get(MANOSTECH_GATEWAY_URL_KEY)
+
+  return typeof current === "string" && current.length > 0 ? current : undefined
+}
+
+export function clearGatewayUrl(): void {
+  getStore().delete(MANOSTECH_GATEWAY_URL_KEY)
+}
+
+/**
+ * O dia (America/Sao_Paulo) em que a barra avisou dos 85% do uso diário.
+ * O aviso aparece uma vez por dia: sem data guardada para hoje, a barra
+ * mostra a linha e marca; com a data, silencia até o próximo reset.
+ */
+export function loadUsageWarnedDay(): string | undefined {
+  const current = getStore().get(MANOSTECH_USAGE_WARNED_KEY)
+
+  return typeof current === "string" && current.length > 0 ? current : undefined
+}
+
+export function saveUsageWarnedDay(day: string): void {
+  getStore().set(MANOSTECH_USAGE_WARNED_KEY, day)
+}
+
+export function clearUsageWarnedDay(): void {
+  getStore().delete(MANOSTECH_USAGE_WARNED_KEY)
 }
 
 /** Um id estável por instalação; um login novo no mesmo aparelho vence o anterior. */

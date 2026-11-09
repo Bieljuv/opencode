@@ -128,6 +128,17 @@ describe("provider error classification", () => {
     ).toEqual(["Authentication", "QuotaExceeded", "RateLimit", "InvalidRequest", "ProviderInternal"])
   })
 
+  test("classifies a ManosTech gateway daily-limit 429 as quota exhausted, not a throttle", () => {
+    // The gateway answers in pt-BR; the body names the daily cap, never a model or provider.
+    const body = JSON.stringify({ erro: "limite diário excedido", reseta_em: "2026-11-10T03:00:00Z" })
+
+    expect(classifyProviderFailure({ message: body, rawBody: body, status: 429 })._tag).toBe("QuotaExceeded")
+    expect(classifyProviderFailure({ message: "limite de uso atingido", status: 429 })._tag).toBe("QuotaExceeded")
+    expect(classifyProviderFailure({ message: "cota excedida", status: 429 })._tag).toBe("QuotaExceeded")
+    // A plain gateway throttle stays a rate limit: only the cap wording exhausts.
+    expect(classifyProviderFailure({ message: "too many requests", status: 429 })._tag).toBe("RateLimit")
+  })
+
   test("classifies Azure content filter rejections by their structured codes", () => {
     const message = "The response was filtered"
     const azure = {

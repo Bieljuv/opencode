@@ -113,6 +113,7 @@ const builtins = new Map<string, () => Promise<unknown>>([
   ["@opencode/ai/providers/google-vertex/images", () => import("@opencode/ai/providers/google-vertex/images")],
   ["@opencode/ai/providers/google-vertex-messages", () => import("@opencode/ai/providers/google-vertex-messages")],
   ["@opencode/ai/providers/groq", () => import("@opencode/ai/providers/groq")],
+  ["@opencode/ai/providers/manostech", () => import("@opencode/ai/providers/manostech")],
   ["@opencode/ai/providers/meta", () => import("@opencode/ai/providers/meta")],
   ["@opencode/ai/providers/meta/chat", () => import("@opencode/ai/providers/meta/chat")],
   ["@opencode/ai/providers/meta/images", () => import("@opencode/ai/providers/meta/images")],

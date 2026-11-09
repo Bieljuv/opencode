@@ -141,8 +141,11 @@ const RATE_LIMIT_TEXT = /rate increased too quickly|rate[-_\s]?limit|too[_\s]?ma
 // Only consulted on 429, where throttles and account caps share a status.
 // Z.ai reports balance, plan expiry, plan limits, and plan model access on 429.
 // Cerebras reports its per-minute token throttle as `token_quota_exceeded`; that is a rate limit.
+// ManosTech: the gateway answers in pt-BR (`limite diário excedido`), so the daily cap needs its own
+// phrases — otherwise it reads as a throttle and the session shows the retry message instead of the
+// exhaustion one the daily block requires.
 const QUOTA_TEXT =
-  /insufficient[-_\s]?(?:quota|balance)|(?<!token_)quota[-_\s]?exceeded|budget exceeded|usage limit|limit exhausted|package has expired|plan does not yet include/i
+  /insufficient[-_\s]?(?:quota|balance)|(?<!token_)quota[-_\s]?exceeded|budget exceeded|usage limit|limit exhausted|package has expired|plan does not yet include|limite[-_\s]?di[aá]rio|limite de uso|cota[-_\s]?excedida|uso di[aá]rio excedido/i
 // Policy rejections without a dedicated code, matched against the provider's own
 // explanation only. OpenAI reuses `invalid_prompt` for usage-policy rejections while
 // Bedrock Mantle reuses it for schema validation; Anthropic reports blocked output

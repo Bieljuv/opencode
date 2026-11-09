@@ -13,6 +13,11 @@ export const manosTechClientHandlers = ManosTechClientRpcs.toLayer(
       ManosTechClientLogout: () => promise(() => ManosTechClientAuth.logout()),
       ManosTechClientGoogleAvailable: () => promise(() => ManosTechClientAuth.googleAvailable()),
       ManosTechClientGoogleStart: () => promise(() => ManosTechClientAuth.googleStart()),
+      ManosTechClientUsage: () => promise(() => ManosTechClientAuth.getClientUsage()),
+      ManosTechClientUsageWarned: () =>
+        promise(() => {
+          ManosTechClientAuth.markUsageWarnedToday()
+        }),
     })
   }),
 )

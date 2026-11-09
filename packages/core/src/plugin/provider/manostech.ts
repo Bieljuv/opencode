@@ -1,0 +1,99 @@
+import { Effect } from "effect"
+import { define } from "@opencode/plugin/effect/plugin"
+import { Form } from "@opencode/schema/form"
+import { Integration } from "@opencode/schema/integration"
+import { Model } from "@opencode/schema/model"
+import { Provider } from "../../provider.js"
+import { configuredSettings } from "./configured.js"
+import { credentialSettings, metadataSettings } from "./credential-settings.js"
+
+/**
+ * ManosTech gateway: the app never holds a provider key. The desktop main
+ * connects the client API key (issued by the ManosTech panel, per client)
+ * as this integration's key, and the server routes each request across its
+ * shared provider keys. The single static model `auto` is the only route
+ * the app knows; the server picks the model behind it.
+ *
+ * Availability follows the normal rule: the provider record carries
+ * integrationID `manostech`, so it only joins `Model.available()` while a
+ * credential is connected — no key, no model, nothing to pick or leak.
+ * The provider registers unconditionally (no flag — the product is the
+ * product): without a credential the registration is inert, so nothing
+ * changes for users who never log in.
+ *
+ * The panel-reported gateway URL reaches the provider settings through the
+ * key method's hidden `gatewayUrl` form answer, which the main supplies
+ * when it connects the key — the same credential-metadata seam the
+ * Cloudflare AI Gateway plugin uses for its account and gateway IDs.
+ * The panel never reports a URL in practice, so the main falls back to
+ * the package default (the panel's live gateway, /v1) when none is stored.
+ * Precedence: panel URL (credential) > config baseURL > MANOSTECH_GATEWAY_URL
+ * env > the package default.
+ */
+
+const providerID = Provider.ID.make("manostech")
+
+const gatewayUrlField = Form.StringField.make({
+  type: "string",
+  key: "gatewayUrl",
+  title: "Gateway URL",
+  format: "uri",
+  hidden: true,
+})
+
+export const ManosTechGatewayPlugin = define({
+  id: "opencode.provider.manostech",
+  effect: Effect.fn(function* (ctx) {
+    const configured = yield* configuredSettings(providerID)
+    yield* ctx.integration.transform((editor) => {
+      editor.update(providerID, (integration) => {
+        integration.name = "ManosTech"
+      })
+      editor.method.update({
+        integrationID: providerID,
+        method: {
+          type: "key",
+          label: "ManosTech API key",
+          form:
+            typeof configured?.baseURL === "string" ? undefined : Form.Fields.make([gatewayUrlField]),
+        },
+      })
+    })
+    // The key method's form answers are stored as credential metadata.
+    const login = yield* credentialSettings(ctx, providerID, (value) => {
+      if (value.type !== "key") return {}
+      const settings = metadataSettings(value.metadata, ["gatewayUrl"])
+      return typeof settings.gatewayUrl === "string" ? { baseURL: settings.gatewayUrl } : {}
+    })
+    yield* ctx.provider.transform((providers) => {
+      if (!providers.get(providerID)) {
+        providers.add({
+          info: {
+            ...Provider.Info.empty(providerID),
+            name: "ManosTech",
+            package: "@opencode/ai/providers/manostech",
+            integrationID: Integration.ID.make("manostech"),
+          },
+          models: [Model.Info.default(providerID, Model.ID.make("auto"))],
+        })
+      }
+      if (typeof login.settings.baseURL === "string") {
+        providers.update(providerID, (provider) => {
+          provider.settings = Provider.mergeOverlay(provider.settings, login.settings)
+        })
+      }
+    })
+    yield* ctx.model.transform((models) => {
+      // With a gateway credential connected the provider is available, so
+      // its model is in the catalog: new sessions default to it, unless
+      // the user pinned another model in config (an explicit default wins
+      // whichever transform runs first). Without a credential the model is
+      // not in the catalog and nothing changes; on logout the next rebuild
+      // starts from an empty default again. The default is internal — no
+      // model, provider, or tier name reaches visible text.
+      if (models.get("manostech", "auto") === undefined) return
+      if (models.default.get() !== undefined) return
+      models.default.set("manostech", "auto")
+    })
+  }),
+})

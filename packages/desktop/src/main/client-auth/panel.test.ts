@@ -1,6 +1,8 @@
 import { afterAll, describe, expect, test } from "bun:test"
 import {
   changePassword,
+  fetchApiKey,
+  fetchDailyUsage,
   googleLogin,
   login,
   trialStatus,
@@ -23,7 +25,19 @@ const server = Bun.serve({
       if (body.origin !== "desktop" || typeof body.device_id !== "string")
         return Response.json({ erro: "informe e-mail, senha, origin e device_id válidos" }, { status: 400 })
 
-      return Response.json({ token: "tok-1", mustChange: false, client }, { status: 200 })
+      // O painel, com o gateway, devolve a chave do cliente e a URL do
+      // gateway junto do login; sem elas, o app mantém o guardado.
+      return Response.json(
+        { token: "tok-1", mustChange: false, client, api_key: "key-1", gateway_url: "https://gw.exemplo/v1" },
+        { status: 200 },
+      )
+    }
+
+    if (url.pathname === "/api/uso" && request.method === "GET") {
+      if (request.headers.get("authorization") !== "Bearer key-1")
+        return Response.json({ erro: "não autorizado" }, { status: 401 })
+
+      return Response.json({ usado_percentual: 85, reseta_em: "2026-11-10T03:00:00Z" }, { status: 200 })
     }
 
     if (url.pathname === "/api/auth/cliente/trocar-senha" && request.method === "POST") {
@@ -44,6 +58,8 @@ const server = Bun.serve({
             origin: "desktop",
             device_id: "dev-1",
             expires_at: "2026-12-09T03:27:00Z",
+            api_key: "key-2",
+            gateway_url: "https://gw.exemplo/v1",
           })
         : Response.json({ erro: "não autorizado" }, { status: 401 })
 
@@ -58,6 +74,8 @@ const server = Bun.serve({
           client: { ...client, trial_ends_at: "2026-11-09T06:00:00Z", is_trial: true },
           trial_ends_at: "2026-11-09T06:00:00Z",
           is_trial: true,
+          api_key: "key-1",
+          gateway_url: "https://gw.exemplo/v1",
         },
         { status: 200 },
       )
@@ -90,6 +108,69 @@ describe("login", () => {
       expect(result.value.client.email).toBe("ana@exemplo.com")
       expect(result.value.trial_ends_at).toBeNull()
       expect(result.value.expires_at).toBeNull()
+    }
+  })
+
+  test("a login that carries the gateway key and URL passes them through", async () => {
+    const result = await login(base, { email: "ana@exemplo.com", password: "senha", deviceId: "dev-1" })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.apiKey).toBe("key-1")
+      expect(result.value.gatewayUrl).toBe("https://gw.exemplo/v1")
+    }
+  })
+
+  test("a login without gateway fields leaves them undefined (keeps the stored ones)", async () => {
+    const plain = Bun.serve({
+      port: 0,
+      fetch: () => Response.json({ token: "tok-1", mustChange: false, client }, { status: 200 }),
+    })
+
+    try {
+      const result = await login(`http://127.0.0.1:${plain.port}`, {
+        email: "ana@exemplo.com",
+        password: "senha",
+        deviceId: "dev-1",
+      })
+
+      expect(result.ok).toBe(true)
+      if (result.ok) {
+        expect(result.value.apiKey).toBeUndefined()
+        expect(result.value.gatewayUrl).toBeUndefined()
+      }
+    } finally {
+      plain.stop()
+    }
+  })
+
+  test("a login whose current key is still valid returns api_key null and stays logged in", async () => {
+    // O painel devolve api_key: null quando a chave corrente ainda vale
+    // (só devolve em claro uma chave nova). Antes, o null quebrava o
+    // decode e o login caía em "unknown" para todo cliente recorrente.
+    const plain = Bun.serve({
+      port: 0,
+      fetch: () =>
+        Response.json(
+          { token: "tok-1", mustChange: false, client, api_key: null, gateway_url: null },
+          { status: 200 },
+        ),
+    })
+
+    try {
+      const result = await login(`http://127.0.0.1:${plain.port}`, {
+        email: "ana@exemplo.com",
+        password: "senha",
+        deviceId: "dev-1",
+      })
+
+      expect(result.ok).toBe(true)
+      if (result.ok) {
+        expect(result.value.apiKey).toBeUndefined()
+        expect(result.value.gatewayUrl).toBeUndefined()
+      }
+    } finally {
+      plain.stop()
     }
   })
 
@@ -168,6 +249,16 @@ describe("validateSession", () => {
     }
   })
 
+  test("a session validation that renews the key passes the new one through", async () => {
+    const result = await validateSession(base, "tok-1")
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.apiKey).toBe("key-2")
+      expect(result.value.gatewayUrl).toBe("https://gw.exemplo/v1")
+    }
+  })
+
   test("a revoked token maps to invalid-credentials", async () => {
     const result = await validateSession(base, "tok-revogado")
 
@@ -187,10 +278,114 @@ describe("googleLogin", () => {
     }
   })
 
+  test("a Google login that carries the gateway key and URL passes them through", async () => {
+    const result = await googleLogin(base, { idToken: "idtok", deviceId: "dev-1" })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.apiKey).toBe("key-1")
+      expect(result.value.gatewayUrl).toBe("https://gw.exemplo/v1")
+    }
+  })
+
   test("a rejected id token maps to google-unavailable", async () => {
     const result = await googleLogin(base, { idToken: "ruim", deviceId: "dev-1" })
 
     expect(result).toEqual({ ok: false, error: { tag: "google-unavailable" } })
+  })
+})
+
+describe("fetchDailyUsage", () => {
+  test("a valid key returns the daily percent and the reset instant", async () => {
+    expect(await fetchDailyUsage(base, "key-1")).toEqual({
+      percent: 85,
+      resetsAt: "2026-11-10T03:00:00Z",
+    })
+  })
+
+  test("a wrong key, a bad shape, and an unreachable panel all mean no data (fail-open)", async () => {
+    expect(await fetchDailyUsage(base, "key-errada")).toBeUndefined()
+    expect(await fetchDailyUsage("http://127.0.0.1:1", "key-1")).toBeUndefined()
+
+    const outOfRange = Bun.serve({
+      port: 0,
+      fetch: () => Response.json({ usado_percentual: 150, reseta_em: "2026-11-10T03:00:00Z" }),
+    })
+
+    try {
+      expect(await fetchDailyUsage(`http://127.0.0.1:${outOfRange.port}`, "key-1")).toBeUndefined()
+    } finally {
+      outOfRange.stop()
+    }
+  })
+})
+
+describe("fetchApiKey", () => {
+  test("a newly generated key comes back in clear", async () => {
+    const fresh = Bun.serve({
+      port: 0,
+      fetch: (request) => {
+        if (request.headers.get("authorization") !== "Bearer tok-1")
+          return Response.json({ erro: "não autorizado" }, { status: 401 })
+
+        return Response.json(
+          {
+            api_key: "key-2",
+            key_prefix: "mk_key-2",
+            plan: "desktop",
+            cycle_start_at: "2026-11-09T03:00:00Z",
+            renews_at: "2026-12-09T03:00:00Z",
+            gerada_agora: true,
+          },
+          { status: 200 },
+        )
+      },
+    })
+
+    try {
+      expect(await fetchApiKey(`http://127.0.0.1:${fresh.port}`, "tok-1")).toBe("key-2")
+    } finally {
+      fresh.stop()
+    }
+  })
+
+  test("a still-valid current key returns null and keeps the stored one", async () => {
+    const current = Bun.serve({
+      port: 0,
+      fetch: () =>
+        Response.json(
+          {
+            api_key: null,
+            key_prefix: "mk_key-1",
+            plan: "desktop",
+            cycle_start_at: "2026-10-09T03:00:00Z",
+            renews_at: "2026-12-09T03:00:00Z",
+            gerada_agora: false,
+          },
+          { status: 200 },
+        ),
+    })
+
+    try {
+      expect(await fetchApiKey(`http://127.0.0.1:${current.port}`, "tok-1")).toBeUndefined()
+    } finally {
+      current.stop()
+    }
+  })
+
+  test("a revoked token and an unreachable panel mean no key (fail-open)", async () => {
+    const revoked = Bun.serve({
+      port: 0,
+      fetch: () => Response.json({ erro: "não autorizado" }, { status: 401 }),
+    })
+
+    try {
+      expect(await fetchApiKey(`http://127.0.0.1:${revoked.port}`, "tok-1")).toBeUndefined()
+    } finally {
+      revoked.stop()
+    }
+
+    expect(await fetchApiKey("http://127.0.0.1:1", "tok-1")).toBeUndefined()
   })
 })
 

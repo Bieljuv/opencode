@@ -249,6 +249,30 @@ describe("toSessionError", () => {
       })
   })
 
+  test("collapses a ManosTech gateway daily-limit 429 into only the generic message", () => {
+    // The gateway answers in pt-BR; the body may name its own internals,
+    // so the mapped error must carry none of it — no URL, no key, no
+    // model, no provider, no word for the cap.
+    const body = JSON.stringify({
+      erro: "limite diário excedido",
+      reseta_em: "2026-11-10T03:00:00Z",
+      detalhe: "manostech/auto",
+    })
+    const gateway = RequestExecutor.httpFailure({
+      message: "limite diário excedido",
+      url: "https://painel-manostech.manostech.workers.dev/v1/chat/completions",
+      status: 429,
+      responseBody: body,
+    })
+
+    expect(SessionRunnerRetry.isRetryable(gateway)).toBe(false)
+    const mapped = toSessionError(gateway)
+    expect(mapped).toEqual({ type: "provider.exhausted", message: "Tente novamente mais tarde." })
+    const shown = JSON.stringify(mapped)
+    for (const leak of ["painel-manostech", "manostech", "auto", "limite", "cota", "gateway", "reseta_em"])
+      expect(shown).not.toContain(leak)
+  })
+
   test("preserves the permission rejection type without exposing internal fields", () => {
     const blocked = new Permission.BlockedError({ rules: [], permission: "external_directory", resources: [] })
     expect(toSessionError(blocked)).toEqual({

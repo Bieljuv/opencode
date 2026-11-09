@@ -109,6 +109,10 @@ type LocationData = {
   mcpServer?: McpServer[]
   mcpResource?: McpResource[]
   model?: ModelInfo[]
+  // The server's default model for this location (GET /api/model/default):
+  // the model a session uses when nothing else is chosen. Null when the
+  // server has none; undefined until loaded.
+  modelDefault?: ModelInfo | null
   provider?: ProviderInfo[]
   reference?: ReferenceInfo[]
   websearch?: WebSearchProvider[]
@@ -1337,11 +1341,21 @@ export function createData(config: CreateDataInput) {
             }),
           }))
         const active =
-          hasLocation("integration", location) || hasLocation("model", location) || hasLocation("provider", location)
+          hasLocation("integration", location) ||
+          hasLocation("model", location) ||
+          hasLocation("modelDefault", location) ||
+          hasLocation("provider", location)
         result.location.model.invalidate(location)
+        result.location.modelDefault.invalidate(location)
         result.location.provider.invalidate(location)
         if (active)
-          refresh(() => Promise.all([result.location.model.sync(location), result.location.provider.sync(location)]))
+          refresh(() =>
+            Promise.all([
+              result.location.model.sync(location),
+              result.location.modelDefault.sync(location),
+              result.location.provider.sync(location),
+            ]),
+          )
       })
       return
     }
@@ -1354,6 +1368,7 @@ export function createData(config: CreateDataInput) {
         break
       case "model.updated":
         refreshLocation("model", result.location.model, location)
+        refreshLocation("modelDefault", result.location.modelDefault, location)
         break
       case "agent.updated":
         refreshLocation("agent", result.location.agent, location)
@@ -1397,15 +1412,20 @@ export function createData(config: CreateDataInput) {
       case "integration.updated": {
         refreshUsageLimits(location)
         const active =
-          hasLocation("integration", location) || hasLocation("model", location) || hasLocation("provider", location)
+          hasLocation("integration", location) ||
+          hasLocation("model", location) ||
+          hasLocation("modelDefault", location) ||
+          hasLocation("provider", location)
         result.location.integration.invalidate(location)
         result.location.model.invalidate(location)
+        result.location.modelDefault.invalidate(location)
         result.location.provider.invalidate(location)
         if (active)
           refresh(() =>
             Promise.all([
               result.location.integration.sync(location),
               result.location.model.sync(location),
+              result.location.modelDefault.sync(location),
               result.location.provider.sync(location),
             ]),
           )
@@ -2107,6 +2127,7 @@ export function createData(config: CreateDataInput) {
         result.location.mcp.server.invalidate(location)
         result.location.mcp.resource.invalidate(location)
         result.location.model.invalidate(location)
+        result.location.modelDefault.invalidate(location)
         result.location.provider.invalidate(location)
         result.location.reference.invalidate(location)
         result.location.skill.invalidate(location)
@@ -2130,6 +2151,9 @@ export function createData(config: CreateDataInput) {
         }),
       },
       model: locationResource("model", (location) => api().model.list({ location }), { alias: true }),
+      modelDefault: locationResource("modelDefault", (location) => api().model.default({ location }), {
+        alias: true,
+      }),
       provider: locationResource("provider", (location) => api().provider.list({ location }), { alias: true }),
       reference: locationResource("reference", (location) => api().reference.list({ location })),
       websearch: {

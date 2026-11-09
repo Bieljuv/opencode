@@ -687,7 +687,7 @@ test("refreshes global credential events across every loaded location", async ()
           directory,
           project: { id: "project", directory, canonical: directory },
         },
-        data: [],
+        data: url.pathname === "/api/model/default" ? null : [],
       })
     },
   })
@@ -742,12 +742,14 @@ test("refreshes global credential events across every loaded location", async ()
         data: { credentialID, integrationID: "integration" },
       }
       listeners.forEach((listener) => listener({ name: switched.type, details: switched }))
-      await wait(() => requests.length === 4)
+      await wait(() => requests.length === 6)
       expect(requests.map((url) => [url.pathname, url.searchParams.get("location[directory]")])).toEqual(
         expect.arrayContaining([
           ["/api/model", "/project"],
+          ["/api/model/default", "/project"],
           ["/api/provider", "/project"],
           ["/api/model", "/other"],
+          ["/api/model/default", "/other"],
           ["/api/provider", "/other"],
         ]),
       )
@@ -836,6 +838,71 @@ for (const resource of ["provider", "model"] as const) {
     }
   })
 }
+
+test("refreshes the server default only at the location named by model.updated", async () => {
+  const listeners = new Set<Parameters<CreateDataInput["event"]["listen"]>[0]>()
+  const requests: URL[] = []
+  const current = { name: "Before" }
+  const api = OpenCode.make({
+    baseUrl: "http://opencode.local",
+    fetch: async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init)
+      const url = new URL(request.url)
+      requests.push(url)
+      const directory = url.searchParams.get("location[directory]") ?? "/project"
+      if (url.pathname !== "/api/model" && url.pathname !== "/api/model/default")
+        throw new Error(`Unexpected request: ${request.url}`)
+      return Response.json({
+        location: { directory, project: { id: directory, directory, canonical: directory } },
+        data: url.pathname === "/api/model/default" ? modelInfo(current.name) : [modelInfo(current.name)],
+      })
+    },
+  })
+  const setup = createRoot((dispose) => ({
+    data: createData({
+      api: () => api,
+      directory: "/project",
+      event: {
+        on: () => () => {},
+        listen(handler) {
+          listeners.add(handler)
+          return () => listeners.delete(handler)
+        },
+      },
+      connection: { status: () => "connected" },
+    }),
+    dispose,
+  }))
+  const project = { directory: "/project" }
+  const other = { directory: "/other" }
+
+  try {
+    await Promise.all([
+      setup.data.location.model.sync(project),
+      setup.data.location.modelDefault.sync(project),
+      setup.data.location.model.sync(other),
+    ])
+    requests.length = 0
+    current.name = "After"
+    const event: OpenCodeEvent = {
+      id: "evt_model_updated",
+      created: 1,
+      type: "model.updated",
+      location: project,
+      data: {},
+    }
+    listeners.forEach((listener) => listener({ name: event.type, details: event }))
+
+    await wait(() => setup.data.location.modelDefault.list(project)?.name === "After")
+    expect(requests.map((url) => [url.pathname, url.searchParams.get("location[directory]")])).toEqual([
+      ["/api/model", "/project"],
+      ["/api/model/default", "/project"],
+    ])
+    expect(setup.data.location.modelDefault.list(other)).toBe(undefined)
+  } finally {
+    setup.dispose()
+  }
+})
 
 test("ignores catalog updates for unloaded locations while refreshing loaded locations", async () => {
   const listeners = new Set<Parameters<CreateDataInput["event"]["listen"]>[0]>()

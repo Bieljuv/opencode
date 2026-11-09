@@ -42,6 +42,7 @@ import { TimelineSearchBar } from "./timeline/search-bar"
 import { createTimelineQuote, TimelineQuote } from "./timeline/quote"
 import { createTimelineQuoteHighlight } from "./timeline/quote-highlight"
 import { ActiveSessionComposerRegion, createActiveSessionRegion } from "./composer/region"
+import { PlanUsageStrip } from "@/client/plan-usage"
 import { SessionIdentityHeader, SessionLocation } from "./session-identity-header"
 import { SessionHeaderDrag, windowDragEnabled } from "./header/drag-area"
 import { usePlatform } from "@/runtime/platform/platform"
@@ -536,6 +537,9 @@ function SessionScreenContent(props: {
             </div>
           </Show>
         </div>
+
+        {/* ManosTech: daily plan usage, persistent at the foot of the session. Renders nothing without gateway data. */}
+        <PlanUsageStrip />
 
         {/* Hidden rather than unmounted while the user hides it, so its terminals keep their screens. */}
         <Show when={isDesktop() && !!session.identity.params.id && bottomTabs()}>

@@ -51,6 +51,8 @@ export const api: ElectronAPI = {
   logoutClient: () => invoke("ManosTechClientLogout"),
   getClientGoogleAvailable: () => invoke("ManosTechClientGoogleAvailable"),
   startClientGoogle: () => invoke("ManosTechClientGoogleStart"),
+  getClientUsage: () => invoke("ManosTechClientUsage"),
+  markClientUsageWarned: () => invoke("ManosTechClientUsageWarned"),
   onClientChanged: (cb) => listen("ManosTechClientChanged", () => cb()),
 
   openDirectoryPicker: (opts) => invoke("FilesOpenDirectoryPicker", { options: opts }).then(mutable),

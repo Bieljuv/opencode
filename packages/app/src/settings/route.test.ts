@@ -80,6 +80,31 @@ describe("settings route", () => {
     })
   })
 
+  test("sends a direct Providers link to General while the gateway hides the page", () => {
+    const providers: SettingsView = { type: "root", tab: "providers", server: "wsl:Debian" }
+    const local = { key: "local", availability: "ready" as const }
+    const wsl = { key: "wsl:Debian", availability: "starting" as const }
+
+    expect(
+      settingsViewRedirect({ view: providers, loaded: true, servers: [local, wsl], gatewayActive: true }),
+    ).toEqual({ type: "root", tab: "general" })
+    expect(
+      settingsViewRedirect({ view: providers, loaded: false, servers: [local], gatewayActive: true }),
+    ).toEqual({ type: "root", tab: "general" })
+    // Without the gateway the link keeps working exactly as before.
+    expect(
+      settingsViewRedirect({ view: providers, loaded: true, servers: [local, wsl], gatewayActive: false }),
+    ).toBeUndefined()
+    expect(
+      settingsViewRedirect({
+        view: { type: "root", tab: "general" },
+        loaded: true,
+        servers: [local, wsl],
+        gatewayActive: true,
+      }),
+    ).toBeUndefined()
+  })
+
   test("keeps a project page while its server starts and leaves it for a signed-out or unreachable one", () => {
     const view: SettingsView = { type: "project", server: "wsl:Debian", project: "/work", tab: "general" }
     const local = { key: "local", availability: "ready" as const }
