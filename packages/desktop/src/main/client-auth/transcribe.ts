@@ -20,9 +20,11 @@ export type TranscribeAudioResult =
 
 const TranscriptionResponse = Schema.Struct({ text: Schema.String })
 
-/** data:audio/<tipo>;base64,... -> { mimeType, data } (null se inválido) */
+/** data:audio/<tipo>[;param=valor]*;base64,... -> { mimeType, data } (null se inválido) */
 export function parseAudioDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
-  const m = /^data:(audio\/[\w.+-]+);base64,([A-Za-z0-9+/=]+)$/.exec((dataUrl || "").trim())
+  // O MediaRecorder do Chromium devolve audio/webm;codecs=opus — os parâmetros depois do
+  // tipo MIME são aceitos e descartados; só o tipo base vira o Blob/nome do arquivo.
+  const m = /^data:(audio\/[\w.+-]+)(?:;[^;,]+)*;base64,([A-Za-z0-9+/=]+)$/.exec((dataUrl || "").trim())
 
   if (!m) return null
 

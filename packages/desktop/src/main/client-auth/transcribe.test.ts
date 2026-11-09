@@ -92,8 +92,24 @@ test("an invalid audio data URL never reaches the gateway", async () => {
   expect(requests).toHaveLength(0)
 })
 
+test("a slice from the Chromium MediaRecorder (audio/webm;codecs=opus) is sent as audio.webm", async () => {
+  // Regressão ao vivo (09/11): o MediaRecorder do Chromium devolve o MIME com o parâmetro
+  // ;codecs=opus e o parse antigo rejeitava a fatia — o mic gravava e nada era transcrito.
+  const chromiumUrl = `data:audio/webm;codecs=opus;base64,${AUDIO_B64}`
+  const result = await transcribeSlice({ apiKey: "client-key", gatewayUrl: gatewayUrl(), audioDataUrl: chromiumUrl })
+
+  expect(result).toEqual({ ok: true, text: "olá" })
+  expect(requests).toHaveLength(1)
+  expect(requests[0]?.body).toContain('filename="audio.webm"')
+  expect(requests[0]?.body).toContain("Content-Type: audio/webm")
+})
+
 test("parseAudioDataUrl accepts audio data URLs and rejects the rest", () => {
   expect(parseAudioDataUrl(AUDIO_DATA_URL)).toEqual({ mimeType: "audio/webm", data: AUDIO_B64 })
+  expect(parseAudioDataUrl(`data:audio/webm;codecs=opus;base64,${AUDIO_B64}`)).toEqual({
+    mimeType: "audio/webm",
+    data: AUDIO_B64,
+  })
   expect(parseAudioDataUrl("data:text/plain;base64,AAAA")).toBeNull()
   expect(parseAudioDataUrl("")).toBeNull()
 })
