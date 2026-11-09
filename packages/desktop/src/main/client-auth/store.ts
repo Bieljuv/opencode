@@ -62,9 +62,10 @@ export function clearSession(): void {
 
 /**
  * ManosTech gateway: a chave API do cliente, guardada no mesmo store do
- * processo principal — o renderer nunca a vê. O painel a renova todo mês
- * e a devolve no login e na validação da sessão; ausente = mantém a
- * guardada, presente = atualiza.
+ * processo principal — o renderer nunca a vê. O painel a renova todo mês e
+ * a devolve em claro no login e em GET /api/auth/cliente/api-key, só quando
+ * gera uma nova; a validação da sessão só informa o fim do ciclo.
+ * Ausente = mantém a guardada, presente = atualiza.
  */
 export function saveApiKey(apiKey: string): void {
   getStore().set(MANOSTECH_CLIENT_API_KEY_KEY, apiKey)
@@ -80,7 +81,7 @@ export function clearApiKey(): void {
   getStore().delete(MANOSTECH_CLIENT_API_KEY_KEY)
 }
 
-/** A URL do gateway que o painel reportou no login ou na sessão. */
+/** A URL do gateway reportada pelo painel, quando houver — o painel não reporta nenhuma, e o default (/v1) vale. */
 export function saveGatewayUrl(url: string): void {
   getStore().set(MANOSTECH_GATEWAY_URL_KEY, url)
 }

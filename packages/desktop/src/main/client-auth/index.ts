@@ -227,9 +227,18 @@ export async function getStatus(): Promise<ClientStatus> {
   if (result.ok) {
     const info = result.value
     // A /sessao não reemite token nem trial: o guardado continua valendo.
-    // A chave e a URL, quando vêm, renovam o guardado (renovação mensal).
+    // Ela também nunca devolve a chave — só o fim do ciclo mensal.
     updateSession({ mustChange: info.mustChange, expires_at: info.expires_at })
     storeGatewayCredentials(info.apiKey, info.gatewayUrl)
+    // A chave em claro só existe quando o painel gera uma nova: sem chave
+    // guardada, ou com o ciclo mensal vencido, busca uma em
+    // /api/auth/cliente/api-key; com a chave corrente ainda válida o painel
+    // devolve null e a guardada continua valendo.
+    if (!loadApiKey() || (info.apiKeyRenewsAt !== null && Date.parse(info.apiKeyRenewsAt) <= Date.now())) {
+      const fresh = await Panel.fetchApiKey(Panel.panelBaseUrl(process.env), stored.token)
+
+      if (fresh) saveApiKey(fresh)
+    }
     await refreshGatewayCredential()
 
     return statusFromSession({

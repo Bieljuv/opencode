@@ -18,11 +18,17 @@ import { Option, Schema } from "effect"
  * - Google: o app troca o código pelo id_token no próprio Google e manda
  *   { token: id_token, origin, device_id } ao painel.
  * - fim do teste: 403 { erro: "teste_expirado" }.
- * - gateway (contrato parcial, painel ainda não expôs): login, sessão e
- *   Google podem devolver `api_key` (chave do cliente, renovada todo mês)
- *   e `gateway_url` (a URL do gateway) — ambos opcionais; ausente mantém
- *   o guardado, presente atualiza. `GET /api/uso` devolve o uso diário
- *   `{ usado_percentual, reseta_em }` com a chave API como Bearer.
+ * - gateway (contrato real, deploy 8fe9e7a5): o painel serve a API
+ *   OpenAI-compatível em /v1 (chat/completions, models, images/generations)
+ *   — nada em /api/gateway. Login e Google devolvem `api_key` em claro SÓ
+ *   quando uma chave nova foi gerada (sem chave ou ciclo mensal vencido);
+ *   com a chave corrente ainda válida, `api_key` é null e o app mantém a
+ *   guardada. A sessão nunca devolve a chave (só `tem_chave_api`,
+ *   `key_prefix`, `api_key_renews_at`); `GET /api/auth/cliente/api-key`
+ *   devolve a chave em claro só quando gera uma nova naquela chamada.
+ *   Nada devolve `gateway_url` — o app usa o default (/v1 ao vivo).
+ *   `GET /api/uso` devolve o uso diário `{ usado_percentual, reseta_em }`
+ *   com a chave API como Bearer.
  * - a troca chave→sessão (`exchangeApiKey`) ainda não tem endpoint
  *   definido no painel: a função existe com o caminho marcado como
  *   pendente e NÃO é chamada — a sessão de 30 dias cobre o offline.
@@ -62,6 +68,8 @@ export type SessionInfo = {
   readonly expires_at: string
   readonly apiKey: string | undefined
   readonly gatewayUrl: string | undefined
+  /** Fim do ciclo mensal da chave (`api_key_renews_at`); null = sem chave. */
+  readonly apiKeyRenewsAt: string | null
 }
 
 /** Uso diário do plano, como o painel expõe em GET /api/uso. */
@@ -99,8 +107,8 @@ const LoginResponse = Schema.Struct({
   token: Schema.String,
   mustChange: Schema.Boolean,
   client: ClientResponse,
-  api_key: Schema.optional(Schema.String),
-  gateway_url: Schema.optional(Schema.String),
+  api_key: Schema.optional(Schema.NullOr(Schema.String)),
+  gateway_url: Schema.optional(Schema.NullOr(Schema.String)),
 })
 
 const SessaoResponse = Schema.Struct({
@@ -109,8 +117,11 @@ const SessaoResponse = Schema.Struct({
   origin: Schema.String,
   device_id: Schema.String,
   expires_at: Schema.String,
-  api_key: Schema.optional(Schema.String),
-  gateway_url: Schema.optional(Schema.String),
+  tem_chave_api: Schema.optional(Schema.Boolean),
+  key_prefix: Schema.optional(Schema.NullOr(Schema.String)),
+  api_key_renews_at: Schema.optional(Schema.NullOr(Schema.String)),
+  api_key: Schema.optional(Schema.NullOr(Schema.String)),
+  gateway_url: Schema.optional(Schema.NullOr(Schema.String)),
 })
 
 const GoogleResponse = Schema.Struct({
@@ -119,8 +130,17 @@ const GoogleResponse = Schema.Struct({
   client: ClientResponse,
   trial_ends_at: Schema.NullOr(Schema.String),
   is_trial: Schema.Boolean,
-  api_key: Schema.optional(Schema.String),
-  gateway_url: Schema.optional(Schema.String),
+  api_key: Schema.optional(Schema.NullOr(Schema.String)),
+  gateway_url: Schema.optional(Schema.NullOr(Schema.String)),
+})
+
+const ApiKeyResponse = Schema.Struct({
+  api_key: Schema.NullOr(Schema.String),
+  key_prefix: Schema.String,
+  plan: Schema.String,
+  cycle_start_at: Schema.String,
+  renews_at: Schema.String,
+  gerada_agora: Schema.Boolean,
 })
 
 const UsageResponse = Schema.Struct({
@@ -159,8 +179,8 @@ export async function login(
       client: value.client,
       trial_ends_at: null,
       expires_at: null,
-      apiKey: value.api_key,
-      gatewayUrl: value.gateway_url,
+      apiKey: value.api_key ?? undefined,
+      gatewayUrl: value.gateway_url ?? undefined,
     },
   }
 }
@@ -260,8 +280,9 @@ export async function validateSession(baseUrl: string, token: string): Promise<R
       mustChange: value.mustChange,
       client: value.client,
       expires_at: value.expires_at,
-      apiKey: value.api_key,
-      gatewayUrl: value.gateway_url,
+      apiKey: value.api_key ?? undefined,
+      gatewayUrl: value.gateway_url ?? undefined,
+      apiKeyRenewsAt: value.api_key_renews_at ?? null,
     },
   }
 }
@@ -315,8 +336,8 @@ export async function googleLogin(
       client: value.client,
       trial_ends_at: value.trial_ends_at,
       expires_at: null,
-      apiKey: value.api_key,
-      gatewayUrl: value.gateway_url,
+      apiKey: value.api_key ?? undefined,
+      gatewayUrl: value.gateway_url ?? undefined,
     },
   }
 }
@@ -349,6 +370,34 @@ export async function fetchDailyUsage(baseUrl: string, apiKey: string): Promise<
     return undefined
 
   return { percent: value.usado_percentual, resetsAt: value.reseta_em }
+}
+
+/**
+ * A chave API do cliente (GET /api/auth/cliente/api-key, Bearer = token de
+ * sessão). O painel só devolve a chave em claro quando uma NOVA foi gerada
+ * nesta chamada (sem chave ou ciclo mensal vencido); com a chave corrente
+ * ainda válida, devolve `api_key: null` e o app mantém a guardada — o
+ * painel só guarda o hash e não tem como devolver uma chave antiga em
+ * claro. É como o app pega a chave nova depois da renovação mensal sem
+ * pedir login de novo. Fail-open: qualquer falha ou forma inesperada
+ * devolve undefined.
+ */
+export async function fetchApiKey(baseUrl: string, token: string): Promise<string | undefined> {
+  let response: { status: number; json: unknown }
+
+  try {
+    response = await call(baseUrl, "/api/auth/cliente/api-key", { method: "GET", token })
+  } catch {
+    return undefined
+  }
+
+  if (response.status !== 200) return undefined
+
+  const decoded = Schema.decodeUnknownOption(ApiKeyResponse)(response.json)
+
+  if (Option.isNone(decoded)) return undefined
+
+  return decoded.value.api_key ?? undefined
 }
 
 // contrato do painel (pendente): a frente do painel ainda não definiu o
@@ -390,8 +439,8 @@ export async function exchangeApiKey(
       client: value.client,
       trial_ends_at: null,
       expires_at: null,
-      apiKey: value.api_key,
-      gatewayUrl: value.gateway_url,
+      apiKey: value.api_key ?? undefined,
+      gatewayUrl: value.gateway_url ?? undefined,
     },
   }
 }

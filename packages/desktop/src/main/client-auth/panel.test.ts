@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test"
 import {
   changePassword,
+  fetchApiKey,
   fetchDailyUsage,
   googleLogin,
   login,
@@ -124,6 +125,36 @@ describe("login", () => {
     const plain = Bun.serve({
       port: 0,
       fetch: () => Response.json({ token: "tok-1", mustChange: false, client }, { status: 200 }),
+    })
+
+    try {
+      const result = await login(`http://127.0.0.1:${plain.port}`, {
+        email: "ana@exemplo.com",
+        password: "senha",
+        deviceId: "dev-1",
+      })
+
+      expect(result.ok).toBe(true)
+      if (result.ok) {
+        expect(result.value.apiKey).toBeUndefined()
+        expect(result.value.gatewayUrl).toBeUndefined()
+      }
+    } finally {
+      plain.stop()
+    }
+  })
+
+  test("a login whose current key is still valid returns api_key null and stays logged in", async () => {
+    // O painel devolve api_key: null quando a chave corrente ainda vale
+    // (só devolve em claro uma chave nova). Antes, o null quebrava o
+    // decode e o login caía em "unknown" para todo cliente recorrente.
+    const plain = Bun.serve({
+      port: 0,
+      fetch: () =>
+        Response.json(
+          { token: "tok-1", mustChange: false, client, api_key: null, gateway_url: null },
+          { status: 200 },
+        ),
     })
 
     try {
@@ -286,6 +317,75 @@ describe("fetchDailyUsage", () => {
     } finally {
       outOfRange.stop()
     }
+  })
+})
+
+describe("fetchApiKey", () => {
+  test("a newly generated key comes back in clear", async () => {
+    const fresh = Bun.serve({
+      port: 0,
+      fetch: (request) => {
+        if (request.headers.get("authorization") !== "Bearer tok-1")
+          return Response.json({ erro: "não autorizado" }, { status: 401 })
+
+        return Response.json(
+          {
+            api_key: "key-2",
+            key_prefix: "mk_key-2",
+            plan: "desktop",
+            cycle_start_at: "2026-11-09T03:00:00Z",
+            renews_at: "2026-12-09T03:00:00Z",
+            gerada_agora: true,
+          },
+          { status: 200 },
+        )
+      },
+    })
+
+    try {
+      expect(await fetchApiKey(`http://127.0.0.1:${fresh.port}`, "tok-1")).toBe("key-2")
+    } finally {
+      fresh.stop()
+    }
+  })
+
+  test("a still-valid current key returns null and keeps the stored one", async () => {
+    const current = Bun.serve({
+      port: 0,
+      fetch: () =>
+        Response.json(
+          {
+            api_key: null,
+            key_prefix: "mk_key-1",
+            plan: "desktop",
+            cycle_start_at: "2026-10-09T03:00:00Z",
+            renews_at: "2026-12-09T03:00:00Z",
+            gerada_agora: false,
+          },
+          { status: 200 },
+        ),
+    })
+
+    try {
+      expect(await fetchApiKey(`http://127.0.0.1:${current.port}`, "tok-1")).toBeUndefined()
+    } finally {
+      current.stop()
+    }
+  })
+
+  test("a revoked token and an unreachable panel mean no key (fail-open)", async () => {
+    const revoked = Bun.serve({
+      port: 0,
+      fetch: () => Response.json({ erro: "não autorizado" }, { status: 401 }),
+    })
+
+    try {
+      expect(await fetchApiKey(`http://127.0.0.1:${revoked.port}`, "tok-1")).toBeUndefined()
+    } finally {
+      revoked.stop()
+    }
+
+    expect(await fetchApiKey("http://127.0.0.1:1", "tok-1")).toBeUndefined()
   })
 })
 
