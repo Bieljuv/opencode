@@ -106,6 +106,21 @@ export function isExhaustionError(error: { readonly type: string }): boolean {
   return EXHAUSTION_TYPES.has(error.type)
 }
 
+/**
+ * Every session error type the runner hops away from. Exhaustion hops at
+ * once; a plain throttle (`provider.rate-limit`) also hops — a 429 is a
+ * per-model or per-account cap (OpenRouter's free 20/min and 50/day caps,
+ * an upstream provider at capacity), and another model answers now while
+ * the same model would burn its backoff retries and die with the
+ * throttle message. When no hop remains, the throttle falls through to
+ * the same-model retry policy instead of failing at once. Auth,
+ * content-filter, and invalid-request errors never hop: they are
+ * configuration or request problems, not a spent model.
+ */
+export function isHopSignal(error: { readonly type: string }): boolean {
+  return error.type === "provider.rate-limit" || isExhaustionError(error)
+}
+
 /** Effort from prompt metadata; anything unknown falls back to automatic. */
 export function effortFromMetadata(metadata: Record<string, unknown> | undefined): Effort {
   const value = metadata?.[EFFORT_METADATA_KEY]
@@ -381,4 +396,22 @@ export function nextHop(
   tried: ReadonlySet<string>,
 ): Model.Ref | undefined {
   return chain.find((ref) => !tried.has(refKey(ref)))
+}
+
+/**
+ * First chain ref not tried yet from a different provider than the one
+ * that just failed, or the plain next hop when no other provider remains.
+ * A rate limit is usually per account, not per model — OpenRouter's free
+ * 20/min cap covers every free model on the account — so hopping to
+ * another model of the same provider hits the same wall. A different
+ * provider is a different bucket.
+ */
+export function nextHopFromProvider(
+  chain: readonly Model.Ref[],
+  tried: ReadonlySet<string>,
+  providerID: string,
+): Model.Ref | undefined {
+  return (
+    chain.find((ref) => !tried.has(refKey(ref)) && ref.providerID !== providerID) ?? nextHop(chain, tried)
+  )
 }

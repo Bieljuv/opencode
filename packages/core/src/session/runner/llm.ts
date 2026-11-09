@@ -258,11 +258,26 @@ const layer = Layer.effect(
           ? SessionRouter.effortFromMetadata(lastUser.metadata)
           : SessionRouter.effortFromVariant(first.model.ref.variant)
       const explicit = configured !== undefined || first.agent.info.model !== undefined
+      const complexity = SessionRouter.classifyComplexity(lastUser?.text ?? "")
       const chain = SessionRouter.buildChain(available, {
-        complexity: SessionRouter.classifyComplexity(lastUser?.text ?? ""),
+        complexity,
         effort,
       })
       const tried = new Set<string>()
+      // Diagnostic log only, never the screen: the next failure has to
+      // show whether the chain was born short (providers connected but
+      // absent from `available()`, gateway credential not connected) or
+      // long and exhausted one model at a time.
+      yield* Effect.logInfo("manostech router chain", {
+        sessionID,
+        available: available.length,
+        chain: chain.length,
+        sessionModel:
+          first.session.model === undefined ? undefined : SessionRouter.refKey(first.session.model),
+        complexity,
+        effort,
+        explicit,
+      })
       if (!explicit) {
         // The chain head answers this step unless it is already the session
         // model. The switch is published, so the loop below re-resolves the
@@ -349,18 +364,37 @@ const layer = Layer.effect(
           retry: (cause, error, proposed) =>
             Effect.gen(function* () {
               // ManosTech router: on exhausted credit, hop to the next
-              // connected model instead of failing the turn. The switch is
-              // published as ModelSelected, so the retry re-resolves the new
-              // model; the user never sees the hop. When the whole chain is
-              // exhausted, fail at once with the generic message: falling
-              // through would let the retry policy burn its same-model
-              // attempts (a rate-limit-shaped exhaustion is retryable) and
-              // only then fail — with the original error, not the generic
-              // one.
-              if (SessionRouter.isExhaustionError(error)) {
-                const next = SessionRouter.nextHop(chain, tried)
+              // connected model instead of failing the turn. A plain
+              // throttle hops too — a 429 is a per-model or per-account
+              // cap, and another provider answers now while the same
+              // model would burn its backoff retries and die with the
+              // throttle message. The switch is published as
+              // ModelSelected, so the retry re-resolves the new model;
+              // the user never sees the hop. When the whole chain is
+              // exhausted, an exhaustion error fails at once with the
+              // generic message: falling through would let the retry
+              // policy burn its same-model attempts (a rate-limit-shaped
+              // exhaustion is retryable) and only then fail — with the
+              // original error, not the generic one. A throttle with no
+              // hop left falls through to the same-model retry instead.
+              // Diagnostic log only, never the screen: each hop records
+              // which model was tried and why the chain stopped.
+              if (SessionRouter.isHopSignal(error)) {
+                const exhausted = SessionRouter.isExhaustionError(error)
+                const next = exhausted
+                  ? SessionRouter.nextHop(chain, tried)
+                  : SessionRouter.nextHopFromProvider(chain, tried, loaded.model.ref.providerID)
                 if (next !== undefined) {
                   tried.add(SessionRouter.refKey(next))
+                  yield* Effect.logInfo("manostech router hop", {
+                    sessionID,
+                    from: SessionRouter.refKey(loaded.model.ref),
+                    to: SessionRouter.refKey(next),
+                    errorType: error.type,
+                    errorStatus: error.status,
+                    tried: tried.size,
+                    chain: chain.length,
+                  })
                   yield* bus.publish(SessionEvent.ModelSelected, {
                     sessionID,
                     model: next,
@@ -368,7 +402,25 @@ const layer = Layer.effect(
                   })
                   return { retry: true as const, attempt: (retryAttempt ?? 1) + 1, delay: 0 }
                 }
-                return { retry: false as const }
+                if (exhausted) {
+                  yield* Effect.logWarning("manostech router chain exhausted", {
+                    sessionID,
+                    lastModel: SessionRouter.refKey(loaded.model.ref),
+                    errorType: error.type,
+                    errorStatus: error.status,
+                    tried: tried.size,
+                    chain: chain.length,
+                  })
+                  return { retry: false as const }
+                }
+                yield* Effect.logInfo("manostech router no hop left, same-model retry", {
+                  sessionID,
+                  model: SessionRouter.refKey(loaded.model.ref),
+                  errorType: error.type,
+                  errorStatus: error.status,
+                  tried: tried.size,
+                  chain: chain.length,
+                })
               }
               return yield* retry.decide({
                 cause,
