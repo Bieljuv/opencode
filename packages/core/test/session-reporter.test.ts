@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import { buildEvent, parseClientIdentity, resolveConfig } from "@opencode/core/session/reporter"
+import { Money } from "@opencode/schema/money"
+import { Effect, Logger } from "effect"
+import { mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
+import { buildEvent, configSkipReason, parseClientIdentity, report, resolveConfig } from "@opencode/core/session/reporter"
+import { withEnv } from "./fixture/env"
 
 describe("resolveConfig", () => {
   test("needs the secret and the client file", () => {
@@ -45,6 +51,144 @@ describe("parseClientIdentity", () => {
       client_id: "abc",
       client_email: "a@b.com",
     })
+  })
+})
+
+describe("configSkipReason", () => {
+  test("without the secret the reason is sem segredo", () => {
+    expect(configSkipReason({})).toBe("sem segredo")
+    expect(configSkipReason({ MANOSTECH_CLIENT_FILE: "/tmp/c.json" })).toBe("sem segredo")
+  })
+
+  test("with a secret but no client file the reason is sem arquivo de identidade", () => {
+    expect(configSkipReason({ MANOSTECH_INGEST_SECRET: "s" })).toBe("sem arquivo de identidade")
+  })
+
+  test("a full config has no skip reason", () => {
+    expect(configSkipReason({ MANOSTECH_INGEST_SECRET: "s", MANOSTECH_CLIENT_FILE: "/tmp/c.json" })).toBeUndefined()
+  })
+})
+
+describe("report", () => {
+  const tokens = { input: 100, output: 50, reasoning: 10, cache: { read: 20, write: 5 } }
+  const noUsage = { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+
+  // Captures the info-level lines the reporter writes; the reason travels
+  // as the second message part, never a secret, token, key or identity.
+  // (Effect.logInfo(msg, {...}) keeps the context in the message, and the
+  // file formatter flattens it to `motivo="..."` in opencode.log.)
+  function captureLogs() {
+    const lines: Array<{ level: string; message: unknown }> = []
+    const logger = Logger.map(Logger.formatStructured, (entry) => {
+      lines.push({ level: entry.level, message: entry.message })
+    })
+    return { lines, logger }
+  }
+
+  test("without a config it never fails the step", async () => {
+    await Effect.runPromise(
+      withEnv(
+        { MANOSTECH_INGEST_SECRET: undefined, MANOSTECH_CLIENT_FILE: undefined, MANOSTECH_INGEST_URL: undefined },
+        () => report({ model: "manostech/auto", tokens, cost: Money.USD.make(0.001) }),
+      ),
+    )
+  })
+
+  test("a missing identity file logs sem arquivo de identidade once", async () => {
+    const { lines, logger } = captureLogs()
+    const dir = mkdtempSync(path.join(tmpdir(), "opencode-reporter-"))
+    const missing = path.join(dir, "ausente.json")
+    const run = () =>
+      Effect.runPromise(
+        withEnv(
+          { MANOSTECH_INGEST_SECRET: "s", MANOSTECH_CLIENT_FILE: missing, MANOSTECH_INGEST_URL: undefined },
+          () =>
+            report({ model: "manostech/auto", tokens, cost: Money.USD.make(0.001) }).pipe(
+              Effect.provide(Logger.layer([logger])),
+            ),
+        ),
+      )
+
+    await run()
+    expect(lines).toEqual([
+      {
+        level: "INFO",
+        message: ["relatório de uso desligado", { motivo: "sem arquivo de identidade" }],
+      },
+    ])
+    await run()
+    expect(lines).toHaveLength(1)
+  })
+
+  test("a step with no usage logs sem uso once", async () => {
+    const { lines, logger } = captureLogs()
+    const dir = mkdtempSync(path.join(tmpdir(), "opencode-reporter-"))
+    const file = path.join(dir, "cliente.json")
+    writeFileSync(file, JSON.stringify({ client_id: "abc", client_email: "a@b.com" }))
+    const run = () =>
+      Effect.runPromise(
+        withEnv(
+          { MANOSTECH_INGEST_SECRET: "s", MANOSTECH_CLIENT_FILE: file, MANOSTECH_INGEST_URL: undefined },
+          () =>
+            report({ model: "manostech/auto", tokens: noUsage, cost: Money.USD.zero }).pipe(
+              Effect.provide(Logger.layer([logger])),
+            ),
+        ),
+      )
+
+    await run()
+    expect(lines).toEqual([
+      { level: "INFO", message: ["relatório de uso desligado", { motivo: "sem uso" }] },
+    ])
+    await run()
+    expect(lines).toHaveLength(1)
+  })
+
+  test("a step with usage sends one event to the panel and logs nothing", async () => {
+    const received: Array<{ body: unknown; authorization: string | null }> = []
+    const server = Bun.serve({
+      port: 0,
+      async fetch(request) {
+        received.push({
+          body: await request.json().catch(() => undefined),
+          authorization: request.headers.get("authorization"),
+        })
+        return Response.json({ ok: true })
+      },
+    })
+    try {
+      const dir = mkdtempSync(path.join(tmpdir(), "opencode-reporter-"))
+      const file = path.join(dir, "cliente.json")
+      writeFileSync(file, JSON.stringify({ client_id: "abc", client_email: "a@b.com" }))
+      const { lines, logger } = captureLogs()
+      await Effect.runPromise(
+        withEnv(
+          {
+            MANOSTECH_INGEST_SECRET: "s",
+            MANOSTECH_CLIENT_FILE: file,
+            MANOSTECH_INGEST_URL: `http://127.0.0.1:${server.port}/api/ingest`,
+          },
+          () =>
+            report({ model: "manostech/auto", tokens, cost: Money.USD.make(0.001) }).pipe(
+              Effect.provide(Logger.layer([logger])),
+            ),
+        ),
+      )
+      expect(received).toHaveLength(1)
+      expect(received[0]?.authorization).toBe("Bearer s")
+      expect(received[0]?.body).toEqual({
+        client_id: "abc",
+        client_email: "a@b.com",
+        origin: "desktop",
+        model: "manostech/auto",
+        tokens_in: 125,
+        tokens_out: 60,
+        cost_usd: 0.001,
+      })
+      expect(lines).toEqual([])
+    } finally {
+      server.stop()
+    }
   })
 })
 
