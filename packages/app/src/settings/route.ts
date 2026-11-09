@@ -126,8 +126,13 @@ export function settingsViewRedirect(input: {
   /** False while the saved, WSL, and SSH server lists load; a restored route waits for them. */
   loaded: boolean
   servers: readonly RedirectServer[]
+  /** ManosTech: with the gateway active the Providers page is hidden, so a direct link lands on General. */
+  gatewayActive?: boolean
 }): SettingsView | undefined {
   const view = input.view
+
+  if (input.gatewayActive && view.type === "root" && view.tab === "providers")
+    return { type: "root", tab: "general" }
 
   if (!view.server || !input.loaded) return
   const server = input.servers.find((item) => item.key === view.server)

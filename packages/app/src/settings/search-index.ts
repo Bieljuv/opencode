@@ -26,6 +26,8 @@ export function settingsSearchIndex(input: {
   mobile: boolean
   translate: ReturnType<typeof useLanguage>["t"]
   plugins?: readonly SettingsSearchPlugin[]
+  /** ManosTech: with the gateway active the Providers page is hidden, so it must not surface in search. */
+  gatewayActive?: boolean
 }) {
   const items: SettingsSearchResult[] = []
   const multiple = input.servers.length > 1
@@ -147,7 +149,11 @@ export function settingsSearchIndex(input: {
     })
 
     if (!server.connected || server.key !== input.selected) return
-    serverSettings.forEach((entry) => add(entry, view(entry.tab, entry.target, entry.subtab), server.name, server.key))
+    serverSettings.forEach((entry) => {
+      if (entry.tab === "providers" && input.gatewayActive) return
+
+      add(entry, view(entry.tab, entry.target, entry.subtab), server.name, server.key)
+    })
     // Sections on the servers page render with each server's connection.
     plugins.forEach((item) => {
       if (item.value.page !== "servers") return

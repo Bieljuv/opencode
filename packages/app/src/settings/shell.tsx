@@ -1,8 +1,21 @@
 import { Tabs } from "@opencode/ui/tabs"
 import { useDialog } from "@opencode/ui/context/dialog"
-import { createEffect, createMemo, For, on, onCleanup, onMount, Show, Switch, Match, type Accessor } from "solid-js"
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+  Match,
+  type Accessor,
+} from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLanguage } from "@/runtime/i18n/language"
+import { usePlatform } from "@/runtime/platform/platform"
 import { useTabs } from "@/shell/tabs/tabs"
 import { useGlobal, useServerCtx } from "@/runtime/server/runtime"
 import { ServerConnection } from "@/runtime/server/registry"
@@ -75,7 +88,22 @@ export function SettingsScreen() {
   const servers = useSettingsServers()
   const loaded = useSettingsServersLoaded()
   const global = useGlobal()
+  const platform = usePlatform()
   let root: HTMLDivElement | undefined
+
+  // ManosTech: with the gateway active the Providers page is hidden everywhere (nav, content, redirect, search).
+  const [gatewayActive, setGatewayActive] = createSignal(false)
+
+  onMount(() => {
+    const load = () => {
+      void platform.isClientGatewayActive?.().then(setGatewayActive).catch(() => undefined)
+    }
+
+    load()
+    const off = platform.onClientChanged?.(() => load())
+
+    onCleanup(() => off?.())
+  })
 
   onMount(() => {
     root?.focus({ preventScroll: true })
@@ -128,6 +156,7 @@ export function SettingsScreen() {
       view: surface.view(),
       loaded: loaded(),
       servers: servers().map((item) => ({ key: item.key, availability: item.availability.status })),
+      gatewayActive: gatewayActive(),
     })
 
     if (next) surface.replace(next)
@@ -147,7 +176,7 @@ export function SettingsScreen() {
     >
       <Switch>
         <Match when={surface.view().type === "root"}>
-          <RootSettings />
+          <RootSettings gatewayActive={gatewayActive} />
         </Match>
         <Match when={surface.view().type === "project"}>
           <Show when={targetServer()} keyed>
@@ -161,7 +190,7 @@ export function SettingsScreen() {
   )
 }
 
-function RootSettings() {
+function RootSettings(props: { gatewayActive: Accessor<boolean> }) {
   const language = useLanguage()
   const dialog = useDialog()
   const surface = useSettingsSurface()
@@ -172,6 +201,10 @@ function RootSettings() {
   })
 
   const multiple = createMemo(() => inventory().length > 1)
+
+  // ManosTech: the Providers tab leaves the nav with the gateway active.
+  const visibleServerTabs = () =>
+    props.gatewayActive() ? serverTabs.filter((item) => item.value !== "providers") : serverTabs
 
   // The selected server while its pages can load; an unreachable one shows its pages' unavailable state instead.
   const reachable = createMemo(() => {
@@ -202,7 +235,7 @@ function RootSettings() {
 
   const groups = createMemo<SettingsNavGroup[]>(() => [
     {
-      items: serverTabs.map((item) => ({
+      items: visibleServerTabs().map((item) => ({
         ...item,
         label: language.t(item.label),
         onPrefetch: item.value === "workspaces" ? prefetchWorkspaces : undefined,
@@ -268,7 +301,7 @@ function RootSettings() {
         fallback={
           <Show when={surface.server()}>
             {(entry) => (
-              <For each={serverTabs}>
+              <For each={visibleServerTabs()}>
                 {(item) => (
                   <Tabs.Content value={item.value} class="settings-panel">
                     <SettingsServerUnavailable
@@ -288,12 +321,14 @@ function RootSettings() {
       >
         {(server) => (
           <SettingsServerDataScope server={server}>
-            <Tabs.Content value="providers" class="settings-panel">
-              <SettingsProviders
-                directory={undefined}
-                headerAction={<SettingsServerSwitcher />}
-              />
-            </Tabs.Content>
+            <Show when={!props.gatewayActive()}>
+              <Tabs.Content value="providers" class="settings-panel">
+                <SettingsProviders
+                  directory={undefined}
+                  headerAction={<SettingsServerSwitcher />}
+                />
+              </Tabs.Content>
+            </Show>
             <Tabs.Content value="extensions" class="settings-panel">
               <SettingsExtensions
                 directory={activeDirectory()}
