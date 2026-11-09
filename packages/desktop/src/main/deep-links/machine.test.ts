@@ -7,11 +7,11 @@ import {
   type DeepLinkState,
 } from "./machine"
 
-const oauth = "manostech://console/authorized?window=a"
+const oauth = "com.manostech.editor:/console/authorized?window=a"
 
-const oauthB = "manostech://console/authorized?window=b"
+const oauthB = "com.manostech.editor:/console/authorized?window=b"
 
-const project = "manostech://open?project=/repo"
+const project = "com.manostech.editor:/open?project=/repo"
 
 // Folds events through the machine and keeps the commands of each step.
 function replay(events: readonly DeepLinkEvent[], from = createDeepLinkState()) {

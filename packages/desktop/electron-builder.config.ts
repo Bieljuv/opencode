@@ -174,7 +174,7 @@ const getBase = (appId: string): Configuration => {
     },
     protocols: {
       name: "ManosTech",
-      schemes: ["manostech"],
+      schemes: ["com.manostech.editor"],
     },
     win: {
       icon: `resources/icons/icon.ico`,
@@ -242,7 +242,7 @@ export function getConfig() {
         ...base,
         appId,
         productName: "Editor IA ManosTech Beta",
-        protocols: { name: "ManosTech Beta", schemes: ["manostech"] },
+        protocols: { name: "ManosTech Beta", schemes: ["com.manostech.editor"] },
         publish: {
           provider: "github",
           owner: "BielJuv",
@@ -262,7 +262,7 @@ export function getConfig() {
         ...base,
         appId,
         productName: "Editor IA ManosTech",
-        protocols: { name: "ManosTech", schemes: ["manostech"] },
+        protocols: { name: "ManosTech", schemes: ["com.manostech.editor"] },
         // An Icon Composer package compiles to Assets.car, which macOS 26 and later draw the app icon from
         // (Dock, Finder, system dialogs and the system icon styles). Older macOS keeps using the ICNS.
         mac: { ...base.mac, icon: "resources/icons/icon.icon" },

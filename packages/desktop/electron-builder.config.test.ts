@@ -67,6 +67,10 @@ test.each(channels)("channel identity for $channel", ({ channel, appId }) => {
   // window association (StartupWMClass/desktop file basename) is unchanged.
   expect(config.linux?.syncDesktopName).toBe(true)
   expect(config.linux?.desktop?.entry?.StartupWMClass).toBe(appId)
+  // One reverse-DNS scheme for every channel: the OS hands the app every
+  // deep link (`/auth/google`, `/console/authorized`, `/open`) on it, and
+  // Google only accepts a dotted scheme as a redirect URI.
+  expect(config.protocols?.schemes).toEqual(["com.manostech.editor"])
 
   for (const fpm of [config.deb?.fpm, config.rpm?.fpm]) {
     expect(fpm).toContainEqual(expect.stringContaining(`/usr/share/metainfo/${appId}.metainfo.xml`))

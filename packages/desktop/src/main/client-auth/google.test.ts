@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { afterAll, describe, expect, test } from "bun:test"
-import { authorizeUrl, createPkce, createState, exchangeCodeForIdToken, parseAuthReturn } from "./google"
+import { authorizeUrl, createPkce, createState, exchangeCodeForIdToken, GOOGLE_REDIRECT_URI, parseAuthReturn } from "./google"
 
 // Um endpoint de token falso: a troca real é com o Google, mas o envio
 // (form-urlencoded + PKCE) é o mesmo contra qualquer URL.
@@ -14,7 +14,7 @@ const tokenServer = Bun.serve({
       body.get("code") === "code-1" &&
       body.get("client_id") === "cid" &&
       body.get("code_verifier") === "verifier" &&
-      body.get("redirect_uri") === "manostech://auth/google"
+      body.get("redirect_uri") === "com.manostech.editor:/auth/google"
     )
       return Response.json({ id_token: "idtok", access_token: "acctok" })
 
@@ -39,12 +39,16 @@ describe("createPkce", () => {
 })
 
 describe("authorizeUrl", () => {
+  test("the redirect is the reverse-DNS deep link Google accepts", () => {
+    expect(GOOGLE_REDIRECT_URI).toBe("com.manostech.editor:/auth/google")
+  })
+
   test("builds the Google authorize URL with the app deep-link return", () => {
     const url = new URL(authorizeUrl({ clientId: "cid", state: "st", challenge: "ch" }))
 
     expect(url.origin + url.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth")
     expect(url.searchParams.get("client_id")).toBe("cid")
-    expect(url.searchParams.get("redirect_uri")).toBe("manostech://auth/google")
+    expect(url.searchParams.get("redirect_uri")).toBe("com.manostech.editor:/auth/google")
     expect(url.searchParams.get("response_type")).toBe("code")
     expect(url.searchParams.get("code_challenge_method")).toBe("S256")
     expect(url.searchParams.get("state")).toBe("st")
@@ -53,7 +57,15 @@ describe("authorizeUrl", () => {
 
 describe("parseAuthReturn", () => {
   test("accepts the code and state", () => {
-    expect(parseAuthReturn("manostech://auth/google?code=abc&state=st")).toEqual({
+    expect(parseAuthReturn("com.manostech.editor:/auth/google?code=abc&state=st")).toEqual({
+      kind: "code",
+      code: "abc",
+      state: "st",
+    })
+  })
+
+  test("accepts the return with a trailing slash before the query", () => {
+    expect(parseAuthReturn("com.manostech.editor:/auth/google/?code=abc&state=st")).toEqual({
       kind: "code",
       code: "abc",
       state: "st",
@@ -61,12 +73,17 @@ describe("parseAuthReturn", () => {
   })
 
   test("an error return is an error, not a code", () => {
-    expect(parseAuthReturn("manostech://auth/google?error=access_denied")).toEqual({ kind: "error" })
+    expect(parseAuthReturn("com.manostech.editor:/auth/google?error=access_denied")).toEqual({ kind: "error" })
+  })
+
+  test("the old scheme is not a Google return", () => {
+    expect(parseAuthReturn("manostech://auth/google?code=abc&state=st")).toBeUndefined()
   })
 
   test("anything else is not ours", () => {
+    expect(parseAuthReturn("com.manostech.editor:/console/authorized?window=1")).toBeUndefined()
     expect(parseAuthReturn("manostech://console/authorized?window=1")).toBeUndefined()
-    expect(parseAuthReturn("manostech://auth/google")).toBeUndefined()
+    expect(parseAuthReturn("com.manostech.editor:/auth/google")).toBeUndefined()
     expect(parseAuthReturn("https://example.com/?code=abc&state=st")).toBeUndefined()
   })
 })
