@@ -4,6 +4,7 @@ import type {
   ManosTechClientChangePasswordValue,
   ManosTechClientLoginValue,
   ManosTechClientStatusValue,
+  ManosTechClientTranscribeValue,
   ManosTechClientUsageValue,
 } from "../shared/ipc-rpc/manostech-client"
 import type { StorageSnapshot } from "../shared/ipc-transport"
@@ -55,6 +56,7 @@ export type ElectronAPI = {
   startClientGoogle(): Promise<{ available: boolean }>
   getClientUsage(): Promise<ManosTechClientUsageValue | null>
   markClientUsageWarned(): Promise<void>
+  transcribeClientAudio(audio: string): Promise<ManosTechClientTranscribeValue>
   onClientChanged(cb: () => void): () => void
   openDirectoryPicker(opts?: DirectoryPickerOptions): Promise<string | string[] | null>
   openFilePicker(opts?: FilePickerOptions): Promise<PickedFiles | null>

@@ -6,10 +6,11 @@ import { Tooltip } from "@opencode/ui/tooltip"
 import { createSignal, onCleanup, Show } from "solid-js"
 import type { ComposerEditorModel } from "@/composer/editor/interaction"
 import { useLanguage } from "@/runtime/i18n/language"
+import { usePlatform } from "@/runtime/platform/platform"
 import { useServer } from "@/runtime/server/current"
 import { showToast } from "@/shell/notifications/toast"
 import { DictationFailure, DictationTransport, type DictationEngine } from "./dictation-transport"
-import { BrowserDictationTransport } from "./browser-dictation-transport"
+import { GatewayDictationTransport } from "./gateway-dictation-transport"
 import type { DictationJoinFailure } from "./dictation-machine"
 import type { VoiceEvent } from "./protocol"
 
@@ -19,7 +20,7 @@ const failureTitle = {
   unavailable: "composer.dictation.failure.unavailable",
   microphone: "composer.dictation.failure.microphone",
   connection: "composer.dictation.failure.connection",
-  offline: "composer.dictation.failure.offline",
+  transcription: "composer.dictation.failure.transcription",
   dropped: "composer.dictation.failure.dropped",
 } as const
 
@@ -29,6 +30,7 @@ const failureTitle = {
  */
 export function DictationButton(props: { controller: ComposerEditorModel }) {
   const language = useLanguage()
+  const platform = usePlatform()
   const server = useServer()
   const [status, setStatus] = createSignal<DictationStatus>("idle")
 
@@ -79,12 +81,12 @@ export function DictationButton(props: { controller: ComposerEditorModel }) {
     fail("dropped")
   }
 
-  // The browser engine reports the failure it actually hit (microphone, offline, ...), so the
-  // toast names the real cause instead of a generic drop.
-  const failed = (reason: DictationJoinFailure) => {
-    if (status() !== "recording") return
-    transport = undefined
-    fail(reason)
+  // A gateway slice failed: the text of that slice is lost, but the recording keeps going
+  // (the Forge kept it going) — only the toast shows, never a state change. This also
+  // covers a slice that fails while the recording is already finalizing, when the button
+  // is idle and there is no recording status to change.
+  const gatewayFailed = (reason: DictationJoinFailure) => {
+    showToast({ variant: "error", title: language.t(failureTitle[reason]) })
   }
 
   const startEngine = (engine: DictationEngine) => {
@@ -99,16 +101,31 @@ export function DictationButton(props: { controller: ComposerEditorModel }) {
       (error) => {
         if (transport !== current || stopping) return
         const reason = error instanceof DictationFailure ? error.reason : "connection"
-        // The Realtime engine is not available; the browser's own recognition takes over
-        // silently — the user never sees which engine is behind the microphone.
+        // The Realtime engine is not available; the gateway takes over silently when the
+        // client is logged in — the user never sees which engine is behind the microphone.
         if (reason === "unavailable" && current instanceof DictationTransport) {
-          startEngine(new BrowserDictationTransport({ event: onEvent, failed }))
+          void startGatewayEngine()
           return
         }
         transport = undefined
         fail(reason)
       },
     )
+  }
+
+  /** Starts the gateway engine when the client is logged in; otherwise the mic is unavailable. */
+  const startGatewayEngine = async () => {
+    const active = await platform.isClientGatewayActive?.().catch(() => false)
+    const transcribe = platform.transcribeClientAudio
+
+    if (!active || !transcribe) {
+      transport = undefined
+      fail("unavailable")
+
+      return
+    }
+
+    startEngine(new GatewayDictationTransport({ event: onEvent, failed: gatewayFailed, transcribe }))
   }
 
   const start = () => {

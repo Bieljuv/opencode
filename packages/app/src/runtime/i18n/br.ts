@@ -917,7 +917,7 @@ export const dict = {
   "composer.dictation.failure.unavailable": "A transcrição de voz não está disponível neste dispositivo.",
   "composer.dictation.failure.microphone": "É preciso permitir o acesso ao microfone para gravar.",
   "composer.dictation.failure.connection": "Não foi possível iniciar a gravação.",
-  "composer.dictation.failure.offline": "A transcrição precisa de internet. Verifique a conexão e tente novamente.",
+  "composer.dictation.failure.transcription": "Não foi possível transcrever o áudio. Tente novamente.",
   "composer.dictation.failure.dropped": "A gravação foi interrompida.",
   "composer.model.automatic": "IA Automática",
   "composer.effort.label": "Esforço",
