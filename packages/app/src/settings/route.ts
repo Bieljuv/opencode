@@ -7,7 +7,6 @@ export type SettingsRootTab =
   | "shortcuts"
   | "projects"
   | "workspaces"
-  | "providers"
   | "extensions"
   | "servers"
   | "experimental"
@@ -19,7 +18,7 @@ declare const pluginTab: unique symbol
 export type SettingsPluginTab = string & { readonly [pluginTab]: true }
 
 /** Root pages that show one server's settings: the selected server, or the default one. */
-export type SettingsServerTab = "projects" | "workspaces" | "providers" | "extensions"
+export type SettingsServerTab = "projects" | "workspaces" | "extensions"
 
 export type SettingsProjectTab = "general" | "workspaces" | "extensions"
 
@@ -51,7 +50,6 @@ const rootTabs: Record<SettingsRootTab, true> = {
   shortcuts: true,
   projects: true,
   workspaces: true,
-  providers: true,
   extensions: true,
   servers: true,
   experimental: true,
@@ -126,13 +124,8 @@ export function settingsViewRedirect(input: {
   /** False while the saved, WSL, and SSH server lists load; a restored route waits for them. */
   loaded: boolean
   servers: readonly RedirectServer[]
-  /** ManosTech: with the gateway active the Providers page is hidden, so a direct link lands on General. */
-  gatewayActive?: boolean
 }): SettingsView | undefined {
   const view = input.view
-
-  if (input.gatewayActive && view.type === "root" && view.tab === "providers")
-    return { type: "root", tab: "general" }
 
   if (!view.server || !input.loaded) return
   const server = input.servers.find((item) => item.key === view.server)

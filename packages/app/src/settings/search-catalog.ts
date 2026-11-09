@@ -276,7 +276,6 @@ export const clientSettings: Entry<SettingsRootTab>[] = [
 export const serverSettings: Entry<SettingsServerTab | "servers">[] = [
   { tab: "projects", label: "settings.tab.projects" },
   { tab: "workspaces", label: "settings.tab.workspaces", keywords: "workspaces disk usage cleanup delete", keywordsKey: "settings.search.keywords.workspaces", },
-  { tab: "providers", label: "settings.providers.title", keywords: "connect api key credentials", keywordsKey: "settings.search.keywords.providers", },
   { tab: "extensions", label: "settings.tab.extensions" },
   {
     tab: "extensions",

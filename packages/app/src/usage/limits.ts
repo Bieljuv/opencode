@@ -122,32 +122,6 @@ export function usageView(
   }
 }
 
-/** What the member's budgets leave for one model: the least any budget covering it has left. */
-export type ModelUsage = { readonly left: number; readonly reached: boolean; readonly resetsAt: number }
-
-/**
- * What the Console budgets leave for a model, when any covers it. A budget on all spend covers every model the
- * workspace serves; OpenCode Go bills its own allowance instead.
- */
-export function modelUsage(
-  info: UsageLimitsInfo,
-  model: { readonly id: string; readonly provider: { readonly id: string; readonly integrationID?: string } },
-): ModelUsage | undefined {
-  const served = model.provider.integrationID === "opencode" && model.provider.id !== "opencode-go"
-  const covering = info.budgets.flatMap((budget) => {
-    if (budget.coverage === "all") return served ? [{ budget, spent: budget.spent }] : []
-    const entry = budget.models.find((item) => item.providerID === model.provider.id && item.modelID === model.id)
-    if (!entry) return []
-    return [{ budget, spent: budget.per === "model" ? (entry.spent ?? 0) : budget.spent }]
-  })
-  if (covering.length === 0) return undefined
-  return {
-    left: Math.min(...covering.map((entry) => Math.max(0, entry.budget.limit - entry.spent))),
-    reached: covering.some((entry) => entry.spent >= entry.budget.limit),
-    resetsAt: Math.min(...covering.map((entry) => entry.budget.resetsAt)),
-  }
-}
-
 /** The spend a budget's cap compares against: a per-model budget's counter for the current model, when it covers it. */
 function spend(budget: UsageLimitsBudget, model: CurrentModel | undefined) {
   const current =

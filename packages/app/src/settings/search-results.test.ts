@@ -27,13 +27,13 @@ function index(input: Partial<Parameters<typeof settingsSearchIndex>[0]> = {}) {
 
 describe("settings search index", () => {
   test("indexes the selected server's pages and names it only when there are several servers", () => {
-    const multi = rankSettings("providers", index({ selected: "remote" })).filter((item) => item.topLevel)
+    const multi = rankSettings("extensions", index({ selected: "remote" })).filter((item) => item.topLevel)
     expect(multi.map((item) => item.view)).toEqual([
-      { type: "root", server: "remote", tab: "providers", target: undefined, subtab: undefined },
+      { type: "root", server: "remote", tab: "extensions", target: undefined, subtab: undefined },
     ])
-    const single = rankSettings("providers", index({ servers: [servers[0]] })).find((item) => item.topLevel)!
+    const single = rankSettings("extensions", index({ servers: [servers[0]] })).find((item) => item.topLevel)!
     expect(single.server).toBe("local")
-    expect(single.view).toEqual({ type: "root", tab: "providers", target: undefined, subtab: undefined })
+    expect(single.view).toEqual({ type: "root", tab: "extensions", target: undefined, subtab: undefined })
   })
 
   test("keeps unavailable servers discoverable without advertising unloaded settings", () => {

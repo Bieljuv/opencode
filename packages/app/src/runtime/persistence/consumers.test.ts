@@ -6,7 +6,6 @@ import { Persistence } from "@/runtime/persistence/schema"
 import { FileViewsSchema } from "@/workspaces/files/view-cache"
 import { languageSchema } from "@/runtime/i18n/language"
 import { HomeServersSchema } from "@/home/projects/controller"
-import { ModelProvidersSchema } from "@/settings/models/models"
 import { ProjectState, VcsState } from "@/runtime/server/persistence"
 
 function stored<S extends Schema.ConstraintCodec<object, unknown>>(
@@ -43,7 +42,6 @@ describe("persisted consumer schemas", () => {
       [{ dismissedAt: 123 }, { dismissedAt: 123 }],
     ]),
     stored("home server collapse", HomeServersSchema, { collapsed: {} }, collapsed),
-    stored("model provider collapse", ModelProvidersSchema, { collapsed: {} }, collapsed),
     stored("VCS cache", VcsState, { value: undefined }, [
       [{}, { value: undefined }],
       [{ value: null }, { value: undefined }],

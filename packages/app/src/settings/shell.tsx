@@ -3,7 +3,6 @@ import { useDialog } from "@opencode/ui/context/dialog"
 import {
   createEffect,
   createMemo,
-  createSignal,
   For,
   on,
   onCleanup,
@@ -15,7 +14,6 @@ import {
 } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLanguage } from "@/runtime/i18n/language"
-import { usePlatform } from "@/runtime/platform/platform"
 import { useTabs } from "@/shell/tabs/tabs"
 import { useGlobal, useServerCtx } from "@/runtime/server/runtime"
 import { ServerConnection } from "@/runtime/server/registry"
@@ -27,7 +25,6 @@ import { SettingsAppearance } from "./appearance/appearance"
 import { experimentalSettingsAvailable, SettingsExperimental } from "./experimental/experimental"
 import { SettingsKeybinds } from "./keybinds/keybinds"
 import { SettingsNotifications } from "./notifications/notifications"
-import { SettingsProviders } from "./providers/providers"
 import { SettingsServerGeneral, SettingsServerList } from "./servers/servers"
 import { SettingsServerSwitcher } from "./servers/switcher"
 import { SettingsServerUnavailable } from "./servers/unavailable"
@@ -56,7 +53,6 @@ const rootClientTabs = [
 ] as const
 
 const serverTabs = [
-  { value: "providers", icon: pageIcons.providers, label: "settings.providers.title" },
   { value: "extensions", icon: pageIcons.extensions, label: "settings.tab.extensions" },
   { value: "projects", icon: pageIcons.projects, label: "settings.tab.projects" },
   { value: "workspaces", icon: pageIcons.workspaces, label: "settings.tab.workspaces" },
@@ -64,7 +60,6 @@ const serverTabs = [
 
 // The heading of each per-server page, which its unreachable state keeps.
 const serverPages = {
-  providers: { title: "settings.providers.title", description: "settings.providers.description" },
   extensions: { title: "settings.tab.extensions", description: "settings.extensions.description" },
   projects: { title: "settings.projects.title", description: "settings.projects.description" },
   workspaces: { title: "settings.tab.workspaces", description: "settings.workspaces.description" },
@@ -88,22 +83,7 @@ export function SettingsScreen() {
   const servers = useSettingsServers()
   const loaded = useSettingsServersLoaded()
   const global = useGlobal()
-  const platform = usePlatform()
   let root: HTMLDivElement | undefined
-
-  // ManosTech: with the gateway active the Providers page is hidden everywhere (nav, content, redirect, search).
-  const [gatewayActive, setGatewayActive] = createSignal(false)
-
-  onMount(() => {
-    const load = () => {
-      void platform.isClientGatewayActive?.().then(setGatewayActive).catch(() => undefined)
-    }
-
-    load()
-    const off = platform.onClientChanged?.(() => load())
-
-    onCleanup(() => off?.())
-  })
 
   onMount(() => {
     root?.focus({ preventScroll: true })
@@ -156,7 +136,6 @@ export function SettingsScreen() {
       view: surface.view(),
       loaded: loaded(),
       servers: servers().map((item) => ({ key: item.key, availability: item.availability.status })),
-      gatewayActive: gatewayActive(),
     })
 
     if (next) surface.replace(next)
@@ -176,7 +155,7 @@ export function SettingsScreen() {
     >
       <Switch>
         <Match when={surface.view().type === "root"}>
-          <RootSettings gatewayActive={gatewayActive} />
+          <RootSettings />
         </Match>
         <Match when={surface.view().type === "project"}>
           <Show when={targetServer()} keyed>
@@ -190,7 +169,7 @@ export function SettingsScreen() {
   )
 }
 
-function RootSettings(props: { gatewayActive: Accessor<boolean> }) {
+function RootSettings() {
   const language = useLanguage()
   const dialog = useDialog()
   const surface = useSettingsSurface()
@@ -201,10 +180,6 @@ function RootSettings(props: { gatewayActive: Accessor<boolean> }) {
   })
 
   const multiple = createMemo(() => inventory().length > 1)
-
-  // ManosTech: the Providers tab leaves the nav with the gateway active.
-  const visibleServerTabs = () =>
-    props.gatewayActive() ? serverTabs.filter((item) => item.value !== "providers") : serverTabs
 
   // The selected server while its pages can load; an unreachable one shows its pages' unavailable state instead.
   const reachable = createMemo(() => {
@@ -235,7 +210,7 @@ function RootSettings(props: { gatewayActive: Accessor<boolean> }) {
 
   const groups = createMemo<SettingsNavGroup[]>(() => [
     {
-      items: visibleServerTabs().map((item) => ({
+      items: serverTabs.map((item) => ({
         ...item,
         label: language.t(item.label),
         onPrefetch: item.value === "workspaces" ? prefetchWorkspaces : undefined,
@@ -301,7 +276,7 @@ function RootSettings(props: { gatewayActive: Accessor<boolean> }) {
         fallback={
           <Show when={surface.server()}>
             {(entry) => (
-              <For each={visibleServerTabs()}>
+              <For each={serverTabs}>
                 {(item) => (
                   <Tabs.Content value={item.value} class="settings-panel">
                     <SettingsServerUnavailable
@@ -321,14 +296,6 @@ function RootSettings(props: { gatewayActive: Accessor<boolean> }) {
       >
         {(server) => (
           <SettingsServerDataScope server={server}>
-            <Show when={!props.gatewayActive()}>
-              <Tabs.Content value="providers" class="settings-panel">
-                <SettingsProviders
-                  directory={undefined}
-                  headerAction={<SettingsServerSwitcher />}
-                />
-              </Tabs.Content>
-            </Show>
             <Tabs.Content value="extensions" class="settings-panel">
               <SettingsExtensions
                 directory={activeDirectory()}

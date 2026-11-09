@@ -11,7 +11,7 @@ describe("settings route", () => {
 
   test("round trips root pages, the selected server, and project pages", () => {
     const root: SettingsView = { type: "root", tab: "appearance" }
-    const providers: SettingsView = { type: "root", tab: "providers", server: "wsl:Debian" }
+    const extensions: SettingsView = { type: "root", tab: "extensions", server: "wsl:Debian" }
     // Preferences with a selected server names its tab, which a link to the old server page lacks.
     const preferences: SettingsView = { type: "root", tab: "general", server: "wsl:Debian" }
 
@@ -24,7 +24,7 @@ describe("settings route", () => {
     }
 
     expect(parse(root)).toEqual({ ...root, server: undefined, subtab: undefined })
-    expect(parse(providers)).toEqual({ ...providers, subtab: undefined })
+    expect(parse(extensions)).toEqual({ ...extensions, subtab: undefined })
     expect(settingsViewUrl(preferences)).toBe("/settings?server=wsl%3ADebian&tab=general")
     expect(parse(preferences)).toEqual({ ...preferences, subtab: undefined })
     expect(parse(project)).toEqual(project)
@@ -32,12 +32,6 @@ describe("settings route", () => {
 
   test("opens links to a server's old settings page on the flat pages with that server selected", () => {
     expect(parseSettingsView("?server=wsl%3ADebian")).toEqual({ type: "root", tab: "servers", server: "wsl:Debian" })
-    expect(parseSettingsView("?server=wsl%3ADebian&tab=providers")).toEqual({
-      type: "root",
-      tab: "providers",
-      server: "wsl:Debian",
-      subtab: undefined,
-    })
   })
 
   test("opens links to the desktop's old Plugins page on the Plugins tab of Extensions", () => {
@@ -67,7 +61,7 @@ describe("settings route", () => {
   })
 
   test("keeps a restored server selection until the server lists load, then drops a removed one", () => {
-    const view: SettingsView = { type: "root", tab: "providers", server: "wsl:Debian" }
+    const view: SettingsView = { type: "root", tab: "extensions", server: "wsl:Debian" }
     const local = { key: "local", availability: "ready" as const }
     const wsl = { key: "wsl:Debian", availability: "starting" as const }
 
@@ -75,34 +69,15 @@ describe("settings route", () => {
     expect(settingsViewRedirect({ view, loaded: true, servers: [local, wsl] })).toBeUndefined()
     expect(settingsViewRedirect({ view, loaded: true, servers: [local] })).toEqual({
       type: "root",
-      tab: "providers",
+      tab: "extensions",
       server: undefined,
     })
   })
 
-  test("sends a direct Providers link to General while the gateway hides the page", () => {
-    const providers: SettingsView = { type: "root", tab: "providers", server: "wsl:Debian" }
-    const local = { key: "local", availability: "ready" as const }
-    const wsl = { key: "wsl:Debian", availability: "starting" as const }
-
-    expect(
-      settingsViewRedirect({ view: providers, loaded: true, servers: [local, wsl], gatewayActive: true }),
-    ).toEqual({ type: "root", tab: "general" })
-    expect(
-      settingsViewRedirect({ view: providers, loaded: false, servers: [local], gatewayActive: true }),
-    ).toEqual({ type: "root", tab: "general" })
-    // Without the gateway the link keeps working exactly as before.
-    expect(
-      settingsViewRedirect({ view: providers, loaded: true, servers: [local, wsl], gatewayActive: false }),
-    ).toBeUndefined()
-    expect(
-      settingsViewRedirect({
-        view: { type: "root", tab: "general" },
-        loaded: true,
-        servers: [local, wsl],
-        gatewayActive: true,
-      }),
-    ).toBeUndefined()
+  test("sends a link to a removed tab to General", () => {
+    expect(parseSettingsView("?server=wsl%3ADebian&tab=providers")).toEqual({ type: "root", tab: "general" })
+    expect(parseSettingsView("?tab=providers")).toEqual({ type: "root", tab: "general" })
+    expect(parseSettingsView("?tab=extensions")).toEqual({ type: "root", tab: "extensions", server: undefined })
   })
 
   test("keeps a project page while its server starts and leaves it for a signed-out or unreachable one", () => {

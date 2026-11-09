@@ -37,7 +37,3 @@ export default {
 export const Preferences = {
   render: () => <SettingsStory tab="general" />,
 }
-
-export const Providers = {
-  render: () => <SettingsStory tab="providers" />,
-}

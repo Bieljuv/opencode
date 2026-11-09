@@ -32,14 +32,6 @@ export function SessionContextUsage(props: {
     props.session.id ? props.session.server.data.session.message.list(props.session.id) : [],
   )
 
-  const usd = createMemo(
-    () =>
-      new Intl.NumberFormat(i18n.locale(), {
-        style: "currency",
-        currency: "USD",
-      }),
-  )
-
   const info = createMemo(() =>
     props.session.id ? props.session.server.data.session.get(props.session.id) : undefined,
   )
@@ -69,22 +61,6 @@ export function SessionContextUsage(props: {
       .format(context()?.total ?? 0)
       .toLocaleLowerCase(i18n.locale()),
   )
-
-  // A root session's cost includes its subagent sessions, as in the TUI.
-  const spent = createMemo(() => (props.session.id ? props.session.server.data.session.cost(props.session.id) : 0))
-
-  const cost = createMemo(() => usd().format(spent()))
-
-  // Spend anywhere in the family keeps the cost visible, even when this session's model is free.
-  const showCost = createMemo(() => {
-    if (spent() > 0) return true
-    const ref = info()?.model ?? messages().findLast((item) => item.type === "assistant")?.model
-    const model = ref ? catalogModel(props.session, ref)?.model : undefined
-
-    if (!model) return true
-
-    return model.cost.some((cost) => cost.input > 0 || cost.output > 0 || cost.cache.read > 0 || cost.cache.write > 0)
-  })
 
   const openContext = () => {
     if (!props.session.id) return
@@ -151,7 +127,6 @@ export function SessionContextUsage(props: {
       <Menu.Portal>
         <Menu.Content class="w-[200px] max-w-[calc(100vw-16px)]" aria-label={ctx.t("usage.view")}>
           {menuRow(ctx.t("usage.tokens"), context()?.total.toLocaleString(i18n.locale()) ?? "0")}
-          <Show when={showCost()}>{menuRow(ctx.t("usage.cost"), cost())}</Show>
           {menuRow(ctx.t("usage.usage"), `${context()?.usage ?? 0}%`)}
           <Menu.Separator />
           <Menu.Item onSelect={viewContext}>{ctx.t("usage.view")}</Menu.Item>
@@ -179,12 +154,6 @@ export function SessionContextUsage(props: {
                 <span class="flex items-center gap-2 whitespace-nowrap group-active:text-v2-text-text-muted">
                   {compactCircle()}
                   <span>{tokens()}</span>
-                  <Show when={showCost()}>
-                    <span aria-hidden="true" class="flex w-1.5 shrink-0 items-center justify-center">
-                      ·
-                    </span>
-                    <span>{cost()}</span>
-                  </Show>
                 </span>
               </Button>
             </Tooltip>

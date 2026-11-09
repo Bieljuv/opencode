@@ -825,8 +825,11 @@ function mockHandlers(
         model: () => Effect.succeed({ location: location(config), data: currentModels(resolve(config.provider)) }),
         modelDefault: () =>
           Effect.succeed({ location: location(config), data: currentDefaultModel(resolve(config.provider)) }),
-        integrationList: () =>
-          Effect.sync(() => ({ location: location(config), data: resolve(config.integrations ?? []) })),
+        integrationList: (ctx) =>
+          Effect.sync(() => ({
+            location: location(config, requestDirectory(config, ctx.request)),
+            data: resolve(config.integrations ?? []),
+          })),
         integrationGet: (ctx) =>
           Effect.sync(() => ({
             location: location(config),
