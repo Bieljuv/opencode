@@ -102,6 +102,28 @@ describe("SessionHistoryPackage.packageHistory", () => {
     expect(packaged).toHaveLength(21)
   })
 
+  test("switches and idle markers do not eat window slots", () => {
+    const switches = (count: number, prefix: string) =>
+      Array.from({ length: count }, (_, index) => modelSwitched(`${prefix}-${index}`))
+
+    // 10 conversational messages buried in switches: too few to pack.
+    const few = [...switches(15, "a"), ...conversation(10), ...switches(15, "b")]
+    expect(SessionHistoryPackage.packageHistory(few)).toBe(few)
+
+    // 25 conversational messages with a switch after each one: the window
+    // still holds the last 20 conversational messages, not 20 raw items.
+    const conv = conversation(25)
+    const many = conv.flatMap((message) => [message, modelSwitched("hop")])
+    const packaged = SessionHistoryPackage.packageHistory(many)
+    const first = packaged[0]
+    expect(first?.type).toBe("compaction")
+    const summary = first?.type === "compaction" && first.status === "completed" ? first.summary : ""
+    expect(summary).toContain("User message 0")
+    const window = packaged.slice(1).filter((message) => message.type === "user" || message.type === "assistant")
+    expect(window).toHaveLength(20)
+    expect(window).toEqual(conv.slice(-20))
+  })
+
   test("the packaged list renders as one checkpoint plus the window for the model", () => {
     const messages = conversation(25)
     const packaged = SessionHistoryPackage.packageHistory(messages)

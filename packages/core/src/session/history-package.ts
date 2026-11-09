@@ -113,17 +113,45 @@ export const buildDigest = (older: ReadonlyArray<SessionMessage.Info>): string =
 }
 
 /**
- * The messages a turn sends to the model: the last WINDOW_SIZE in full,
- * preceded by one summary message carrying the rest. Short histories go
- * out unchanged. The summary reuses the compaction message shape, so the
+ * Whether a message counts toward the 20-message window. Switches and idle
+ * markers are metadata, not conversation: they reach the model as nothing
+ * (or an effort note), but a session can hold hundreds of them — every
+ * router hop publishes one — and counting them would fill the window with
+ * switch noise and leave the recent conversation out of it.
+ */
+const countsTowardWindow = (message: SessionMessage.Info): boolean => {
+  switch (message.type) {
+    case "agent-switched":
+    case "model-switched":
+    case "idle":
+      return false
+    default:
+      return true
+  }
+}
+
+/**
+ * The messages a turn sends to the model: the last WINDOW_SIZE conversational
+ * messages in full, preceded by one summary message carrying the rest. Short
+ * histories go out unchanged. The summary reuses the compaction message shape, so the
  * request renders it as the usual conversation checkpoint; it is built
  * fresh for the request and never stored, so the session keeps its full
  * history.
  */
 export const packageHistory = (messages: ReadonlyArray<SessionMessage.Info>): ReadonlyArray<SessionMessage.Info> => {
-  if (messages.length <= WINDOW_SIZE) return messages
-  const older = messages.slice(0, messages.length - WINDOW_SIZE)
-  const window = messages.slice(messages.length - WINDOW_SIZE)
+  let conversational = 0
+  let start = -1
+  for (let index = messages.length - 1; index >= 0; index--) {
+    if (!countsTowardWindow(messages[index]!)) continue
+    conversational++
+    if (conversational === WINDOW_SIZE) {
+      start = index
+      break
+    }
+  }
+  if (start <= 0) return messages
+  const older = messages.slice(0, start)
+  const window = messages.slice(start)
   const packaged = SessionMessage.Compaction.make({
     id: SessionMessage.ID.create(),
     type: "compaction",
