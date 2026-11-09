@@ -18,6 +18,7 @@ import {
 import type { AgentChoices } from "@/providers/models/selection-machine"
 import { useComposerState } from "./persistence"
 import { useConfiguredModel } from "@/providers/models/configured"
+import { resolveFallbackModel } from "@/providers/models/server-default"
 import { useGlobal } from "@/runtime/server/runtime"
 import { composerModelLabelKey, composerModelLabels, composerProviderName } from "./model-label"
 
@@ -162,12 +163,7 @@ export function createComposerModelSelection(input: {
 
   const recent = () => models.recent.list().find(valid)
 
-  const fallback = () =>
-    providers.connected().flatMap((provider) => {
-      const modelID = Object.values(provider.models)[0]?.id
-
-      return modelID ? [{ providerID: provider.id, modelID }] : []
-    })[0]
+  const fallback = () => resolveFallbackModel(providers.serverDefault(), providers.connected())
 
   const key = () => {
     if (!configuredModel.ready()) return

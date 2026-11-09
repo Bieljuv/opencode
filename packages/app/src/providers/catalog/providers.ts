@@ -36,7 +36,11 @@ export function useProviders(directory: Accessor<string | undefined>) {
       if (!ref) await data.location.syncInfo()
       const resolved = ref ?? data.location.default()
       await syncWhileBooting(() =>
-        Promise.all([data.location.provider.sync(resolved), data.location.model.sync(resolved)]),
+        Promise.all([
+          data.location.provider.sync(resolved),
+          data.location.model.sync(resolved),
+          data.location.modelDefault.sync(resolved),
+        ]),
       )
     })().catch(() => undefined)
   })
@@ -62,6 +66,20 @@ export function useProviders(directory: Accessor<string | undefined>) {
     ready,
     all: () => providers().all,
     default: () => providers().default,
+    // The server's default model (GET /api/model/default): the model a
+    // session uses when nothing else is chosen. A plugin or config steers
+    // fresh sessions through it — e.g. the ManosTech gateway sets it to
+    // manostech/auto while its credential is connected. Undefined until
+    // loaded or when the server has none; callers validate it against the
+    // catalog before using it.
+    serverDefault: () => {
+      const ref = location()
+      const value = data.location.modelDefault.list(ref)
+
+      if (!value) return undefined
+
+      return { providerID: value.providerID, modelID: value.id }
+    },
     // V2 servers list only available providers, so the connectable catalog
     // comes from the integration list, with the provider catalog as fallback.
     popular: () => {
