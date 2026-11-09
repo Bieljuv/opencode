@@ -3,6 +3,7 @@ import { createMediaQuery } from "@solid-primitives/media"
 import { Button } from "@opencode/ui/button"
 import { Select } from "@opencode/ui/select"
 import { Switch } from "@opencode/ui/switch"
+import { PlanUsageBar, useClientUsage } from "@/client/plan-usage"
 import { TimelineDetailControl } from "@/settings/timeline-detail"
 import { useLanguage } from "@/runtime/i18n/language"
 import { usePlatform } from "@/runtime/platform/platform"
@@ -266,27 +267,35 @@ export const SettingsGeneral: Component = () => {
     void platform.signOutClient?.().then(() => setAccount(undefined)).catch(() => undefined)
   }
 
-  const AccountSection = () => (
-    <Show when={account()}>
-      {(current) => (
-        <section class="settings-section" aria-label={language.t("client.account.title")}>
-          <h3 class="settings-section-title">{language.t("client.account.title")}</h3>
-          <SettingsList>
-            <SettingsRow
-              title={language.t("client.account.signedInAs", { email: current().email })}
-              description={current().name}
-            >
-              <div data-action="settings-client-sign-out">
-                <Button variant="outline" onClick={signOut}>
-                  {language.t("client.account.signOut")}
-                </Button>
-              </div>
-            </SettingsRow>
-          </SettingsList>
-        </section>
-      )}
-    </Show>
-  )
+  const AccountSection = () => {
+    const usage = useClientUsage()
+
+    return (
+      <Show when={account()}>
+        {(current) => (
+          <section class="settings-section" aria-label={language.t("client.account.title")}>
+            <h3 class="settings-section-title">{language.t("client.account.title")}</h3>
+            <SettingsList>
+              <SettingsRow
+                title={language.t("client.account.signedInAs", { email: current().email })}
+                description={current().name}
+              >
+                <div data-action="settings-client-sign-out">
+                  <Button variant="outline" onClick={signOut}>
+                    {language.t("client.account.signOut")}
+                  </Button>
+                </div>
+              </SettingsRow>
+            </SettingsList>
+            {/* ManosTech: on-demand plan usage — the /usage screen lives here, in Conta. */}
+            <Show when={usage()}>
+              {(value) => <PlanUsageBar usage={value()} />}
+            </Show>
+          </section>
+        )}
+      </Show>
+    )
+  }
 
   const GeneralSection = () => (
     <div class="settings-section">

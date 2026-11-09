@@ -481,6 +481,10 @@ export const dict = {
   "client.account.title": "Account",
   "client.account.signedInAs": "Signed in as {{email}}",
   "client.account.signOut": "Sign out",
+  "client.usage.today": "Today's usage",
+  "client.usage.warning": "You've used {{percent}}% of today's usage · resets at midnight",
+  "client.usage.resetsInHours": "resets in {{hours}}h {{minutes}}m",
+  "client.usage.resetsInMinutes": "resets in {{minutes}}m",
   "server.connect.link": "Pairing link",
   "server.connect.link.placeholder": "http://192.168.1.2:4096/auth/connect/…",
   "server.connect.link.invalid":
