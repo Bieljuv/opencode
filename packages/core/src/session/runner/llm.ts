@@ -339,7 +339,12 @@ const layer = Layer.effect(
               // ManosTech router: on exhausted credit, hop to the next
               // connected model instead of failing the turn. The switch is
               // published as ModelSelected, so the retry re-resolves the new
-              // model; the user never sees the hop.
+              // model; the user never sees the hop. When the whole chain is
+              // exhausted, fail at once with the generic message: falling
+              // through would let the retry policy burn its same-model
+              // attempts (a rate-limit-shaped exhaustion is retryable) and
+              // only then fail — with the original error, not the generic
+              // one.
               if (SessionRouter.isExhaustionError(error)) {
                 const next = SessionRouter.nextHop(chain, tried)
                 if (next !== undefined) {
@@ -351,6 +356,7 @@ const layer = Layer.effect(
                   })
                   return { retry: true as const, attempt: (retryAttempt ?? 1) + 1, delay: 0 }
                 }
+                return { retry: false as const }
               }
               return yield* retry.decide({
                 cause,

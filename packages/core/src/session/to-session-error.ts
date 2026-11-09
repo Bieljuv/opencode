@@ -6,6 +6,7 @@ import { Integration } from "../integration.js"
 import { AgentNotFoundError, StepFailedError } from "./error.js"
 import { ModelResolver } from "../model-resolver.js"
 import { ModelRetry } from "../model-retry.js"
+import { SessionRouter } from "./router.js"
 import { SessionRunnerModel } from "./runner/model.js"
 
 const tokenSharingMessages = {
@@ -64,12 +65,77 @@ const GENERIC_UNKNOWN_MESSAGE = "Algo deu errado. Tente novamente."
  */
 const EXHAUSTED: SessionError.Error = { type: "provider.exhausted", message: "Tente novamente mais tarde." }
 
+/**
+ * ManosTech router: a limit refusal does not always arrive classified as
+ * one. The classifier only recognizes the exact `FreeUsageLimitError` /
+ * `GoUsageLimitError` / `BudgetLimitError` codes and a few quota phrases,
+ * so a refusal worded as a plain rate limit — or a 401/403 from a gateway
+ * guarding a cap — reaches the runner as a throttle or an auth error, and
+ * the runner retries the same model until the turn dies instead of hopping.
+ * Any refusal whose code, message, or body names a cap is exhaustion, no
+ * matter which reason it was classified under. A plain throttle ("rate
+ * limit", "too many requests") carries no cap signal and keeps its retry.
+ */
+const QUOTA_CODES: ReadonlySet<string> = new Set([
+  "freeusagelimiterror",
+  "freeusagelimit",
+  "gousagelimiterror",
+  "gousagelimit",
+  "budgetlimiterror",
+  "budgetlimit",
+  "creditlimitexceeded",
+  "insufficientquota",
+  "insufficientbalance",
+  "quotaexceeded",
+  "usagelimitexceeded",
+  "usagelimit",
+  "monthlylimitexceeded",
+  "dailylimitexceeded",
+  "spendinglimitexceeded",
+  "tokenlimitexceeded",
+  "freequotaexceeded",
+  "freelimitexceeded",
+  "planquotaexceeded",
+])
+
+const QUOTA_TEXT: readonly string[] = [
+  "free usage limit",
+  "free message",
+  "free limit",
+  "free quota",
+  "usage limit",
+  "quota exceeded",
+  "quota exhausted",
+  "quota reached",
+  "exceeded your quota",
+  "quota limit",
+  "budget exceeded",
+  "budget limit",
+  "limit exhausted",
+  "out of credits",
+  "no credits",
+  "credits exhausted",
+  "credit limit",
+  "monthly limit",
+  "daily limit",
+  "spending limit",
+  "token budget",
+]
+
+function hasQuotaSignal(cause: AIError): boolean {
+  const code = cause.code?.toLowerCase().replace(/[^a-z0-9]/g, "")
+  if (code !== undefined && QUOTA_CODES.has(code)) return true
+  const text = [cause.message, cause.reason.body].filter((part) => part !== undefined).join("\n").toLowerCase()
+  return QUOTA_TEXT.some((signal) => text.includes(signal))
+}
+
 export function toSessionError(cause: unknown): SessionError.Error {
   if (cause instanceof AIError) {
     // ChatGPT's usage limit arrives in HTTP and stream errors alike, whatever their reason, so its code decides the type.
     // The retry hook reads the body to veto retries of token-sharing codes, so it rides along as data.
     if (cause.reason.body?.includes("subscription_sharing_usage_limit_exceeded"))
       return { ...EXHAUSTED, response: { body: cause.reason.body } }
+    if (hasQuotaSignal(cause)) return EXHAUSTED
     switch (cause.reason._tag) {
       case "RateLimit":
         return providerError("provider.rate-limit", cause.reason)
@@ -109,7 +175,11 @@ export function toSessionError(cause: unknown): SessionError.Error {
     const unwrapped = toSessionError(cause.error)
     return unwrapped.message === "" ? { ...unwrapped, type: "tool.execution", message: cause.message } : unwrapped
   }
-  if (cause instanceof StepFailedError) return cause.error
+  // A step failure can carry an already-typed session error (an older
+  // server, a stored message). A limit type inside it is exhaustion, not
+  // the limit's own message — otherwise the free-limit line survives.
+  if (cause instanceof StepFailedError)
+    return SessionRouter.isExhaustionError(cause.error) ? EXHAUSTED : cause.error
   if (cause instanceof ModelResolver.UnsupportedCompactionError)
     return { type: "provider.unsupported-operation", message: cause.message }
   if (cause instanceof AgentNotFoundError) return { type: "unknown", message: cause.message }
