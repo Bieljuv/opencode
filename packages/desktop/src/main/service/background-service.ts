@@ -2,9 +2,10 @@ import { app } from "electron"
 import type { Endpoint } from "@opencode/client/service"
 import { Context, Effect, FileSystem, Layer, Option, Path, Schema } from "effect"
 import { SidecarChanged } from "../../shared/ipc-rpc/events"
-import { CHANNEL } from "../constants"
+import { CHANNEL, MANOSTECH_INGEST_SECRET } from "../constants"
 import { emitIpcEvent } from "../ipc-events"
 import { getMainWindows } from "../windows"
+import { clientFilePath } from "../client-auth/reporter-file"
 import { BackgroundServiceMachine } from "./background-service-machine"
 import { cleanStages } from "./cli-stages"
 import { keptStages, serviceVersion, shouldRetryEnsure } from "./cli-version"
@@ -70,6 +71,15 @@ const ensure = Effect.fn("BackgroundService.ensure")(function* (mode: Background
         "--service",
         ...(setup.isolated ? ["--hostname", "0.0.0.0", "--port", String(0x0c0c)] : []),
       ],
+      // ManosTech: the usage reporter in the server reads the client identity
+      // from this file and the ingest secret from the environment. The secret
+      // is baked into the main bundle at build time; without it the reporter
+      // stays silent. Login after startup needs no restart: the file is read
+      // fresh on every reported step.
+      env: {
+        MANOSTECH_CLIENT_FILE: clientFilePath(),
+        ...(MANOSTECH_INGEST_SECRET ? { MANOSTECH_INGEST_SECRET } : {}),
+      },
       onStart: (reason, previousVersion) =>
         runFork(Effect.logInfo("v2 CLI background service starting", { reason, previousVersion })),
     })

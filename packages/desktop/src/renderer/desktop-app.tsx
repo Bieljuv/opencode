@@ -20,6 +20,7 @@ import type { BaseRouterProps } from "@solidjs/router"
 import { createEffect, createMemo, createSignal, lazy, onCleanup, Show, Suspense, untrack } from "solid-js"
 import type { ElectronAPI } from "./api-types"
 import { DesktopFirstLaunchOnboarding } from "./onboarding"
+import { ManosTechClientGate } from "./client/gate"
 import { createDesktopPlatform } from "./platform"
 import { bindDesktopMenu } from "./platform/menu"
 import { createSidecarResolver, localServerStartupError, sidecarHttp } from "./startup/initialization"
@@ -123,6 +124,7 @@ export function DesktopApp(props: { api: ElectronAPI; version: string }) {
               revealed={selectStartupRevealed(startup.state())}
               dispatch={startup.dispatch}
             />
+            <ManosTechClientGate api={props.api} />
             <DesktopEffects api={props.api} />
             <Suspense fallback={null}>
               <Show when={activeSidecar()} keyed>
