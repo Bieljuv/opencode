@@ -329,6 +329,69 @@ test("the free usage limit opens the Go dialog once, leaves a readable notice, a
   await expect(view.editor).toHaveText("")
 })
 
+test("a budget limit shows only the generic exhaustion message, with no model switch", async ({ page }) => {
+  await page.clock.setFixedTime(T0)
+  const sessionID = "ses_budget_limit"
+  const model = { id: "big-pickle", providerID: "opencode" }
+
+  const view = await openSession(page, {
+    name: "BudgetLimit",
+    sessions: [{ id: sessionID, agent: "build", model }],
+    onFileWrite: () => undefined,
+    provider: () => ({
+      all: [
+        {
+          id: "opencode",
+          name: "OpenCode",
+          models: {
+            "big-pickle": {
+              id: "big-pickle",
+              name: "Big Pickle",
+              cost: { input: 0, output: 0 },
+              limit: { context: 200_000 },
+            },
+          },
+        },
+      ],
+      connected: ["opencode"],
+      default: { build: "opencode/big-pickle" },
+    }),
+    pageMessages: () => ({
+      items: [
+        { id: "msg_budget_user", type: "user", text: "Refactor the parser", time: { created: T0 } },
+        { id: "msg_budget_assistant", type: "assistant", agent: "build", model, content: [], time: { created: T0 + 1 } },
+      ],
+    }),
+  })
+
+  await expect(page.getByText("Refactor the parser", { exact: true })).toBeVisible()
+
+  const error = {
+    type: "provider.budget-limit",
+    message: "Budget reached.",
+    status: 429,
+  }
+
+  const durable = (seq: number) => ({ aggregateID: sessionID, seq, version: 1 as const })
+  const location = { directory: view.directory }
+
+  await view.push([
+    {
+      id: "evt_budget_limit_1",
+      created: T0 + 2,
+      type: "session.step.failed",
+      location,
+      durable: durable(1),
+      data: { sessionID, assistantMessageID: "msg_budget_assistant", error },
+    },
+  ])
+
+  await expect(page.getByRole("status").filter({ hasText: "Try again later." })).toBeVisible()
+  await expect(page.getByText("Budget reached.")).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "Switch model", exact: true })).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "Use a free model", exact: true })).toHaveCount(0)
+})
+
 for (const action of ["tray", "picker"] as const) {
   test(`the Go usage limit restores the prompt and dismisses the tray when switching models through the ${action}`, async ({
     page,

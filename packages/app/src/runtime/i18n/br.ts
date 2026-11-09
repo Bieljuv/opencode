@@ -560,8 +560,6 @@ export const dict = {
   "home.sessions.group.today": "Hoje",
   "home.sessions.group.yesterday": "Ontem",
   "home.sessions.group.older": "Mais antigas",
-  "home.providerTip":
-    "Conecte-se a mais de 75 provedores para usar outros modelos, incluindo Claude, GPT, Gemini e muito mais",
   "session.tab.session": "Sessão",
   "session.tab.unknown": "Sessão desconhecida",
   "session.panel.reviewAndFiles": "Revisão e arquivos",
