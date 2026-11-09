@@ -155,7 +155,7 @@ function CommandPaletteStory(props: { query?: string }) {
 
   const files = () => [
     createCommandPaletteFileEntry(
-      "packages/app/src/providers/models/select-dialog.tsx",
+      "packages/app/src/providers/models/selection.tsx",
       language.t("palette.group.files"),
     ),
     createCommandPaletteFileEntry("packages/ui/src/overlays/dialog/dialog.tsx", language.t("palette.group.files")),

@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, on, onCleanup, onMount, Show } from "solid-js"
+import { createEffect, createMemo, on, onMount, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createMediaQuery } from "@solid-primitives/media"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
@@ -256,20 +256,6 @@ export function createSettingsSearchCatalog() {
   const surface = useSettingsSurface()
   const mobile = createMediaQuery("(max-width: 767px)")
 
-  // ManosTech: with the gateway active the Providers page is hidden, so its entries leave the index too.
-  const [gatewayActive, setGatewayActive] = createSignal(false)
-
-  onMount(() => {
-    const load = () => {
-      void platform.isClientGatewayActive?.().then(setGatewayActive).catch(() => undefined)
-    }
-
-    load()
-    const off = platform.onClientChanged?.(() => load())
-
-    onCleanup(() => off?.())
-  })
-
   const inventory = createMemo(() =>
     servers().map((server) => {
       // Indexed exactly while the server's pages can open, so a result never leads to its unavailable state.
@@ -292,7 +278,6 @@ export function createSettingsSearchCatalog() {
       mobile: mobile(),
       translate: language.t,
       plugins: surface.plugins.items(),
-      gatewayActive: gatewayActive(),
     }),
   )
 }

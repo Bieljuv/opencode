@@ -144,9 +144,6 @@ type PlatformBase = {
   /** Sign the client account out (desktop only) */
   signOutClient?(): Promise<void>
 
-  /** Whether the ManosTech gateway is active for the signed-in client (desktop only) */
-  isClientGatewayActive?(): Promise<boolean>
-
   /** The client's daily plan usage, when the gateway is active and the panel answered (desktop only) */
   getClientUsage?(): Promise<{ percent: number; resetsAt: string; warnedToday: boolean } | undefined>
 
