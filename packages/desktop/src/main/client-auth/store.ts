@@ -8,12 +8,16 @@ import {
   MANOSTECH_GATEWAY_URL_KEY,
   MANOSTECH_USAGE_WARNED_KEY,
 } from "../storage/keys"
+import { decryptSecret, encryptSecret } from "./secrets"
 import type { SessionData } from "./panel"
 
 /**
  * ManosTech: a sessão do cliente vive no store do processo principal
  * (`opencode.settings`), que só o main lê — o renderer nunca toca no
  * arquivo e nunca vê o token. O token é de 30 dias e revogável no servidor.
+ * O token é guardado criptografado com o `safeStorage` do Electron (ver
+ * `./secrets`); valor antigo em texto claro continua valendo e é
+ * re-criptografado na próxima escrita.
  */
 
 const StoredSession = Schema.Struct({
@@ -32,8 +36,13 @@ const StoredSession = Schema.Struct({
 
 export type StoredSession = Schema.Schema.Type<typeof StoredSession>
 
+/** Guarda a sessão criptografando o token; o resto (id, e-mail, plano) não é segredo. */
+function persistSession(session: StoredSession): void {
+  getStore().set(MANOSTECH_CLIENT_SESSION_KEY, { ...session, token: encryptSecret(session.token) })
+}
+
 export function saveSession(session: SessionData): void {
-  getStore().set(MANOSTECH_CLIENT_SESSION_KEY, {
+  persistSession({
     token: session.token,
     expires_at: session.expires_at,
     mustChange: session.mustChange,
@@ -45,7 +54,15 @@ export function saveSession(session: SessionData): void {
 export function loadSession(): StoredSession | undefined {
   const decoded = Schema.decodeUnknownOption(StoredSession)(getStore().get(MANOSTECH_CLIENT_SESSION_KEY))
 
-  return Option.isSome(decoded) ? decoded.value : undefined
+  if (Option.isNone(decoded)) return undefined
+
+  // Valor criptografado que não descriptografa (outro usuário/máquina,
+  // arquivo corrompido) vale como sessão ausente: o login resolve.
+  const token = decryptSecret(decoded.value.token)
+
+  if (token === undefined) return undefined
+
+  return { ...decoded.value, token }
 }
 
 export function updateSession(patch: Partial<Pick<StoredSession, "mustChange" | "expires_at" | "trial_ends_at">>): void {
@@ -53,7 +70,7 @@ export function updateSession(patch: Partial<Pick<StoredSession, "mustChange" | 
 
   if (!current) return
 
-  getStore().set(MANOSTECH_CLIENT_SESSION_KEY, { ...current, ...patch })
+  persistSession({ ...current, ...patch })
 }
 
 export function clearSession(): void {
@@ -65,16 +82,22 @@ export function clearSession(): void {
  * processo principal — o renderer nunca a vê. O painel a renova todo mês e
  * a devolve em claro no login e em GET /api/auth/cliente/api-key, só quando
  * gera uma nova; a validação da sessão só informa o fim do ciclo.
- * Ausente = mantém a guardada, presente = atualiza.
+ * Ausente = mantém a guardada, presente = atualiza. A chave é guardada
+ * criptografada com o `safeStorage` (ver `./secrets`); valor antigo em
+ * texto claro continua valendo e é re-criptografado na próxima escrita.
  */
 export function saveApiKey(apiKey: string): void {
-  getStore().set(MANOSTECH_CLIENT_API_KEY_KEY, apiKey)
+  getStore().set(MANOSTECH_CLIENT_API_KEY_KEY, encryptSecret(apiKey))
 }
 
 export function loadApiKey(): string | undefined {
   const current = getStore().get(MANOSTECH_CLIENT_API_KEY_KEY)
 
-  return typeof current === "string" && current.length > 0 ? current : undefined
+  if (typeof current !== "string" || current.length === 0) return undefined
+
+  const apiKey = decryptSecret(current)
+
+  return apiKey !== undefined && apiKey.length > 0 ? apiKey : undefined
 }
 
 export function clearApiKey(): void {
