@@ -122,6 +122,11 @@ jobs:
           # shows. Empty until the repo secret exists; the build passes
           # and the button simply stays hidden.
           MANOSTECH_GOOGLE_CLIENT_ID: ${{ secrets.MANOSTECH_GOOGLE_CLIENT_ID }}
+          # Bakes the panel ingest secret into the app so the usage
+          # reporter sends each AI step to the panel. Empty until the
+          # repo secret exists; the build passes and the reporter
+          # simply stays silent.
+          MANOSTECH_INGEST_SECRET: ${{ secrets.MANOSTECH_INGEST_SECRET }}
 
       # Packs the unpacked app into dist/desktop/app (no installer yet).
       # Also writes resources/app-update.yml with the github feed, which the
