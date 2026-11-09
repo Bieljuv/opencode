@@ -115,10 +115,13 @@ export function DictationButton(props: { controller: ComposerEditorModel }) {
 
   /** Starts the gateway engine when the client is logged in; otherwise the mic is unavailable. */
   const startGatewayEngine = async () => {
-    const active = await platform.isClientGatewayActive?.().catch(() => false)
+    // PR #26 removed isClientGatewayActive from the platform: the signed-in
+    // account is the signal now (the gateway is the default transport while
+    // logged in). Without it the fallback below could never start.
+    const account = await platform.getClientAccount?.().catch(() => undefined)
     const transcribe = platform.transcribeClientAudio
 
-    if (!active || !transcribe) {
+    if (!account || !transcribe) {
       transport = undefined
       fail("unavailable")
 
