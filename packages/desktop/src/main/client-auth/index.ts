@@ -6,7 +6,7 @@ import { openExternalURL } from "../files"
 import { emitIpcEvent } from "../ipc-events"
 import { getMainWindows } from "../windows"
 import { authorizeUrl, createPkce, createState, exchangeCodeForIdToken, parseAuthReturn } from "./google"
-import { connectGatewayCredential, disconnectGatewayCredential, isGatewayActive, todayInSaoPaulo } from "./gateway"
+import { connectGatewayCredential, disconnectGatewayCredential, isGatewayActive, resolveGatewayBaseUrl, todayInSaoPaulo, DEFAULT_GATEWAY_URL } from "./gateway"
 import * as Panel from "./panel"
 import { clearClientIdentity, writeClientIdentity } from "./reporter-file"
 import {
@@ -118,12 +118,21 @@ function signOutLocally(): void {
   notifyClientChanged()
 }
 
+/** A URL do gateway: a reportada pelo painel, senão o env, senão o default (/v1 ao vivo). */
+function resolvedGatewayUrl(): string {
+  return resolveGatewayBaseUrl({
+    panelUrl: loadGatewayUrl(),
+    env: process.env,
+    fallback: DEFAULT_GATEWAY_URL,
+  })
+}
+
 /** O gateway está ativo: chave + URL guardadas e credencial aceita no servidor. */
 export function gatewayActive(): boolean {
   return isGatewayActive({
     connected: gatewayConnectedFor !== undefined,
     apiKey: loadApiKey(),
-    gatewayUrl: loadGatewayUrl(),
+    gatewayUrl: resolvedGatewayUrl(),
   })
 }
 
@@ -135,9 +144,11 @@ export function gatewayActive(): boolean {
  */
 async function refreshGatewayCredential(): Promise<void> {
   const apiKey = loadApiKey()
-  const gatewayUrl = loadGatewayUrl()
+  // A URL sempre resolve: o painel nunca a reporta, então sem URL guardada
+  // e sem env vale o default (/v1 ao vivo). Só a chave pode faltar.
+  const gatewayUrl = resolvedGatewayUrl()
 
-  if (!apiKey || !gatewayUrl) {
+  if (!apiKey) {
     gatewayConnectedFor = undefined
     return
   }

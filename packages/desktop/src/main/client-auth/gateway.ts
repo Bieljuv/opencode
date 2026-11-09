@@ -8,12 +8,24 @@ import { SidecarCredentials } from "../service/sidecar-credentials"
  * (gateway ativo) e o uso já agregado (percentual + reset).
  *
  * Ativação (tudo tem que valer): a flag `manostech-gateway` ligada no
- * servidor, a chave API guardada e a URL do gateway reportada pelo painel.
- * O main não lê a flag — ela vive no servidor — então `connected` é o
- * proxy observável: o sidecar só aceita a credencial quando a flag ligou
- * o plugin e a integração existe. Sem conexão, o gateway fica inativo e
- * o app não muda nada. Fail-open sempre: falha aqui nunca mostra erro.
+ * servidor, a chave API guardada e a URL do gateway. O painel nunca
+ * devolve `gateway_url`, então a URL é a reportada (quando houver) ou o
+ * default abaixo — o gateway ao vivo do painel, em /v1. O main não lê a
+ * flag — ela vive no servidor — então `connected` é o proxy observável:
+ * o sidecar só aceita a credencial quando a flag ligou o plugin e a
+ * integração existe. Sem conexão, o gateway fica inativo e o app não
+ * muda nada. Fail-open sempre: falha aqui nunca mostra erro.
  */
+
+/**
+ * A URL do gateway quando o painel não reporta nenhuma. Tem que ser a
+ * mesma do default do provedor (`DEFAULT_BASE_URL` em
+ * `packages/ai/src/providers/manostech.ts`): o painel serve a API
+ * OpenAI-compatível em /v1 e a rota acrescenta /chat/completions — /api/gateway
+ * não existe no painel e responde 404. Verificado ao vivo: POST
+ * /v1/chat/completions sem chave responde 401, não 404.
+ */
+export const DEFAULT_GATEWAY_URL = "https://painel-manostech.manostech.workers.dev/v1"
 
 /** A ativação do gateway, como função pura: flag × chave × URL. */
 export function isGatewayActive(input: {

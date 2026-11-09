@@ -25,8 +25,10 @@ import { credentialSettings, metadataSettings } from "./credential-settings.js"
  * key method's hidden `gatewayUrl` form answer, which the main supplies
  * when it connects the key — the same credential-metadata seam the
  * Cloudflare AI Gateway plugin uses for its account and gateway IDs.
+ * The panel never reports a URL in practice, so the main falls back to
+ * the package default (the panel's live gateway, /v1) when none is stored.
  * Precedence: panel URL (credential) > config baseURL > MANOSTECH_GATEWAY_URL
- * env > the package default (a placeholder the panel front replaces).
+ * env > the package default.
  */
 
 const providerID = Provider.ID.make("manostech")

@@ -1,5 +1,15 @@
 import { describe, expect, test } from "bun:test"
-import { isGatewayActive, resolveGatewayBaseUrl, todayInSaoPaulo } from "./gateway"
+import { DEFAULT_GATEWAY_URL, isGatewayActive, resolveGatewayBaseUrl, todayInSaoPaulo } from "./gateway"
+
+describe("DEFAULT_GATEWAY_URL", () => {
+  test("points at the panel's live /v1 gateway, not /api/gateway", () => {
+    // The panel serves the OpenAI-compatible API at /v1; /api/gateway
+    // does not exist and answers 404. The compatible route appends
+    // /chat/completions, so the default must end in /v1.
+    expect(DEFAULT_GATEWAY_URL).toBe("https://painel-manostech.manostech.workers.dev/v1")
+    expect(DEFAULT_GATEWAY_URL.endsWith("/v1")).toBe(true)
+  })
+})
 
 describe("isGatewayActive", () => {
   test("needs the connection, the key, and the panel URL together", () => {
@@ -20,7 +30,7 @@ describe("isGatewayActive", () => {
 
 describe("resolveGatewayBaseUrl", () => {
   test("the panel URL wins, then the environment, then the package default", () => {
-    const fallback = "https://painel-manostech.manostech.workers.dev/api/gateway"
+    const fallback = "https://painel-manostech.manostech.workers.dev/v1"
 
     expect(
       resolveGatewayBaseUrl({

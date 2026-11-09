@@ -16,12 +16,15 @@ import { toConfig } from "./settings.js"
  * baseURL precedence: provider settings (the panel-reported gateway URL,
  * delivered by the core plugin from the connected credential) > the
  * MANOSTECH_GATEWAY_URL environment override (tests) > the default below.
- * The default is a placeholder the panel front reports and replaces once
- * the gateway is live — the gateway is not live yet.
+ * The default is the panel's live gateway: the panel serves the
+ * OpenAI-compatible API at /v1, and the compatible route appends
+ * /chat/completions — so the default must end in /v1, not /api/gateway
+ * (that path does not exist on the panel and answers 404). Verified live:
+ * POST /v1/chat/completions without a key answers 401, not 404.
  */
 
-// caminho do gateway — frente do painel define e reporta
-export const DEFAULT_BASE_URL = "https://painel-manostech.manostech.workers.dev/api/gateway"
+// o caminho real do gateway no painel — /v1, sem /api/gateway
+export const DEFAULT_BASE_URL = "https://painel-manostech.manostech.workers.dev/v1"
 
 export const id = ProviderID.make("manostech")
 

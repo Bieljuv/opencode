@@ -260,7 +260,7 @@ describe("toSessionError", () => {
     })
     const gateway = RequestExecutor.httpFailure({
       message: "limite diário excedido",
-      url: "https://painel-manostech.manostech.workers.dev/api/gateway/v1/chat/completions",
+      url: "https://painel-manostech.manostech.workers.dev/v1/chat/completions",
       status: 429,
       responseBody: body,
     })
