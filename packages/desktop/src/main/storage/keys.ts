@@ -19,3 +19,9 @@ export const BUNDLED_CLI_VERSION_KEY = "bundledCliVersion"
 export const MANOSTECH_CLIENT_SESSION_KEY = "manostech.client.session"
 
 export const MANOSTECH_CLIENT_DEVICE_ID_KEY = "manostech.client.deviceId"
+
+export const MANOSTECH_CLIENT_API_KEY_KEY = "manostech.client.apiKey"
+
+export const MANOSTECH_GATEWAY_URL_KEY = "manostech.gateway.url"
+
+export const MANOSTECH_USAGE_WARNED_KEY = "manostech.client.usageWarned"

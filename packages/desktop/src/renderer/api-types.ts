@@ -4,6 +4,7 @@ import type {
   ManosTechClientChangePasswordValue,
   ManosTechClientLoginValue,
   ManosTechClientStatusValue,
+  ManosTechClientUsageValue,
 } from "../shared/ipc-rpc/manostech-client"
 import type { StorageSnapshot } from "../shared/ipc-transport"
 import type { WindowBootstrap } from "../shared/window-bootstrap"
@@ -52,6 +53,8 @@ export type ElectronAPI = {
   logoutClient(): Promise<void>
   getClientGoogleAvailable(): Promise<boolean>
   startClientGoogle(): Promise<{ available: boolean }>
+  getClientUsage(): Promise<ManosTechClientUsageValue | null>
+  markClientUsageWarned(): Promise<void>
   onClientChanged(cb: () => void): () => void
   openDirectoryPicker(opts?: DirectoryPickerOptions): Promise<string | string[] | null>
   openFilePicker(opts?: FilePickerOptions): Promise<PickedFiles | null>

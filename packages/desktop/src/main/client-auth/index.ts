@@ -6,9 +6,25 @@ import { openExternalURL } from "../files"
 import { emitIpcEvent } from "../ipc-events"
 import { getMainWindows } from "../windows"
 import { authorizeUrl, createPkce, createState, exchangeCodeForIdToken, parseAuthReturn } from "./google"
+import { connectGatewayCredential, disconnectGatewayCredential, isGatewayActive, todayInSaoPaulo } from "./gateway"
 import * as Panel from "./panel"
 import { clearClientIdentity, writeClientIdentity } from "./reporter-file"
-import { clearSession, deviceId, loadSession, saveSession, updateSession } from "./store"
+import {
+  clearApiKey,
+  clearGatewayUrl,
+  clearSession,
+  clearUsageWarnedDay,
+  deviceId,
+  loadApiKey,
+  loadGatewayUrl,
+  loadSession,
+  loadUsageWarnedDay,
+  saveApiKey,
+  saveGatewayUrl,
+  saveSession,
+  saveUsageWarnedDay,
+  updateSession,
+} from "./store"
 
 /**
  * ManosTech: conta do cliente no app desktop. O processo principal é o
@@ -23,9 +39,20 @@ import { clearSession, deviceId, loadSession, saveSession, updateSession } from 
 
 export type ClientStatus =
   | { readonly state: "logged-out" }
-  | { readonly state: "ready"; readonly client: { name: string; email: string }; readonly trialEndsAt: string | null }
+  | {
+      readonly state: "ready"
+      readonly client: { name: string; email: string }
+      readonly trialEndsAt: string | null
+      readonly gatewayActive: boolean
+    }
   | { readonly state: "must-change"; readonly client: { name: string; email: string } }
   | { readonly state: "trial-expired"; readonly trialEndsAt: string | null }
+
+export type ClientUsage = {
+  readonly percent: number
+  readonly resetsAt: string
+  readonly warnedToday: boolean
+}
 
 export type LoginResult =
   | { readonly ok: true; readonly status: ClientStatus }
@@ -41,6 +68,13 @@ let pendingGoogle: PendingGoogle | undefined
 
 const GOOGLE_FLOW_TTL_MS = 10 * 60_000
 
+/** O par chave→URL que o sidecar já aceitou; vazio = reconectar na próxima chance. */
+let gatewayConnectedFor: { apiKey: string; gatewayUrl: string } | undefined
+
+let usageCache: { at: number; value: Panel.DailyUsage | undefined } | undefined
+
+const USAGE_CACHE_MS = 60_000
+
 function statusFromSession(session: Panel.SessionData): ClientStatus {
   if (session.mustChange) return { state: "must-change", client: { name: session.client.name, email: session.client.email } }
   if (Panel.trialStatus(session.trial_ends_at, Date.now()) === "trial-expired")
@@ -50,6 +84,7 @@ function statusFromSession(session: Panel.SessionData): ClientStatus {
     state: "ready",
     client: { name: session.client.name, email: session.client.email },
     trialEndsAt: session.trial_ends_at,
+    gatewayActive: gatewayActive(),
   }
 }
 
@@ -66,13 +101,99 @@ function storedStatus(nowMs: number): ClientStatus {
     state: "ready",
     client: { name: stored.client.name, email: stored.client.email },
     trialEndsAt: stored.trial_ends_at,
+    gatewayActive: gatewayActive(),
   }
 }
 
 function signOutLocally(): void {
   clearSession()
+  clearApiKey()
+  clearGatewayUrl()
+  clearUsageWarnedDay()
   clearClientIdentity()
+  gatewayConnectedFor = undefined
+  usageCache = undefined
+  // Sem a credencial no servidor, o provedor do gateway some do pool.
+  void disconnectGatewayCredential()
   notifyClientChanged()
+}
+
+/** O gateway está ativo: chave + URL guardadas e credencial aceita no servidor. */
+export function gatewayActive(): boolean {
+  return isGatewayActive({
+    connected: gatewayConnectedFor !== undefined,
+    apiKey: loadApiKey(),
+    gatewayUrl: loadGatewayUrl(),
+  })
+}
+
+/**
+ * Conecta (ou reconecta) a credencial do gateway no servidor quando a
+ * chave ou a URL mudou — ou quando o app reiniciou. Idempotente e
+ * fail-open: o app segue com os provedores atuais se o servidor não
+ * aceitar (flag desligada, servidor fora do ar, integração ausente).
+ */
+async function refreshGatewayCredential(): Promise<void> {
+  const apiKey = loadApiKey()
+  const gatewayUrl = loadGatewayUrl()
+
+  if (!apiKey || !gatewayUrl) {
+    gatewayConnectedFor = undefined
+    return
+  }
+
+  if (
+    gatewayConnectedFor?.apiKey === apiKey &&
+    gatewayConnectedFor?.gatewayUrl === gatewayUrl
+  )
+    return
+
+  gatewayConnectedFor = (await connectGatewayCredential(apiKey, gatewayUrl))
+    ? { apiKey, gatewayUrl }
+    : undefined
+}
+
+/** Guarda chave e URL quando o painel as devolve (ausente = mantém a guardada). */
+function storeGatewayCredentials(apiKey: string | undefined, gatewayUrl: string | undefined): void {
+  if (apiKey) saveApiKey(apiKey)
+  if (gatewayUrl) saveGatewayUrl(gatewayUrl)
+}
+
+/** Uso diário do plano (GET /api/uso), com cache curto; sem gateway ativo, nada. */
+export async function getDailyUsage(): Promise<Panel.DailyUsage | undefined> {
+  if (!gatewayActive()) return undefined
+
+  const now = Date.now()
+
+  if (usageCache && now - usageCache.at < USAGE_CACHE_MS) return usageCache.value
+
+  const apiKey = loadApiKey()
+
+  if (!apiKey) return undefined
+
+  const value = await Panel.fetchDailyUsage(Panel.panelBaseUrl(process.env), apiKey)
+  usageCache = { at: now, value }
+
+  return value
+}
+
+/** Uso diário para a UI: null sem gateway ativo ou sem dados (a barra some). */
+export async function getClientUsage(): Promise<ClientUsage | null> {
+  const usage = await getDailyUsage()
+
+  if (!usage) return null
+
+  return { percent: usage.percent, resetsAt: usage.resetsAt, warnedToday: wasUsageWarnedToday() }
+}
+
+/** O aviso dos 85% já apareceu hoje (America/Sao_Paulo)? */
+export function wasUsageWarnedToday(): boolean {
+  return loadUsageWarnedDay() === todayInSaoPaulo(Date.now())
+}
+
+/** Marca o aviso dos 85% como mostrado hoje. */
+export function markUsageWarnedToday(): void {
+  saveUsageWarnedDay(todayInSaoPaulo(Date.now()))
 }
 
 export async function getStatus(): Promise<ClientStatus> {
@@ -86,12 +207,19 @@ export async function getStatus(): Promise<ClientStatus> {
     return { state: "logged-out" }
   }
 
+  // Local e barato quando já conectado: cobre o reinício do app e o
+  // offline (a validação no painel pode falhar e a sessão guardada vale).
+  await refreshGatewayCredential()
+
   const result = await Panel.validateSession(Panel.panelBaseUrl(process.env), stored.token)
 
   if (result.ok) {
     const info = result.value
     // A /sessao não reemite token nem trial: o guardado continua valendo.
+    // A chave e a URL, quando vêm, renovam o guardado (renovação mensal).
     updateSession({ mustChange: info.mustChange, expires_at: info.expires_at })
+    storeGatewayCredentials(info.apiKey, info.gatewayUrl)
+    await refreshGatewayCredential()
 
     return statusFromSession({
       token: stored.token,
@@ -99,6 +227,8 @@ export async function getStatus(): Promise<ClientStatus> {
       client: info.client,
       trial_ends_at: stored.trial_ends_at,
       expires_at: info.expires_at,
+      apiKey: info.apiKey,
+      gatewayUrl: info.gatewayUrl,
     })
   }
 
@@ -130,7 +260,9 @@ export async function login(email: string, password: string): Promise<LoginResul
   if (!result.ok) return { ok: false, error: result.error }
 
   saveSession(result.value)
+  storeGatewayCredentials(result.value.apiKey, result.value.gatewayUrl)
   writeClientIdentity({ id: result.value.client.id, email: result.value.client.email })
+  await refreshGatewayCredential()
   notifyClientChanged()
 
   return { ok: true, status: statusFromSession(result.value) }
@@ -237,7 +369,9 @@ export async function handleDeepLink(url: string): Promise<boolean> {
 
   if (result.ok) {
     saveSession(result.value)
+    storeGatewayCredentials(result.value.apiKey, result.value.gatewayUrl)
     writeClientIdentity({ id: result.value.client.id, email: result.value.client.email })
+    await refreshGatewayCredential()
   }
 
   notifyClientChanged()

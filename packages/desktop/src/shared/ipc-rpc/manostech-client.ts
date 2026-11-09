@@ -12,10 +12,18 @@ const ClientStatus = Schema.Union([
     state: Schema.Literal("ready"),
     client: ClientProfile,
     trialEndsAt: Schema.NullOr(Schema.String),
+    gatewayActive: Schema.Boolean,
   }),
   Schema.Struct({ state: Schema.Literal("must-change"), client: ClientProfile }),
   Schema.Struct({ state: Schema.Literal("trial-expired"), trialEndsAt: Schema.NullOr(Schema.String) }),
 ])
+
+/** Uso diário do plano, já agregado: só percentual e hora do reset. */
+const ClientUsage = Schema.Struct({
+  percent: Schema.Number,
+  resetsAt: Schema.String,
+  warnedToday: Schema.Boolean,
+})
 
 const ClientError = Schema.Struct({
   tag: Schema.Union([
@@ -59,6 +67,12 @@ export const ManosTechClientGoogleStart = Rpc.make("ManosTechClientGoogleStart",
   success: Schema.Struct({ available: Schema.Boolean }),
 })
 
+export const ManosTechClientUsage = Rpc.make("ManosTechClientUsage", {
+  success: Schema.NullOr(ClientUsage),
+})
+
+export const ManosTechClientUsageWarned = Rpc.make("ManosTechClientUsageWarned")
+
 export const ManosTechClientRpcs = RpcGroup.make(
   ManosTechClientStatus,
   ManosTechClientLogin,
@@ -66,9 +80,13 @@ export const ManosTechClientRpcs = RpcGroup.make(
   ManosTechClientLogout,
   ManosTechClientGoogleAvailable,
   ManosTechClientGoogleStart,
+  ManosTechClientUsage,
+  ManosTechClientUsageWarned,
 )
 
 export type ManosTechClientStatusValue = Schema.Schema.Type<typeof ClientStatus>
+
+export type ManosTechClientUsageValue = Schema.Schema.Type<typeof ClientUsage>
 
 export type ManosTechClientErrorValue = Schema.Schema.Type<typeof ClientError>
 

@@ -6,7 +6,7 @@ import {
 } from "./machine"
 
 const loggedOut = { state: "logged-out" } as const
-const ready = { state: "ready", client: { name: "Ana", email: "ana@exemplo.com" }, trialEndsAt: null } as const
+const ready = { state: "ready", client: { name: "Ana", email: "ana@exemplo.com" }, trialEndsAt: null, gatewayActive: false } as const
 const mustChange = {
   state: "must-change",
   client: { name: "Ana", email: "ana@exemplo.com" },
