@@ -22,6 +22,7 @@ import { SessionRunCoordinator } from "@opencode/core/session/run-coordinator"
 import { SessionRunner } from "@opencode/core/session/runner/index"
 import { SessionRunnerLLM } from "@opencode/core/session/runner/llm"
 import { SessionRunnerModel } from "@opencode/core/session/runner/model"
+import { SessionModelRequest } from "@opencode/core/session/model-request"
 import { Tool } from "@opencode/core/tool"
 import { SessionTable } from "@opencode/core/session/sql"
 import { SessionStore } from "@opencode/core/session/store"
@@ -37,7 +38,7 @@ import { Plugin } from "@opencode/core/plugin"
 import { PluginHooks } from "@opencode/core/plugin/hooks"
 import { OptimizePlugin } from "@opencode/core/plugin/optimize"
 import { IdentityPlugin } from "@opencode/core/plugin/identity"
-import { describe, expect } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { eq } from "drizzle-orm"
 import { Effect, Layer, Option, Tracer } from "effect"
 import path from "node:path"
@@ -274,4 +275,28 @@ describe("SessionRunnerLLM recorded", () => {
       expect(attempt?.attributes.get("opencode.llm.first_output_ms")).toBeNumber()
     }).pipe(Effect.withSpan("fixture.request")),
   )
+})
+
+describe("SessionRunnerLLM recorded request bytes", () => {
+  test("every recorded turn carries the token-economy instruction in the request body", async () => {
+    // The cassette is the request as it went on the wire: parse its JSON
+    // body and read the system prompt the model actually received, so the
+    // check holds on bytes, not on the in-memory request object.
+    const recorded = await Bun.file(
+      path.resolve(cassetteDirectory, "session-runner/openai-chat-streams-text.json"),
+    ).json()
+    const bodies: string[] = recorded.interactions.map(
+      (interaction: { request: { body: string } }) => interaction.request.body,
+    )
+    expect(bodies.length).toBeGreaterThan(0)
+    for (const body of bodies) {
+      const request = JSON.parse(body) as { messages: Array<{ role: string; content: unknown }> }
+      const system = request.messages
+        .filter((message) => message.role === "system")
+        .map((message) => (typeof message.content === "string" ? message.content : ""))
+        .join("\n")
+      expect(system).toContain(SessionModelRequest.TOKEN_ECONOMY)
+      expect(system).toContain(SessionModelRequest.HIDE_MODEL_IDENTITY)
+    }
+  })
 })

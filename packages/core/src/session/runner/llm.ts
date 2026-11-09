@@ -15,6 +15,7 @@ import { SessionInbox } from "../inbox.js"
 import { SessionBackground } from "../background.js"
 import { Job } from "../../job.js"
 import { SessionHistory } from "../history.js"
+import { SessionHistoryPackage } from "../history-package.js"
 import { SessionModelRequest } from "../model-request.js"
 import { SessionRouter } from "../router.js"
 import { SessionModelTransport } from "../model-transport.js"
@@ -294,7 +295,11 @@ const layer = Layer.effect(
           model: loaded.model,
           tools: loaded.tools,
           initial: loaded.initial,
-          messages: loaded.messages,
+          // ManosTech history packaging: the turn only resends the last 20
+          // messages plus a condensed summary of the rest, so a long
+          // conversation stops re-sending its whole context on every turn.
+          // The full history stays in the session; only the request is packed.
+          messages: SessionHistoryPackage.packageHistory(loaded.messages),
         })
         const prepared = yield* context.request
           .primary({
