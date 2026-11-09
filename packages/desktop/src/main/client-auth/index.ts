@@ -16,6 +16,7 @@ import {
 } from "./google"
 import { connectGatewayCredential, disconnectGatewayCredential, isGatewayActive, resolveGatewayBaseUrl, todayInSaoPaulo, DEFAULT_GATEWAY_URL } from "./gateway"
 import * as Panel from "./panel"
+import * as Transcribe from "./transcribe"
 import { clearClientIdentity, writeClientIdentity } from "./reporter-file"
 import {
   clearApiKey,
@@ -204,6 +205,15 @@ export async function getClientUsage(): Promise<ClientUsage | null> {
   if (!usage) return null
 
   return { percent: usage.percent, resetsAt: usage.resetsAt, warnedToday: wasUsageWarnedToday() }
+}
+
+/** Transcreve uma fatia de áudio do microfone no gateway, com a chave guardada. */
+export async function transcribeAudio(audioDataUrl: string): Promise<Transcribe.TranscribeAudioResult> {
+  return Transcribe.transcribeSlice({
+    apiKey: loadApiKey(),
+    gatewayUrl: resolvedGatewayUrl(),
+    audioDataUrl,
+  })
 }
 
 /** O aviso dos 85% já apareceu hoje (America/Sao_Paulo)? */

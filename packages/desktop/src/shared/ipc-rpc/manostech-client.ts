@@ -73,6 +73,17 @@ export const ManosTechClientUsage = Rpc.make("ManosTechClientUsage", {
 
 export const ManosTechClientUsageWarned = Rpc.make("ManosTechClientUsageWarned")
 
+export const ManosTechClientTranscribe = Rpc.make("ManosTechClientTranscribe", {
+  payload: { audio: Schema.String },
+  success: Schema.Union([
+    Schema.Struct({ ok: Schema.Literal(true), text: Schema.String }),
+    Schema.Struct({
+      ok: Schema.Literal(false),
+      error: Schema.Union([Schema.Literal("unavailable"), Schema.Literal("failed")]),
+    }),
+  ]),
+})
+
 export const ManosTechClientRpcs = RpcGroup.make(
   ManosTechClientStatus,
   ManosTechClientLogin,
@@ -82,6 +93,7 @@ export const ManosTechClientRpcs = RpcGroup.make(
   ManosTechClientGoogleStart,
   ManosTechClientUsage,
   ManosTechClientUsageWarned,
+  ManosTechClientTranscribe,
 )
 
 export type ManosTechClientStatusValue = Schema.Schema.Type<typeof ClientStatus>
@@ -97,3 +109,7 @@ export type ManosTechClientLoginValue =
 export type ManosTechClientChangePasswordValue =
   | { readonly ok: true }
   | { readonly ok: false; readonly error: ManosTechClientErrorValue }
+
+export type ManosTechClientTranscribeValue =
+  | { readonly ok: true; readonly text: string }
+  | { readonly ok: false; readonly error: "unavailable" | "failed" }

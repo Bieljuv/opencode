@@ -33,6 +33,11 @@ export type FatalRendererErrorLog = {
   os?: DesktopOS
 }
 
+/** O resultado de uma transcrição de áudio no gateway: o texto, ou o motivo da falha. */
+export type ClientTranscribeResult =
+  | { readonly ok: true; readonly text: string }
+  | { readonly ok: false; readonly error: "unavailable" | "failed" }
+
 type PlatformBase = {
   requestMicrophone?(): Promise<boolean>
   setVoiceCallActive?(active: boolean): Promise<void>
@@ -149,6 +154,9 @@ type PlatformBase = {
 
   /** The client's daily plan usage, when the gateway is active and the panel answered (desktop only) */
   getClientUsage?(): Promise<{ percent: number; resetsAt: string; warnedToday: boolean } | undefined>
+
+  /** Transcreve uma fatia de áudio no gateway do painel (desktop only). */
+  transcribeClientAudio?(audioDataUrl: string): Promise<ClientTranscribeResult>
 
   /** Mark the 85% daily-usage warning as shown today (desktop only) */
   markClientUsageWarned?(): Promise<void>
