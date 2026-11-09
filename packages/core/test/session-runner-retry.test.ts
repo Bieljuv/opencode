@@ -120,11 +120,16 @@ describe("ModelRetry.retryOneShot", () => {
 })
 
 describe("toSessionError", () => {
-  test("names the network when the provider's host can't be reached", () => {
+  test("reports an unreachable network without naming the host", () => {
+    // ManosTech: the host is a provider domain and the raw message names
+    // it — both cases get the same generic message.
     expect(toSessionError(dnsFailure)).toEqual({
       type: "provider.transport",
-      message: "Can't reach opencode.ai. Check the network connection. (getaddrinfo ENOTFOUND opencode.ai)",
+      message: "Não foi possível alcançar o servidor. Verifique a conexão com a internet.",
     })
-    expect(toSessionError(refused)).toEqual({ type: "provider.transport", message: "Unable to connect" })
+    expect(toSessionError(refused)).toEqual({
+      type: "provider.transport",
+      message: "Não foi possível alcançar o servidor. Verifique a conexão com a internet.",
+    })
   })
 })

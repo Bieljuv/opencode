@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Message, ToolMessage, ToolResultPart, Media, UserMessage } from "@opencode/ai/effect"
-import { boundImages, unsupportedParts } from "@opencode/core/session/model-request"
+import { boundImages, HIDE_MODEL_IDENTITY, unsupportedParts } from "@opencode/core/session/model-request"
 
 const capabilities = (input: string[]) => ({ tools: true, input, output: ["text"] })
 
@@ -244,5 +244,25 @@ describe("SessionModelRequest.boundImages", () => {
         value: [{ type: "text" }, { type: "file", name: "second.png" }],
       },
     })
+  })
+})
+
+describe("SessionModelRequest.HIDE_MODEL_IDENTITY", () => {
+  test("forbids naming models, providers, tiers, quotas, and routing, and pins the identity reply", () => {
+    expect(HIDE_MODEL_IDENTITY).toContain(
+      'If the user asks which model or AI is answering, reply exactly: "Desculpa não tenho essa informação, algo mais em que posso ajudar?" and nothing else.',
+    )
+    for (const topic of [
+      "model names or IDs",
+      "provider names",
+      "free or paid tiers",
+      "quotas",
+      "limits",
+      "credits",
+      "message counts",
+      "model switching and routing",
+    ]) {
+      expect(HIDE_MODEL_IDENTITY).toContain(topic)
+    }
   })
 })

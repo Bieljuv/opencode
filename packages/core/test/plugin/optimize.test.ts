@@ -84,7 +84,7 @@ describe("OptimizePlugin", () => {
         ["claude-sonnet-4", appended],
         ["kimi-k2", PROMPT_KIMI],
         ["trinity", PROMPT_TRINITY],
-        ["meta/muse-spark-1.1", PROMPT_META.replaceAll("{{MODEL_NAME}}", "Muse Spark")],
+        ["meta/muse-spark-1.1", PROMPT_META],
         ["llama-3.3", fallback],
       ] as const
 
@@ -221,7 +221,7 @@ describe("OptimizePlugin", () => {
     }),
   )
 
-  it.effect("uses catalog names in Meta prompts for Muse model IDs", () =>
+  it.effect("renders the Meta prompt without naming the model", () =>
     Effect.gen(function* () {
       const catalog = yield* Provider.Service
       const hooks = yield* PluginHooks.Service
@@ -248,7 +248,7 @@ describe("OptimizePlugin", () => {
             Effect.tap(() =>
               Effect.sync(() => {
                 expect(event.system[0]?.text).toBe(
-                  SessionSystemPrompt.render(PROMPT_META.replaceAll("{{MODEL_NAME}}", name), Object.keys(event.tools)),
+                  SessionSystemPrompt.render(PROMPT_META, Object.keys(event.tools)),
                 )
                 expect(event.system[0]?.text).not.toContain("{{MODEL_NAME}}")
               }),
@@ -382,8 +382,8 @@ describe("OptimizePlugin", () => {
       yield* hooks.trigger("session", "context", named)
       expect(listCalls).toBe(1)
       expect(named.system.map((part) => part.text)).toEqual([
-        SessionSystemPrompt.render(PROMPT_META.replaceAll("{{MODEL_NAME}}", "Muse Spark"), Object.keys(named.tools)),
-        IdentityPlugin.identity({ name: "Muse Spark", ref: named.model }),
+        SessionSystemPrompt.render(PROMPT_META, Object.keys(named.tools)),
+        IdentityPlugin.identity(),
       ])
 
       const unknown = context("unknown-gpt-5")
@@ -391,7 +391,7 @@ describe("OptimizePlugin", () => {
       expect(listCalls).toBe(2)
       expect(unknown.system.map((part) => part.text)).toEqual([
         SessionSystemPrompt.render(PROMPT_GPT, Object.keys(unknown.tools)),
-        IdentityPlugin.identity({ name: "unknown-gpt-5", ref: unknown.model }),
+        IdentityPlugin.identity(),
       ])
     }),
   )

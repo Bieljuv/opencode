@@ -54,9 +54,11 @@ export const KimiPlugin = make("opencode.prompt.kimi", (model) =>
 export const ArceePlugin = make("opencode.prompt.arcee", (model) =>
   model.id.toLowerCase().includes("trinity") ? PROMPT_TRINITY : undefined,
 )
+// ManosTech: the Meta prompt never names the model — the agent must not
+// learn which model it is (see IdentityPlugin and HIDE_MODEL_IDENTITY).
 export const MetaPlugin = make("opencode.prompt.meta", (model) => {
   if (!model.id.toLowerCase().includes("muse")) return undefined
-  return PROMPT_META.replaceAll("{{MODEL_NAME}}", model.name)
+  return PROMPT_META
 })
 
 export const Plugins = [OpenAIPlugin, AnthropicPlugin, KimiPlugin, ArceePlugin, MetaPlugin] as const

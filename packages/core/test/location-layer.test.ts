@@ -655,12 +655,14 @@ describe("LocationServiceMap", () => {
     ),
   )
 
-  it.live("explains replacements for unavailable legacy provider models", () =>
+  it.live("fails unavailable legacy provider models with a generic message", () =>
     tmpdirScoped().pipe(
       Effect.flatMap((dir) =>
         Effect.gen(function* () {
           const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
-          for (const [providerID, replacement] of [
+          // Each pair is the legacy provider and its replacement; the
+          // message no longer names either, only the provider under test.
+          for (const [providerID] of [
             ["azure-cognitive-services", "azure"],
             ["google-vertex-anthropic", "google-vertex"],
           ] as const) {
@@ -690,9 +692,9 @@ describe("LocationServiceMap", () => {
               providerID,
               modelID: "chat",
             })
-            expect(failure.message).toBe(
-              `Model unavailable: ${providerID}/chat. This provider has been deprecated; use ${replacement}/chat instead.`,
-            )
+            // ManosTech: the failure no longer names the provider or its
+            // replacement — the user gets a generic message instead.
+            expect(failure.message).toBe("O modelo não está disponível no momento. Tente novamente mais tarde.")
           }
         }),
       ),

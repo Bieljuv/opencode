@@ -811,7 +811,7 @@ describe("SubagentTool", () => {
             status: "error",
             error: {
               type: "tool.execution",
-              message: expect.stringContaining("No model is available for session"),
+              message: expect.stringContaining("Nenhum modelo está disponível no momento"),
             },
           })
         }),

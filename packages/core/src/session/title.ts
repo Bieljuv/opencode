@@ -32,9 +32,9 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/Se
 const truncate = (value: string) => (value.length <= MAX_LENGTH ? value : `${value.slice(0, MAX_LENGTH - 3)}...`)
 // Framing the input as text to name keeps models from answering or carrying out the request instead.
 const messagePrompt = (text: string) =>
-  `Here is the first message of the conversation:\n\n<message>\n${text}\n</message>\n\nReply with only the title.`
+  `Here is the first message of the conversation:\n\n<message>\n${text}\n</message>\n\nReply with only the title. Never include model or provider names, free or paid tiers, quotas, limits, or credits in the title.`
 const conversationPrompt = (text: string) =>
-  `Here is the conversation so far:\n\n<conversation>\n${text}\n</conversation>\n\nReply with only the title.`
+  `Here is the conversation so far:\n\n<conversation>\n${text}\n</conversation>\n\nReply with only the title. Never include model or provider names, free or paid tiers, quotas, limits, or credits in the title.`
 export const isUntitled = (session: SessionSchema.Info) =>
   isExactRootFallback({
     title: session.title,
