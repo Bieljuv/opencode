@@ -49,10 +49,20 @@ function resetParts(ms: number): { hours: number; minutes: number } {
   return { hours: Math.floor(ms / 3_600_000), minutes: Math.floor((ms % 3_600_000) / 60_000) }
 }
 
-const toneClass: Record<PlanUsageTone, string> = {
-  ok: "bg-success",
-  warn: "bg-warning",
-  danger: "bg-danger",
+/**
+ * Tom → classe de fundo dos blocos. Usa as cores de estado SATURADAS
+ * (`--v2-state-fg-*`, as mesmas dos pontos de status e da faixa do
+ * callout de uso): as de fundo (`--v2-state-bg-*`) são tintas pálidas
+ * para painéis de callout e somem num bloco de 8px. As três existem
+ * como `--color-v2-state-fg-*` em `@theme`
+ * (`packages/ui/src/styles/tailwind/colors.css`), então o Tailwind
+ * gera a regra — `bg-success` / `bg-warning` / `bg-danger` não tinham
+ * token nenhum e computavam transparente (blocos invisíveis).
+ */
+export function planUsageToneClass(tone: PlanUsageTone): string {
+  if (tone === "danger") return "bg-v2-state-fg-danger"
+  if (tone === "warn") return "bg-v2-state-fg-warning"
+  return "bg-v2-state-fg-success"
 }
 
 const WARNING_PERCENT = 85
@@ -98,7 +108,7 @@ export function PlanUsageBar(props: { usage: PlanUsage; showWarning?: boolean; o
         <span class="text-muted shrink-0">{language.t("client.usage.today")}</span>
         <div class="flex min-w-0 flex-1 gap-[2px]" aria-hidden>
           <For each={Array.from({ length: 10 }, (_, index) => index < filled())}>
-            {(on) => <span class={`h-2 flex-1 rounded-full ${toneClass[tone()]} ${on ? "" : "opacity-20"}`} />}
+            {(on) => <span class={`h-2 flex-1 rounded-full ${planUsageToneClass(tone())} ${on ? "" : "opacity-20"}`} />}
           </For>
         </div>
         <span class="shrink-0 font-medium">{percent()}%</span>

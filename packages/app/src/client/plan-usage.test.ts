@@ -1,5 +1,16 @@
 import { describe, expect, test } from "bun:test"
-import { planUsageBlocks, planUsageResetInMs, planUsageTone } from "./plan-usage"
+import { planUsageBlocks, planUsageResetInMs, planUsageTone, planUsageToneClass } from "./plan-usage"
+
+describe("plan usage tone class", () => {
+  test("maps each tone to a v2 state background class that Tailwind generates", () => {
+    // Regression: bg-success / bg-warning / bg-danger had no color token,
+    // so the bar blocks computed transparent. The v2 state fg tokens are
+    // the saturated state colors (see planUsageToneClass).
+    expect(planUsageToneClass("ok")).toBe("bg-v2-state-fg-success")
+    expect(planUsageToneClass("warn")).toBe("bg-v2-state-fg-warning")
+    expect(planUsageToneClass("danger")).toBe("bg-v2-state-fg-danger")
+  })
+})
 
 describe("plan usage tone", () => {
   test("stays green below 70%, yellow to 89%, red from 90%", () => {
