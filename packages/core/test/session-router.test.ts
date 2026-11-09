@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import { Model } from "@opencode/core/model"
+import { Effect } from "effect"
+import { Model, supportsText } from "@opencode/core/model"
+import { decodeSnapshot } from "@opencode/core/models-dev"
 import { Provider } from "@opencode/core/provider"
 import { Money } from "@opencode/schema/money"
 import {
@@ -9,8 +11,10 @@ import {
   effortFromVariant,
   isExhaustionError,
   isFreeModel,
+  isHopSignal,
   isRoutable,
   nextHop,
+  nextHopFromProvider,
   refKey,
   variantForEffort,
 } from "@opencode/core/session/router"
@@ -226,6 +230,102 @@ describe("nextHop", () => {
     })
     expect(nextHop(chain, new Set(["openrouter/a-free"]))?.id).toBe(Model.ID.make("b-free"))
     expect(nextHop(chain, new Set(["openrouter/a-free", "openrouter/b-free"]))).toBeUndefined()
+  })
+})
+
+describe("isHopSignal", () => {
+  test("every limit type and a plain throttle hop; auth, internal, and invalid-request do not", () => {
+    for (const type of [
+      "provider.exhausted",
+      "provider.free-limit",
+      "provider.go-limit",
+      "provider.budget-limit",
+      "provider.model-budget-limit",
+      "provider.quota",
+      "provider.chatgpt-limit",
+      "provider.rate-limit",
+    ])
+      expect(isHopSignal({ type })).toBe(true)
+    for (const type of [
+      "provider.auth",
+      "provider.internal",
+      "provider.invalid-request",
+      "provider.content-filter",
+    ])
+      expect(isHopSignal({ type })).toBe(false)
+  })
+})
+
+describe("nextHopFromProvider", () => {
+  test("prefers another provider, falls back to the same provider when alone", () => {
+    const chain = buildChain(
+      [free("openrouter", "a-free"), free("nvidia", "b-free"), free("openrouter", "c-free")],
+      { complexity: "simple", effort: "automatico" },
+    )
+    expect(nextHopFromProvider(chain, new Set(["openrouter/a-free"]), "openrouter")?.id).toBe(
+      Model.ID.make("b-free"),
+    )
+    expect(nextHopFromProvider(chain, new Set(["openrouter/a-free", "nvidia/b-free"]), "nvidia")?.id).toBe(
+      Model.ID.make("c-free"),
+    )
+    expect(
+      nextHopFromProvider(
+        chain,
+        new Set(["openrouter/a-free", "nvidia/b-free", "openrouter/c-free"]),
+        "openrouter",
+      ),
+    ).toBeUndefined()
+  })
+})
+
+describe("chain from the packaged catalog (Gabriel's providers)", () => {
+  test("an 'oi' in a new session builds a long multi-provider chain with the gateway before any paid model", async () => {
+    // The packaged models.dev snapshot is the catalog the app starts
+    // with; the providers are the ones connected on his PC plus the
+    // ManosTech gateway. The chain the router builds from it has to be
+    // long — a short chain here would mean the catalog itself starves
+    // the router, and the hop would have nowhere to go.
+    const text = await Bun.file(new URL("../src/models-dev/snapshot.txt", import.meta.url)).text()
+    const snapshots = await Effect.runPromise(decodeSnapshot(text))
+    const providers = new Set(["opencode", "anthropic", "google", "openrouter", "nvidia", "moonshotai", "nano-gpt"])
+    const available = snapshots
+      .filter((snapshot) => providers.has(snapshot.info.id))
+      .flatMap((snapshot) => snapshot.models)
+      .filter((item) => item.status !== "deprecated" && (item.type ?? "chat") === "chat" && supportsText(item))
+    // The gateway model, as the ManosTech plugin registers it: free,
+    // tools, enabled — in the chain only while its credential is
+    // connected. Behind it the panel holds live shared keys for
+    // DeepSeek, Moonshot, Nvidia, Groq, and OpenRouter (6 keys).
+    const gateway = Model.Info.default(Provider.ID.make("manostech"), Model.ID.make("auto"))
+    const pool = [...available, gateway].filter(isRoutable)
+    const chain = buildChain([...available, gateway], {
+      complexity: classifyComplexity("oi"),
+      effort: "automatico",
+    })
+    expect(chain.length).toBe(pool.length)
+    expect(chain.length).toBeGreaterThan(100)
+    const freeKeys = new Set(pool.filter(isFreeModel).map(refKey))
+    expect(freeKeys.size).toBeGreaterThan(10)
+    const gatewayIndex = chain.findIndex((ref) => ref.providerID === "manostech")
+    expect(gatewayIndex).toBeGreaterThanOrEqual(0)
+    const firstPaidIndex = chain.findIndex((ref) => !freeKeys.has(refKey(ref)))
+    expect(gatewayIndex).toBeLessThan(firstPaidIndex)
+    expect(chain.some((ref) => ref.providerID === "opencode-go")).toBe(false)
+    const last = chain[chain.length - 1]
+    expect(last === undefined ? undefined : refKey(last)).toBe("moonshotai/kimi-k3.1-pro")
+
+    // The hop loop the runner runs: every model fails with exhaustion
+    // until the gateway, which answers. The gateway is reached before
+    // any paid model, so the "oi" never touches a paid personal key.
+    const tried = new Set<string>()
+    let current = nextHop(chain, tried)
+    while (current !== undefined && current.providerID !== "manostech") {
+      tried.add(refKey(current))
+      current = nextHop(chain, tried)
+    }
+    expect(current?.providerID).toBe(Provider.ID.make("manostech"))
+    expect(tried.size).toBe(gatewayIndex)
+    expect(tried.size).toBeLessThan(firstPaidIndex)
   })
 })
 

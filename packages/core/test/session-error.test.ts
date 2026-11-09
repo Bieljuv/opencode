@@ -273,6 +273,64 @@ describe("toSessionError", () => {
       expect(shown).not.toContain(leak)
   })
 
+  test("collapses the ManosTech gateway real 403 caps into the generic exhaustion error", () => {
+    // The gateway answers a spent daily/monthly plan with 403 and its own
+    // code (`limite_diario_atingido` / `limite_mensal_atingido`). By status
+    // that is an auth error, and the runner retried the same model until
+    // the turn died instead of hopping to the next connected model — the
+    // gateway's own live keys (DeepSeek, Moonshot, Nvidia) sat unused.
+    const exhausted = { type: "provider.exhausted", message: "Tente novamente mais tarde." }
+    for (const code of ["limite_diario_atingido", "limite_mensal_atingido"]) {
+      const gateway = RequestExecutor.httpFailure({
+        message: "Tente novamente mais tarde.",
+        url: "https://painel-manostech.manostech.workers.dev/v1/chat/completions",
+        status: 403,
+        responseBody: JSON.stringify({
+          error: { message: "Tente novamente mais tarde.", type: code, code },
+        }),
+      })
+      expect(toSessionError(gateway)).toEqual(exhausted)
+    }
+    // The trial block is not a cap to hop from: it stays auth, so the
+    // session layer can keep blocking the trial the way it already does.
+    const trial = RequestExecutor.httpFailure({
+      message: "Tente novamente mais tarde.",
+      url: "https://painel-manostech.manostech.workers.dev/v1/chat/completions",
+      status: 403,
+      responseBody: JSON.stringify({
+        error: { message: "Tente novamente mais tarde.", type: "teste_expirado", code: "teste_expirado" },
+      }),
+    })
+    expect(toSessionError(trial)).toMatchObject({ type: "provider.auth" })
+  })
+
+  test("collapses a credit-balance refusal into the generic exhaustion error", () => {
+    // Anthropic refuses a spent account with 400 and an invalid-request
+    // type; the runner treated it as a malformed request and never hopped.
+    const exhausted = { type: "provider.exhausted", message: "Tente novamente mais tarde." }
+    const anthropic = RequestExecutor.httpFailure({
+      message: "Your credit balance is too low to access the Anthropic API.",
+      url: "https://api.anthropic.com/v1/messages",
+      status: 400,
+      responseBody: JSON.stringify({
+        type: "error",
+        error: {
+          type: "invalid_request_error",
+          message: "Your credit balance is too low to access the Anthropic API.",
+        },
+      }),
+    })
+    expect(toSessionError(anthropic)).toEqual(exhausted)
+    // OpenRouter refuses with 402 when the account has no credits left.
+    const openrouter = RequestExecutor.httpFailure({
+      message: "Insufficient credits. Add more credits to your account.",
+      url: "https://openrouter.ai/api/v1/chat/completions",
+      status: 402,
+      responseBody: JSON.stringify({ error: { message: "Insufficient credits.", code: 402 } }),
+    })
+    expect(toSessionError(openrouter)).toEqual(exhausted)
+  })
+
   test("preserves the permission rejection type without exposing internal fields", () => {
     const blocked = new Permission.BlockedError({ rules: [], permission: "external_directory", resources: [] })
     expect(toSessionError(blocked)).toEqual({

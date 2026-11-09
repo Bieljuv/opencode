@@ -96,6 +96,15 @@ const QUOTA_CODES: ReadonlySet<string> = new Set([
   "freequotaexceeded",
   "freelimitexceeded",
   "planquotaexceeded",
+  // ManosTech gateway caps, as the gateway names them (403): the daily
+  // and monthly plan limits. Never `teste_expirado`: the trial block is
+  // a session state, handled by the session layer, not a hop signal.
+  "limitediarioatingido",
+  "limitemensalatingido",
+  // A provider that refuses for lack of credit, however it words the code.
+  "insufficientcredits",
+  "insufficientcredit",
+  "creditbalancetoolow",
 ])
 
 const QUOTA_TEXT: readonly string[] = [
@@ -120,6 +129,20 @@ const QUOTA_TEXT: readonly string[] = [
   "daily limit",
   "spending limit",
   "token budget",
+  // The gateway names its caps in the error body (`limite_diario_atingido`,
+  // `limite_mensal_atingido`); a provider may also word the cap in pt-BR.
+  "limite_diario_atingido",
+  "limite_mensal_atingido",
+  "limite diário",
+  "limite mensal",
+  "limite diário excedido",
+  "cota excedida",
+  // A refusal for lack of credit, however the provider words it.
+  "insufficient credit",
+  "credit balance is too low",
+  "credit balance too low",
+  "no credit balance",
+  "out of credit",
 ]
 
 function hasQuotaSignal(cause: AIError): boolean {
