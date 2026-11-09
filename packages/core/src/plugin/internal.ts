@@ -98,6 +98,8 @@ import { WellKnown } from "../wellknown.js"
 import { WriteTool } from "../tool/plugin/write.js"
 import { AgentPlugin } from "./agent.js"
 import BrowserPlugin from "@opencode/plugin-browser"
+import ManostechSkillsPlugin from "@opencode/plugin-manostech-skills"
+import { PluginPromise } from "./promise.js"
 import { CommandPlugin } from "./command.js"
 import { IdentityPlugin } from "./identity.js"
 import { PlanPlugin } from "./plan.js"
@@ -284,6 +286,8 @@ const post = [
   ConfigReferencePlugin.Plugin,
   ConfigAgentPlugin.Plugin,
   BrowserPlugin,
+  // ManosTech skills ship as a promise plugin; adapt it to the effect plugin list.
+  PluginPromise.fromPromise(ManostechSkillsPlugin),
   ConfigCommandPlugin.Plugin,
   ConfigCompactionPlugin.Plugin,
   ConfigFormatterPlugin.Plugin,

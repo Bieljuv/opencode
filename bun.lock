@@ -229,6 +229,7 @@
         "@opencode/codemode": "workspace:*",
         "@opencode/plugin": "workspace:*",
         "@opencode/plugin-browser": "workspace:*",
+        "@opencode/plugin-manostech-skills": "workspace:*",
         "@opencode/pty": "0.4.0",
         "@opencode/schema": "workspace:*",
         "@opencode/util": "workspace:*",
@@ -537,6 +538,22 @@
       "name": "@opencode/plugin-figma",
       "version": "2.2.5",
       "dependencies": {
+        "gray-matter": "4.0.3",
+      },
+      "devDependencies": {
+        "@tsconfig/bun": "1.0.9",
+        "@types/bun": "1.4.3",
+        "@typescript/native": "npm:typescript@7.1.0-beta",
+      },
+      "peerDependencies": {
+        "@opencode/plugin": "^2.0.27 || ^0.0.0-dev",
+      },
+    },
+    "packages/plugins/manostech-skills": {
+      "name": "@opencode/plugin-manostech-skills",
+      "version": "0.1.0",
+      "dependencies": {
+        "effect": "catalog:",
         "gray-matter": "4.0.3",
       },
       "devDependencies": {
@@ -1949,6 +1966,8 @@
     "@opencode/plugin-browser": ["@opencode/plugin-browser@workspace:packages/plugin-browser"],
 
     "@opencode/plugin-figma": ["@opencode/plugin-figma@workspace:packages/plugins/figma"],
+
+    "@opencode/plugin-manostech-skills": ["@opencode/plugin-manostech-skills@workspace:packages/plugins/manostech-skills"],
 
     "@opencode/protocol": ["@opencode/protocol@workspace:packages/protocol"],
 
