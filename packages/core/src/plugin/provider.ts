@@ -13,6 +13,7 @@ import { GoogleVertexPlugin } from "./provider/google-vertex.js"
 import { KiloPlugin } from "./provider/kilo.js"
 import { LLMGatewayPlugin } from "./provider/llmgateway.js"
 import { LMStudioPlugin } from "./provider/lmstudio.js"
+import { ManosTechGatewayPlugin } from "./provider/manostech.js"
 import { ModalPlugin } from "./provider/modal.js"
 import { NeonPlugin } from "./provider/neon.js"
 import { NvidiaPlugin } from "./provider/nvidia.js"
@@ -45,6 +46,7 @@ export const ProviderPlugins: PluginInternal.InternalPlugin[] = [
   KiloPlugin,
   LLMGatewayPlugin,
   LMStudioPlugin,
+  ManosTechGatewayPlugin,
   ModalPlugin,
   NeonPlugin,
   NvidiaPlugin,
