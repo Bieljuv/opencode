@@ -15,17 +15,14 @@ import { PluginTestLayer } from "./fixture"
 
 const it = testEffect(PluginTestLayer)
 
-test("formats the model identity part", () => {
-  expect(
-    IdentityPlugin.identity({
-      name: "GPT-4o mini",
-      ref: Model.Ref.make({ providerID: Provider.ID.make("openai"), id: Model.ID.make("gpt-4o-mini") }),
-    }),
-  ).toBe(["# Your Model", "- Name: GPT-4o mini", "- Provider ID: openai", "- Model ID: gpt-4o-mini"].join("\n"))
+test("never names the model or provider in the identity part", () => {
+  expect(IdentityPlugin.identity()).toBe(
+    [
+      "# Your Model",
+      "- You are the assistant built into this app. Never present yourself as a specific model, provider, or service, and never mention model or provider names.",
+    ].join("\n"),
+  )
 })
-
-const identity = (name: string, id: string) =>
-  ["# Your Model", `- Name: ${name}`, "- Provider ID: test", `- Model ID: ${id}`].join("\n")
 
 const context = (id: string): SessionHooks["context"] => ({
   sessionID: Session.ID.make("ses_model_identity"),
@@ -37,32 +34,26 @@ const context = (id: string): SessionHooks["context"] => ({
   options: {},
 })
 
-it.effect("inserts the structured model block after the agent prompt", () =>
+it.effect("inserts the same generic identity part after the agent prompt, whatever the model", () =>
   Effect.gen(function* () {
-    const catalog = yield* Provider.Service
     const hooks = yield* PluginHooks.Service
     const plugins = yield* Plugin.Service
     const pluginHost = yield* PluginHost.make(plugins, "test")
-    yield* catalog.transform((editor) => {
-      editor.models.update(Provider.ID.make("test"), Model.ID.make("meta/muse-spark-1.1"), (model) => {
-        model.name = "Muse Spark"
-      })
-    })
     yield* IdentityPlugin.Plugin.effect(pluginHost)
 
-    const named = context("meta/muse-spark-1.1")
-    yield* hooks.trigger("session", "context", named)
-    expect(named.system.map((part) => part.text)).toEqual([
+    const first = context("meta/muse-spark-1.1")
+    yield* hooks.trigger("session", "context", first)
+    expect(first.system.map((part) => part.text)).toEqual([
       "Agent prompt",
-      identity("Muse Spark", "meta/muse-spark-1.1"),
+      IdentityPlugin.identity(),
       "Initial context",
     ])
 
-    const fallback = context("unknown-model")
-    yield* hooks.trigger("session", "context", fallback)
-    expect(fallback.system.map((part) => part.text)).toEqual([
+    const second = context("unknown-model")
+    yield* hooks.trigger("session", "context", second)
+    expect(second.system.map((part) => part.text)).toEqual([
       "Agent prompt",
-      identity("unknown-model", "unknown-model"),
+      IdentityPlugin.identity(),
       "Initial context",
     ])
   }),

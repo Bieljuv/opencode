@@ -30,7 +30,7 @@ describe("toSessionError", () => {
   test("maps every AI error reason to the open wire type", () => {
     expect(toSessionError(llm(new RateLimitError({ message: "rate", retryAfterMs: 123 })))).toEqual({
       type: "provider.rate-limit",
-      message: "rate",
+      message: "O serviço está ocupado no momento. Tente novamente em instantes.",
       retryAfterMs: 123,
     })
     expect(toSessionError(llm(new AuthenticationError({ message: "auth" }))).type).toBe("provider.auth")
@@ -44,7 +44,7 @@ describe("toSessionError", () => {
     ).toBe("provider.transport")
     expect(toSessionError(llm(new ProviderInternalError({ message: "internal", retryAfterMs: 789 })))).toEqual({
       type: "provider.internal",
-      message: "internal",
+      message: "O serviço falhou. Tente novamente.",
       retryAfterMs: 789,
     })
     expect(toSessionError(llm(new InvalidProviderOutputError({ message: "output" }))).type).toBe(
@@ -62,7 +62,7 @@ describe("toSessionError", () => {
           }),
         ),
       ),
-    ).toEqual({ type: "provider.unsupported-operation", message: "no compact endpoint" })
+    ).toEqual({ type: "provider.unsupported-operation", message: "Esta operação não é suportada." })
     expect(toSessionError(llm(new UnknownProviderError({ message: "unknown" }))).type).toBe("provider.unknown")
   })
 
@@ -179,9 +179,12 @@ describe("toSessionError", () => {
       new RateLimitError({ message: "Too many requests", body }),
       new UnknownProviderError({ message: "Request failed", body }),
     ])
+      // The body rides along as data: the ChatGPT retry hook reads it to
+      // veto retries of token-sharing codes. No surface renders it.
       expect(toSessionError(llm(reason))).toEqual({
         type: "provider.exhausted",
         message: "Tente novamente mais tarde.",
+        response: { body },
       })
   })
 
@@ -222,7 +225,7 @@ describe("toSessionError", () => {
       ),
     ).toEqual({
       type: "provider.invalid-request",
-      message: "too large",
+      message: "O pedido não pôde ser enviado. Tente reformular.",
       status: 413,
       response: { body: '{"error":"context limit"}' },
     })
@@ -237,7 +240,7 @@ describe("toSessionError", () => {
       ),
     ).toEqual({
       type: "provider.internal",
-      message: "bad gateway",
+      message: "O serviço falhou. Tente novamente.",
       status: 502,
     })
   })
@@ -245,7 +248,7 @@ describe("toSessionError", () => {
   test("preserves provider response body without HTTP status", () => {
     expect(toSessionError(llm(new RateLimitError({ message: "Slow down", body: '{"error":"rate limit"}' })))).toEqual({
       type: "provider.rate-limit",
-      message: "Slow down",
+      message: "O serviço está ocupado no momento. Tente novamente em instantes.",
       response: { body: '{"error":"rate limit"}' },
     })
   })
@@ -271,6 +274,54 @@ describe("toSessionError", () => {
         expect(error.response).toEqual({ body })
       }
     }
+  })
+
+  test("never leaks the provider's own words into the visible message", () => {
+    const leaked = toSessionError(
+      llm(
+        new RateLimitError({
+          message: "Rate limit exceeded for model openrouter/openrouter/free (Free Models Router). Free quota exhausted.",
+          retryAfterMs: 60_000,
+        }),
+      ),
+    )
+    expect(leaked).toEqual({
+      type: "provider.rate-limit",
+      message: "O serviço está ocupado no momento. Tente novamente em instantes.",
+      retryAfterMs: 60_000,
+    })
+    expect(leaked.message).not.toContain("openrouter")
+    expect(leaked.message).not.toContain("free")
+    expect(leaked.message).not.toContain("quota")
+  })
+
+  test("names no host when the network is unreachable", () => {
+    const error = toSessionError(
+      llm(
+        new TransportError({
+          message: "getaddrinfo ENOTFOUND api.openrouter.ai",
+          transport: "http",
+          operation: "request",
+          code: "ENOTFOUND",
+        }),
+      ),
+    )
+    expect(error).toEqual({
+      type: "provider.transport",
+      message: "Não foi possível alcançar o servidor. Verifique a conexão com a internet.",
+    })
+    expect(error.message).not.toContain("openrouter")
+  })
+
+  test("passes internal failures through unchanged", () => {
+    // Internal failures name no model, provider, tier, or quota, and the
+    // user needs the actual cause. Provider failures never reach this
+    // branch: they arrive as AIError and are genericized above.
+    expect(toSessionError(new Error("boom: something internal happened"))).toEqual({
+      type: "unknown",
+      message: "boom: something internal happened",
+    })
+    expect(toSessionError("boom")).toEqual({ type: "unknown", message: "boom" })
   })
 
   test("preserves unresolved provider endpoint errors", () => {

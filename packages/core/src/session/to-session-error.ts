@@ -27,18 +27,49 @@ const tokenSharingMessages = {
 }
 
 /**
+ * ManosTech: provider errors never reach the user with the provider's own
+ * words. The raw message can name the model, its tier, or its limits
+ * ("free tier quota for model X", "rate limit for ..."), and the timeline
+ * renders it verbatim — as do tool results that carry a mapped failure.
+ * Every type gets one short generic message in pt-BR; the type, HTTP
+ * status, and retry delay stay, because the retry logic and the timeline
+ * need them. The raw body is kept only as data (the ChatGPT plugin reads
+ * it to veto retries of token-sharing codes); no surface renders it.
+ * The ChatGPT connection messages below stay: they talk about the user's
+ * own connection, not about which AI is answering.
+ */
+const GENERIC_PROVIDER_MESSAGES: Record<string, string> = {
+  "provider.rate-limit": "O serviço está ocupado no momento. Tente novamente em instantes.",
+  "provider.auth": "A chave de acesso não foi aceita. Confira a conexão nas Configurações.",
+  "provider.content-filter": "O conteúdo foi recusado pelo filtro de segurança.",
+  "provider.transport": "Não foi possível alcançar o servidor. Verifique a conexão com a internet.",
+  "provider.internal": "O serviço falhou. Tente novamente.",
+  "provider.invalid-output": "A resposta veio incompleta. Tente novamente.",
+  "provider.invalid-request": "O pedido não pôde ser enviado. Tente reformular.",
+  "provider.unsupported-operation": "Esta operação não é suportada.",
+  "provider.unknown": "O serviço não respondeu como esperado. Tente novamente.",
+  "provider.timeout": "O serviço demorou demais para responder. Tente novamente.",
+}
+
+const GENERIC_UNKNOWN_MESSAGE = "Algo deu errado. Tente novamente."
+
+/**
  * ManosTech router: every quota/limit refusal collapses into one generic
  * exhaustion error. The router hops to the next connected model on this
  * type; only when the whole chain is exhausted does the user see the
- * message — with no provider, model, tier, reset time, or response body
- * attached. Nothing here may name what ran out.
+ * message — with no provider, model, tier, or reset time attached.
+ * Nothing here may name what ran out. The response body stays off,
+ * except on the ChatGPT token-sharing path below, where the retry hook
+ * reads it as data (no surface renders it).
  */
 const EXHAUSTED: SessionError.Error = { type: "provider.exhausted", message: "Tente novamente mais tarde." }
 
 export function toSessionError(cause: unknown): SessionError.Error {
   if (cause instanceof AIError) {
     // ChatGPT's usage limit arrives in HTTP and stream errors alike, whatever their reason, so its code decides the type.
-    if (cause.reason.body?.includes("subscription_sharing_usage_limit_exceeded")) return EXHAUSTED
+    // The retry hook reads the body to veto retries of token-sharing codes, so it rides along as data.
+    if (cause.reason.body?.includes("subscription_sharing_usage_limit_exceeded"))
+      return { ...EXHAUSTED, response: { body: cause.reason.body } }
     switch (cause.reason._tag) {
       case "RateLimit":
         return providerError("provider.rate-limit", cause.reason)
@@ -93,6 +124,11 @@ export function toSessionError(cause: unknown): SessionError.Error {
   )
     return { type: "provider.no-route", message: cause.message }
   if (cause instanceof Integration.AuthorizationError) return { type: "provider.auth", message: cause.message }
+  // ManosTech: internal failures pass through here unchanged (instruction
+  // sources, tool defects, programming errors) — they name no model,
+  // provider, tier, or quota, and the user needs the actual cause.
+  // Provider failures never reach this branch: they arrive as AIError and
+  // are genericized above.
   return { type: "unknown", message: cause instanceof Error ? cause.message : String(cause) }
 }
 
@@ -105,12 +141,12 @@ export function contentFilterError(summary: string, reason: FinishReasonDetails)
   }
 }
 
-// Names the network as the problem, so a DNS outage doesn't read like a broken model or provider.
+// Names the network as the problem, so a DNS outage doesn't read like a broken model or provider —
+// without naming the host (it can be a provider domain) or quoting the provider's own message.
 function unreachable(reason: AIError["reason"]): SessionError.Error {
-  const host = "url" in reason && reason.url !== undefined ? URL.parse(reason.url)?.hostname : undefined
   return {
     ...providerError("provider.transport", reason),
-    message: `Can't reach ${host || "the provider"}. Check the network connection. (${reason.message})`,
+    message: GENERIC_PROVIDER_MESSAGES["provider.transport"]!,
   }
 }
 
@@ -119,7 +155,10 @@ function providerError(type: string, reason: AIError["reason"]): SessionError.Er
   const retryAfterMs = "retryAfterMs" in reason ? reason.retryAfterMs : undefined
   return {
     type,
-    message: Object.entries(tokenSharingMessages).find(([code]) => reason.body?.includes(code))?.[1] ?? reason.message,
+    message:
+      Object.entries(tokenSharingMessages).find(([code]) => reason.body?.includes(code))?.[1] ??
+      GENERIC_PROVIDER_MESSAGES[type] ??
+      GENERIC_UNKNOWN_MESSAGE,
     ...(status === undefined ? {} : { status }),
     ...(reason.body === undefined ? {} : { response: { body: reason.body } }),
     ...(retryAfterMs === undefined ? {} : { retryAfterMs }),

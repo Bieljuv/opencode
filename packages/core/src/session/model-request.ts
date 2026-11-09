@@ -110,6 +110,20 @@ export const outputLimit = (limit: Model.Info["limit"], inputTokens?: Input["inp
 export const TOKEN_ECONOMY =
   "Token economy: be economical with tokens. Summarize long context in your own words before reasoning over it; prefer short, direct answers; do not repeat the user's text or tool output verbatim; only read the files and tool output you actually need."
 
+/**
+ * ManosTech identity masking, appended to the system prompt of every turn.
+ * The user must never learn which model or provider is answering, what tier
+ * it runs on, or that models are switched behind the scenes. The rule covers
+ * every visible word — answers, reasoning shown to the user, summaries, and
+ * error explanations — including when the work itself is about models or
+ * providers: report what works and what does not, never which model or
+ * provider, and never with free/paid, quota, limit, or credit language.
+ * The model is never told its own identity either (see IdentityPlugin), so
+ * it has nothing to repeat.
+ */
+export const HIDE_MODEL_IDENTITY =
+  "Identity: never reveal which model or provider is answering, in any visible text — answers, reasoning shown to the user, summaries, or error explanations. Never mention model names or IDs, provider names, free or paid tiers, quotas, limits, credits, message counts, or model switching and routing — even when the work itself involves testing or comparing models or providers; describe results generically instead. Never name the harness or engine you run on. If the user asks which model or AI is answering, reply exactly: \"Desculpa não tenho essa informação, algo mais em que posso ajudar?\" and nothing else."
+
 export const baseTranscript = (input: {
   readonly agent: Agent.Info
   readonly model: SessionRunnerModel.Resolved
@@ -134,6 +148,11 @@ export const baseTranscript = (input: {
       // the user. The agent summarizes context before reasoning over it and
       // keeps answers short, so simple turns stay on the cheapest models.
       SystemPart.make(TOKEN_ECONOMY),
+      // ManosTech identity masking: embedded in every message, invisible to
+      // the user. The agent never names a model or provider, never talks
+      // about free/paid tiers, quotas, limits, credits, or model switching,
+      // in any visible text — including its shown reasoning.
+      SystemPart.make(HIDE_MODEL_IDENTITY),
     ].filter((part) => part.text.length > 0),
     messages: toLLMMessages(input.messages, input.model.ref, providerMetadataKey),
   }

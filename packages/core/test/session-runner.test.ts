@@ -127,11 +127,9 @@ const testModel = (id: string, limit: ModelLimit = defaultModelLimit) => {
 }
 const model = testModel("fake-model")
 const defaultSystem = SessionSystemPrompt.make([])
-const identity = (providerID: string, id: string) =>
-  ["# Your Model", `- Name: ${id}`, `- Provider ID: ${providerID}`, `- Model ID: ${id}`].join("\n")
-const fakeIdentity = identity("fake", "fake-model")
-const replacementIdentity = identity("fake", "replacement")
-const gptIdentity = identity("openai", "gpt-5")
+// ManosTech: every model gets the same generic identity part — it never
+// names the model or provider (see IdentityPlugin).
+const genericIdentity = IdentityPlugin.identity()
 const replacementModel = testModel("replacement")
 const compactModel = testModel("compact", { context: 4_000, output: 50 })
 const fullOutputModel = testModel("full-output", { context: 262_144, output: 262_144 })
@@ -952,11 +950,11 @@ function* verifyPartialFlushOnFailure(s: Scenario, kind: FragmentKind) {
   expect(yield* s.resume.pipe(Effect.flip)).toBe(failure)
   expect(yield* s.context).toMatchObject([
     Expected.user(prompt),
-    Expected.assistant({ finish: "error", error: { type: "provider.invalid-request", message: "Invalid request" } }, [
+    Expected.assistant({ finish: "error", error: { type: "provider.invalid-request", message: "O pedido não pôde ser enviado. Tente reformular." } }, [
       kind === "tool input"
         ? Expected.failedTool(
             { id: fragmentID(kind, "partial") },
-            { error: { type: "provider.invalid-request", message: "Invalid request" } },
+            { error: { type: "provider.invalid-request", message: "O pedido não pôde ser enviado. Tente reformular." } },
           )
         : fixture.expectedContent,
     ]),
@@ -1839,7 +1837,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.session.prompt({ sessionID: forked.id, text: "Forked", resume: false })
     yield* s.session.resume(forked.id)
 
-    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, fakeIdentity, "Latest context", SessionModelRequest.TOKEN_ECONOMY])
+    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Latest context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY])
     // Copied history keeps the frozen chronological update; no new update is emitted.
     expect(systemTexts(s.requests.at(-1)!)).toContain("Changed context")
     expect(systemTexts(s.requests.at(-1)!)).not.toContain("Latest context")
@@ -1902,7 +1900,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.resume
 
     expect(s.requests).toHaveLength(1)
-    expect(s.requests[0]?.system.map((part) => part.text)).toEqual([defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY])
+    expect(s.requests[0]?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY])
     expect(messageRoles(s.requests[0])).toEqual(["user", "user"])
     // The projected row is authoritative: a missing row admits a fresh baseline
     // instead of rebuilding from durable events.
@@ -1946,8 +1944,8 @@ describe("SessionRunnerLLM", () => {
     expect(s.requests[0].messages).toHaveLength(1)
     expect(s.requests[1].messages.slice(0, 1)).toEqual([...s.requests[0].messages])
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
-      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
     ])
     expect(messageRoles(s.requests[1])).toEqual(["user", "system", "user"])
     expect(s.requests[1]?.messages.at(1)?.content).toEqual([Expected.text("Changed context")])
@@ -1983,7 +1981,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Second")
     const third = yield* s.runPrompt("Third")
     const before = s.requests.at(-1)?.system.map((part) => part.text)
-    expect(before).toEqual([defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY])
+    expect(before).toEqual([defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY])
 
     yield* s.bus.publish(SessionEvent.RevertEvent.Committed, { sessionID, to: third.id })
     yield* s.runPrompt("Fourth")
@@ -2002,7 +2000,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.bus.publish(SessionEvent.RevertEvent.Committed, { sessionID, to: second.id })
     yield* s.runPrompt("Fourth")
 
-    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, fakeIdentity, "Latest context", SessionModelRequest.TOKEN_ECONOMY])
+    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Latest context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY])
   })
 
   scenario("uses the selected model family prompt when the agent does not override it", function* (s) {
@@ -2014,9 +2012,10 @@ describe("SessionRunnerLLM", () => {
 
     expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([
       expect.stringContaining("# Delegation"),
-      gptIdentity,
+      genericIdentity,
       "Initial context",
       SessionModelRequest.TOKEN_ECONOMY,
+      SessionModelRequest.HIDE_MODEL_IDENTITY,
     ])
   })
 
@@ -2036,9 +2035,10 @@ describe("SessionRunnerLLM", () => {
 
     expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([
       expect.stringContaining("# Delegation"),
-      gptIdentity,
+      genericIdentity,
       "Initial context",
       SessionModelRequest.TOKEN_ECONOMY,
+      SessionModelRequest.HIDE_MODEL_IDENTITY,
     ])
   })
 
@@ -2057,9 +2057,10 @@ describe("SessionRunnerLLM", () => {
 
     expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([
       "Build agent instructions",
-      fakeIdentity,
+      genericIdentity,
       "Initial context",
       SessionModelRequest.TOKEN_ECONOMY,
+      SessionModelRequest.HIDE_MODEL_IDENTITY,
     ])
   })
 
@@ -2083,9 +2084,10 @@ describe("SessionRunnerLLM", () => {
 
     expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([
       "Reviewer instructions",
-      fakeIdentity,
+      genericIdentity,
       "Initial context",
       SessionModelRequest.TOKEN_ECONOMY,
+      SessionModelRequest.HIDE_MODEL_IDENTITY,
     ])
     expect((yield* s.messages)[0]).toMatchObject({ type: "assistant", agent: "reviewer" })
   })
@@ -2111,9 +2113,10 @@ describe("SessionRunnerLLM", () => {
 
     expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([
       "Reviewer instructions",
-      fakeIdentity,
+      genericIdentity,
       "Initial context",
       SessionModelRequest.TOKEN_ECONOMY,
+      SessionModelRequest.HIDE_MODEL_IDENTITY,
     ])
     expect((yield* s.messages)[0]).toMatchObject({ type: "assistant", agent: "reviewer" })
   })
@@ -2156,8 +2159,8 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Second")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, fakeIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY],
-      [defaultSystem, fakeIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY],
+      [defaultSystem, genericIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
+      [defaultSystem, genericIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
     ])
     expect(systemTexts(s.requests[1])).toContainEqual(expect.stringContaining("Reviewer skills"))
   })
@@ -2179,7 +2182,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("First")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, fakeIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY],
+      [defaultSystem, genericIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
     ])
   })
 
@@ -2198,7 +2201,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("First")
     expect(s.requests.map((request) => request.model)).toEqual([model])
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
     ])
   })
 
@@ -2222,13 +2225,14 @@ describe("SessionRunnerLLM", () => {
     // String values render verbatim inside the initial tagged block.
     expect(s.requests[0]?.system.map((part) => part.text)).toEqual([
       defaultSystem,
-      fakeIdentity,
+      genericIdentity,
       ["Initial context", "", '<context key="deploy-target">', "production", "</context>"].join("\n"),
       SessionModelRequest.TOKEN_ECONOMY,
+      SessionModelRequest.HIDE_MODEL_IDENTITY,
     ])
     // Each source stays keyed, so a provider can leave out what its own harness already supplies.
     // `testLLM` strips the empty Code Mode notice from the text only.
-    expect(s.requests[0]?.system.at(-2)?.metadata?.experimental).toEqual({
+    expect(s.requests[0]?.system.at(-3)?.metadata?.experimental).toEqual({
       instructions: [
         expect.objectContaining({ key: "core/codemode" }),
         { key: "test/context", text: "Initial context" },
@@ -2320,9 +2324,9 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Third")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
-      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
-      [defaultSystem, replacementIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
     ])
     expect(messageRoles(s.requests[1])).toEqual(["user", "system", "user"])
     expect(s.requests[2]?.messages.filter((message) => message.role === "system")).toHaveLength(2)
@@ -2384,9 +2388,9 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Third")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
-      [defaultSystem, replacementIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
-      [defaultSystem, replacementIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
     ])
   })
 
@@ -2402,9 +2406,9 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Second")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
-      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
-      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
     ])
     expect(messageRoles(s.requests[2])).toEqual(["user", "system", "user"])
     expect(s.requests[2]?.messages.at(1)?.content).toEqual([Expected.text("Replacement context")])
@@ -2526,7 +2530,7 @@ describe("SessionRunnerLLM", () => {
         expect(userTexts(s.requests[1]).at(-1)).toContain("Summarize only what the user and the assistant said and did")
         expect((yield* s.messages).find((message) => message.id === compact.id)).toMatchObject({
           status: "failed",
-          error: { type: "provider.invalid-request", message: "summary unavailable" },
+          error: { type: "provider.invalid-request", message: "O pedido não pôde ser enviado. Tente reformular." },
         })
       }
       if (outcome === "cancelled") expect((yield* s.messages).some((message) => message.id === compact.id)).toBe(false)
@@ -2769,7 +2773,7 @@ describe("SessionRunnerLLM", () => {
     expect((yield* s.messages).find((message) => message.id === compaction.id)).toMatchObject({
       type: "compaction",
       status: "failed",
-      error: { type: "provider.invalid-request", message: "summary unavailable" },
+      error: { type: "provider.invalid-request", message: "O pedido não pôde ser enviado. Tente reformular." },
     })
   })
 
@@ -3029,7 +3033,7 @@ describe("SessionRunnerLLM", () => {
     expect(s.requests).toHaveLength(RETRY_ATTEMPTS.length + 2)
     expect((yield* s.messages).find((message) => message.id === compaction.id)).toMatchObject({
       status: "failed",
-      error: { type: "provider.transport", message: "Provider unavailable" },
+      error: { type: "provider.transport", message: "Não foi possível alcançar o servidor. Verifique a conexão com a internet." },
     })
     expect((yield* s.context).some((message) => message.type === "user" && message.text === "Earlier question")).toBe(
       true,
@@ -3653,7 +3657,7 @@ describe("SessionRunnerLLM", () => {
         type: "compaction",
         status: "failed",
         reason: "auto",
-        error: expect.objectContaining({ message: "Unsupported parameter: max_output_tokens" }),
+        error: expect.objectContaining({ message: "O pedido não pôde ser enviado. Tente reformular." }),
       }),
     )
   })
@@ -3732,9 +3736,10 @@ describe("SessionRunnerLLM", () => {
     expect(s.requests[2]?.model).toBe(replacementModel)
     expect(s.requests[2]?.system.map((part) => part.text)).toEqual([
       defaultSystem,
-      replacementIdentity,
+      genericIdentity,
       "Initial context",
       SessionModelRequest.TOKEN_ECONOMY,
+      SessionModelRequest.HIDE_MODEL_IDENTITY,
     ])
     expect(systemTexts(s.requests[2])).toContain("Changed during compaction")
     expect(userTexts(s.requests[2])[0]).toContain("<summary>\n## Objective\n- Overflow summary\n</summary>")
@@ -3769,7 +3774,7 @@ describe("SessionRunnerLLM", () => {
       expect.objectContaining({
         type: "assistant",
         finish: "error",
-        error: expect.objectContaining({ message: "prompt too long" }),
+        error: expect.objectContaining({ message: "O pedido não pôde ser enviado. Tente reformular." }),
       }),
     )
     expect(yield* s.context).not.toContainEqual(expect.objectContaining({ type: "compaction" }))
@@ -3825,7 +3830,7 @@ describe("SessionRunnerLLM", () => {
     expect(s.requests).toHaveLength(3)
     expect(yield* s.context).toMatchObject([
       { type: "compaction" },
-      { type: "assistant", finish: "error", error: { message: "prompt too long" } },
+      { type: "assistant", finish: "error", error: { message: "O pedido não pôde ser enviado. Tente reformular." } },
     ])
   })
 
@@ -3928,13 +3933,13 @@ describe("SessionRunnerLLM", () => {
         type: "compaction",
         status: "failed",
         reason: "auto",
-        error: { type: "provider.invalid-request", message: "summary unavailable" },
+        error: { type: "provider.invalid-request", message: "O pedido não pôde ser enviado. Tente reformular." },
       }),
     )
     expect(context.slice(-3)).toMatchObject([
       Expected.user("Continue"),
       { type: "compaction", status: "failed", reason: "auto" },
-      { type: "assistant", finish: "error", error: { message: "prompt too long" } },
+      { type: "assistant", finish: "error", error: { message: "O pedido não pôde ser enviado. Tente reformular." } },
     ])
   })
 
@@ -3983,7 +3988,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Third")
 
     // Compaction already moved current values into the new epoch before the unavailable read.
-    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, fakeIdentity, "Changed context", SessionModelRequest.TOKEN_ECONOMY])
+    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Changed context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY])
     expect(systemTexts(s.requests.at(-1)!)).not.toContain("Changed context")
   })
 
@@ -4118,8 +4123,8 @@ describe("SessionRunnerLLM", () => {
 
     expect(s.requests.map((request) => request.model)).toEqual([model, replacementModel])
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, fakeIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
-      [defaultSystem, replacementIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
     ])
     expect(systemTexts(s.requests[1])).toContain("Replacement context")
   })
@@ -5811,7 +5816,7 @@ describe("SessionRunnerLLM", () => {
       {
         type: "assistant",
         finish: "error",
-        error: { type: "provider.invalid-request", message: "Provider unavailable" },
+        error: { type: "provider.invalid-request", message: "O pedido não pôde ser enviado. Tente reformular." },
       },
     ])
   })
@@ -5827,7 +5832,7 @@ describe("SessionRunnerLLM", () => {
       {
         type: "assistant",
         finish: "error",
-        error: { type: "provider.invalid-request", message: "Provider unavailable" },
+        error: { type: "provider.invalid-request", message: "O pedido não pôde ser enviado. Tente reformular." },
       },
     ])
   })
@@ -5944,7 +5949,7 @@ describe("SessionRunnerLLM", () => {
     expect(s.requests).toHaveLength(1)
     expect(yield* s.context).toMatchObject([
       Expected.user("Fail after output"),
-      Expected.assistant({ finish: "error", error: { message: "prompt too long" } }, [Expected.text("Partial")]),
+      Expected.assistant({ finish: "error", error: { message: "O pedido não pôde ser enviado. Tente reformular." } }, [Expected.text("Partial")]),
     ])
   })
 
@@ -5956,7 +5961,7 @@ describe("SessionRunnerLLM", () => {
     yield* replaySessionProjection(sessionID)
     expect(yield* s.context).toMatchObject([
       Expected.user("Fail raw stream durably"),
-      { type: "assistant", finish: "error", error: { type: "provider.invalid-request", message: "Invalid request" } },
+      { type: "assistant", finish: "error", error: { type: "provider.invalid-request", message: "O pedido não pôde ser enviado. Tente reformular." } },
     ])
   })
 
@@ -6767,12 +6772,12 @@ describe("SessionRunnerLLM", () => {
         type: "session.tool.failed.2",
         data: {
           id: "call-malformed",
-          error: { type: "provider.invalid-output", message: "Invalid JSON input for tool call echo" },
+          error: { type: "provider.invalid-output", message: "A resposta veio incompleta. Tente novamente." },
         },
       },
       {
         type: "session.step.failed.1",
-        data: { error: { type: "provider.invalid-output", message: "Invalid JSON input for tool call echo" } },
+        data: { error: { type: "provider.invalid-output", message: "A resposta veio incompleta. Tente novamente." } },
       },
     ])
   })
@@ -7013,7 +7018,7 @@ describe("SessionRunnerLLM", () => {
 
     expect(yield* s.runPrompt("Fail malformed hosted input").pipe(Effect.flip)).toBe(failure)
     expect(requireAssistant(yield* s.context)).toMatchObject({
-      error: { type: "provider.invalid-output", message: "Invalid hosted tool input" },
+      error: { type: "provider.invalid-output", message: "A resposta veio incompleta. Tente novamente." },
       content: [
         Expected.failedTool({ id: "call-hosted", executed: true }, { error: { type: "provider.invalid-output" } }),
       ],
@@ -7038,7 +7043,7 @@ describe("SessionRunnerLLM", () => {
 
     expect(yield* s.runPrompt("Fail after malformed input").pipe(Effect.flip)).toBe(failure)
     expect(requireAssistant(yield* s.context)).toMatchObject({
-      error: { type: "provider.invalid-output", message: "Provider failed after malformed input" },
+      error: { type: "provider.invalid-output", message: "A resposta veio incompleta. Tente novamente." },
       content: [Expected.failedTool({ id: "call-malformed", executed: false }, { error: { type: "tool.input-json" } })],
     })
     expect(s.requests).toHaveLength(1)
@@ -7192,7 +7197,7 @@ describe("SessionRunnerLLM", () => {
 
     expect(injected).toBe(true)
     expect(requireAssistant(yield* s.context)).toMatchObject({
-      error: { type: "provider.invalid-request", message: "Provider unavailable" },
+      error: { type: "provider.invalid-request", message: "O pedido não pôde ser enviado. Tente reformular." },
     })
   })
 
@@ -7303,7 +7308,7 @@ describe("SessionRunnerLLM", () => {
     yield* replaySessionProjection(sessionID)
     expect(yield* s.context).toMatchObject([
       Expected.user("Fail hosted tool on raw failure"),
-      Expected.assistant({ finish: "error", error: { type: "provider.invalid-request", message: "Invalid request" } }, [
+      Expected.assistant({ finish: "error", error: { type: "provider.invalid-request", message: "O pedido não pôde ser enviado. Tente reformular." } }, [
         Expected.failedTool({ id: "call-hosted-raw-failure" }, {}),
       ]),
     ])

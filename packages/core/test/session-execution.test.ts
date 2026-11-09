@@ -43,7 +43,13 @@ describe("SessionExecution lifecycle", () => {
           }),
         ),
       ),
-    ).toEqual({ type: "failed", error: { type: "provider.transport", message: "Disconnected" } })
+    ).toEqual({
+      type: "failed",
+      error: {
+        type: "provider.transport",
+        message: "Não foi possível alcançar o servidor. Verifique a conexão com a internet.",
+      },
+    })
   })
 
   test("defaults owner-scope interruption to shutdown and preserves explicit reasons", () => {

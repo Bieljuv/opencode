@@ -487,17 +487,17 @@ it.effect("auto compaction estimates current content against the buffered prompt
 
     const interrupted = { ...assistant, id: SessionMessage.ID.create(), tokens: undefined }
     expect(SessionCompaction.estimateContext({ ...grown, messages: [...grown.messages, interrupted] })).toBe(90_001)
-    // Without provider usage, include 82 tokens for the system prompt, instructions, tool definition, and token economy.
-    expect(SessionCompaction.estimateContext({ ...grown, messages: [interrupted] })).toBe(83)
+    // Without provider usage, include 234 tokens for the system prompt, instructions, tool definition, token economy, and identity masking.
+    expect(SessionCompaction.estimateContext({ ...grown, messages: [interrupted] })).toBe(235)
     // Another provider's usage is not trusted either.
     const foreign = { ...assistant, model: { ...assistant.model, providerID: Provider.ID.make("other") } }
-    expect(SessionCompaction.estimateContext({ ...grown, messages: [foreign] })).toBe(83)
+    expect(SessionCompaction.estimateContext({ ...grown, messages: [foreign] })).toBe(235)
     expect(
       SessionCompaction.estimateContext({
         ...grown,
         messages: [{ ...interrupted, tokens: input(0, contextLimited).messages[0].tokens }],
       }),
-    ).toBe(83)
+    ).toBe(235)
 
     const media = [
       { type: "file", mime: "image/png", uri: `data:image/png;base64,${"a".repeat(100_000)}` },
@@ -525,7 +525,7 @@ it.effect("auto compaction estimates current content against the buffered prompt
         model: { ...grown.model, capabilities: { ...grown.model.capabilities, input: modalities } },
       }
       expect(SessionCompaction.estimateContext({ ...selected, messages: [...messages, user] })).toBe(tokens)
-      expect(SessionCompaction.estimateContext({ ...selected, messages: [user] })).toBe(fallback + 82)
+      expect(SessionCompaction.estimateContext({ ...selected, messages: [user] })).toBe(fallback + 234)
     }
 
     const checkpoint = Schema.decodeUnknownSync(SessionMessage.CompactionCompleted)({
