@@ -315,10 +315,20 @@ export const make = Effect.fn("BackgroundServiceMachine.make")(function* (input:
     if (command.type === "verify") {
       const attempt = command.attempt
 
-      return void report(
-        input.ensure("initial").pipe(Effect.map((data): Event => ({ type: "verify.succeeded", attempt, data }))),
-        (error) => ({ type: "verify.failed", attempt, error }),
+      // A verification that fails after a probe used to die silently and
+      // leave the probed (possibly old) service answering. A slow stop
+      // of the old engine is the usual cause, so the reason is logged
+      // and the verification runs once more before giving up.
+      const verify = input.ensure("initial").pipe(
+        Effect.catch((error) =>
+          Effect.logWarning("v2 CLI background service verification failed, retrying once", {
+            error: error instanceof Error ? error.message : String(error),
+          }).pipe(Effect.andThen(input.ensure("initial"))),
+        ),
+        Effect.map((data): Event => ({ type: "verify.succeeded", attempt, data })),
       )
+
+      return void report(verify, (error) => ({ type: "verify.failed", attempt, error }))
     }
 
     if (command.type === "publish") return input.publish(command.data)

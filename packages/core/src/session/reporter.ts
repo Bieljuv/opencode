@@ -6,8 +6,11 @@ import type { SessionUsage } from "./usage.js"
 /**
  * ManosTech: envia um evento de uso por passo de IA concluído ao Painel
  * Gerenciador (POST /api/ingest). Fail-open por desenho: sem segredo, sem
- * arquivo de identidade, sem uso ou com o painel fora do ar, não faz nada
- * e nunca falha o passo. A identidade do cliente (client_id/client_email)
+ * arquivo de identidade, sem uso ou com o painel fora do ar, não envia
+ * nada e nunca falha o passo. A primeira vez que falta configuração,
+ * identidade ou uso, o motivo fica registrado em nível informativo
+ * (só o código do motivo, nunca valores), para aparecer no
+ * "Exportar logs". A identidade do cliente (client_id/client_email)
  * chega pelo arquivo que o app desktop escreve em cada login/logout; o
  * segredo de envio chega por variável de ambiente no processo do servidor.
  *
@@ -103,6 +106,89 @@ export function buildEvent(input: {
   }
 }
 
+/**
+ * O motivo pelo qual o repórter está desligado — só o código, nunca
+ * valores (sem segredo, token, chave ou identidade no log).
+ */
+export type SkipReason = "sem segredo" | "sem arquivo de identidade" | "sem uso"
+
+/**
+ * O motivo da falta de configuração, quando ela falta. Sem segredo de
+ * envio, o repórter nem sabe para onde mandar; sem o caminho do arquivo
+ * de identidade, não sabe de quem é o uso.
+ */
+export function configSkipReason(env: Record<string, string | undefined>): SkipReason | undefined {
+  if (!env.MANOSTECH_INGEST_SECRET) return "sem segredo"
+  if (!env.MANOSTECH_CLIENT_FILE) return "sem arquivo de identidade"
+  return undefined
+}
+
+/**
+ * Cria um repórter com o seu próprio registro de motivos já avisados.
+ * Cada motivo é registrado uma única vez por repórter, em nível
+ * informativo — o suficiente para aparecer no "Exportar logs" sem
+ * encher o arquivo a cada passo.
+ */
+export function makeReporter() {
+  const loggedSkipReasons = new Set<SkipReason>()
+
+  function logSkippedOnce(reason: SkipReason) {
+    if (loggedSkipReasons.has(reason)) return Effect.void
+    loggedSkipReasons.add(reason)
+    return Effect.logInfo("relatório de uso desligado", { motivo: reason })
+  }
+
+  /**
+   * Envia o evento de um passo concluído. Nunca falha: qualquer problema
+   * (sem configuração, sem identidade, painel fora do ar) vira silêncio
+   * no passo — mas a primeira vez que falta configuração, identidade ou
+   * uso, o motivo fica registrado em nível informativo, para aparecer no
+   * "Exportar logs". Quem chama dispara com `Effect.forkDetach` para o
+   * passo não esperar.
+   */
+  function report(input: {
+    readonly model: string
+    readonly tokens: SessionUsage.Recorded["tokens"]
+    readonly cost: SessionUsage.Recorded["cost"]
+  }): Effect.Effect<void, never, never> {
+    return Effect.gen(function* () {
+      const config = resolveConfig(process.env)
+
+      if (!config) {
+        yield* logSkippedOnce(configSkipReason(process.env) ?? "sem segredo")
+        return
+      }
+
+      const client = yield* readIdentity(config.clientFile)
+
+      if (!client) {
+        yield* logSkippedOnce("sem arquivo de identidade")
+        return
+      }
+
+      const event = buildEvent({ model: input.model, tokens: input.tokens, cost: Number(input.cost), client })
+
+      if (!event) {
+        yield* logSkippedOnce("sem uso")
+        return
+      }
+
+      yield* sendEvent(config, event)
+    }).pipe(
+      Effect.catchCause(() => Effect.logDebug("usage report skipped")),
+      Effect.asVoid,
+    )
+  }
+
+  return { report }
+}
+
+/**
+ * O repórter do processo: uma instância só, então cada motivo aparece no
+ * máximo uma vez por processo.
+ */
+export const report = makeReporter().report
+
 function readIdentity(file: string) {
   return Effect.tryPromise({
     try: () => Bun.file(file).text(),
@@ -129,35 +215,5 @@ function sendEvent(config: Config, event: IngestEvent) {
   }).pipe(
     Effect.asVoid,
     Effect.catch(() => Effect.void),
-  )
-}
-
-/**
- * Envia o evento de um passo concluído. Nunca falha: qualquer problema
- * (sem configuração, sem identidade, painel fora do ar) vira silêncio.
- * Quem chama dispara com `Effect.forkDetach` para o passo não esperar.
- */
-export function report(input: {
-  readonly model: string
-  readonly tokens: SessionUsage.Recorded["tokens"]
-  readonly cost: SessionUsage.Recorded["cost"]
-}): Effect.Effect<void, never, never> {
-  return Effect.gen(function* () {
-    const config = resolveConfig(process.env)
-
-    if (!config) return
-
-    const client = yield* readIdentity(config.clientFile)
-
-    if (!client) return
-
-    const event = buildEvent({ model: input.model, tokens: input.tokens, cost: Number(input.cost), client })
-
-    if (!event) return
-
-    yield* sendEvent(config, event)
-  }).pipe(
-    Effect.catchCause(() => Effect.logDebug("usage report skipped")),
-    Effect.asVoid,
   )
 }
