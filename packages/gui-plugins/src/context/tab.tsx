@@ -107,14 +107,6 @@ export default function SessionContextTab(props: { session: MountedSession }) {
     { equals: same },
   )
 
-  const usd = createMemo(
-    () =>
-      new Intl.NumberFormat(i18n.locale(), {
-        style: "currency",
-        currency: "USD",
-      }),
-  )
-
   // Same step as the TUI and the header button: after the last completed compaction and before an undo boundary.
   const context = createMemo(() => {
     const message = lastAssistantWithUsage(messages(), info()?.revert?.messageID)
@@ -140,9 +132,6 @@ export default function SessionContextTab(props: { session: MountedSession }) {
   })
 
   const formatter = createMemo(() => createSessionContextFormatter(i18n.locale()))
-
-  // A root session's cost includes its subagent sessions, as in the TUI.
-  const cost = createMemo(() => usd().format(props.session.id ? data().session.cost(props.session.id) : 0))
 
   const counts = createMemo(() => {
     const all = messages()
@@ -203,7 +192,6 @@ export default function SessionContextTab(props: { session: MountedSession }) {
     },
     { label: "stats.userMessages", value: () => counts().user.toLocaleString(i18n.locale()) },
     { label: "stats.assistantMessages", value: () => counts().assistant.toLocaleString(i18n.locale()) },
-    { label: "stats.totalCost", value: cost },
     { label: "stats.sessionCreated", value: () => formatter().time(info()?.time.created) },
     { label: "stats.lastActivity", value: () => formatter().time(context()?.message.time.created) },
   ] satisfies { label: string; value: () => JSX.Element }[]

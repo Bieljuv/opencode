@@ -183,9 +183,6 @@ export function UsageDialogContent(props: {
   const view = () => usageView(props.info, { model: props.model, credits: props.credits })
   const workspace = () => view().workspace ?? language.t("usage.workspace.fallback")
 
-  const vendors = (list: readonly string[]) =>
-    new Intl.ListFormat(language.intl(), { style: "long", type: "conjunction" }).format(list)
-
   const duration = (until: number) => {
     const minutes = Math.max(1, Math.floor((until - Date.now()) / 60_000))
 
@@ -206,34 +203,21 @@ export function UsageDialogContent(props: {
 
     if (value.kind === "each") return language.t("usage.budget.each")
 
-    if (value.kind === "vendors") {
-      const params = {
-        vendors: vendors(value.vendors),
-        price: value.price === undefined ? "" : format.money(value.price, "auto"),
-      }
-
-      if (value.price !== undefined)
-        return language.t(value.each ? "usage.budget.vendorsPriceEach" : "usage.budget.vendorsPrice", params)
-
-      return language.t(value.each ? "usage.budget.vendorsEach" : "usage.budget.vendors", params)
-    }
-
-    if (value.kind === "price")
-      return language.t(value.each ? "usage.budget.priceEach" : "usage.budget.price", {
-        price: format.money(value.price, "auto"),
-      })
+    if (value.kind === "vendors" || value.kind === "price")
+      // The vendors a budget covers are never named, so a scoped budget reads as "some models".
+      return value.each ? language.t("usage.budget.each") : language.t("usage.budget.some")
 
     // The router picks the model silently, so a budget over named models never lists them.
     return language.t("ui.common.automatic")
   }
 
   const scope = (row: BudgetRow) => {
-    const params = { limit: format.money(row.limit, "auto"), workspace: workspace() }
+    const params = { workspace: workspace() }
 
     const amount = {
-      you: row.perModel ? "usage.budget.youEach" : "usage.budget.you",
-      everyone: row.perModel ? "usage.budget.everyoneEach" : "usage.budget.everyone",
-      group: row.perModel ? "usage.budget.groupEach" : "usage.budget.group",
+      you: row.perModel ? "usage.budget.scope.youEach" : "usage.budget.scope.you",
+      everyone: row.perModel ? "usage.budget.scope.everyoneEach" : "usage.budget.scope.everyone",
+      group: row.perModel ? "usage.budget.scope.groupEach" : "usage.budget.scope.group",
     } as const
 
     return [language.t(amount[row.sharing], params), ...row.notes.map((value) => note(value, row))].join(" · ")
@@ -286,25 +270,11 @@ export function UsageDialogContent(props: {
     if (value.kind === "other-models")
       return {
         title: language.t("usage.action.otherModels.title"),
-        body:
-          value.vendors.length > 0
-            ? language.t("usage.action.otherModels.vendors", { vendors: vendors(value.vendors) })
-            : language.t("usage.action.otherModels.body"),
+        body: language.t("usage.action.otherModels.body"),
       }
-    const limit = format.money(value.limit, "auto")
-
+    // A per-model budget never names the vendors or the amounts: only that other models still work.
     return {
-      title:
-        value.vendors.length > 0
-          ? language.t("usage.action.each.titleVendors", { vendors: vendors(value.vendors) })
-          : language.t("usage.action.each.title"),
-      body: value.suggestion
-        ? language.t("usage.action.each.suggestion", {
-            limit,
-            model: language.t("ui.common.automatic"),
-            left: format.money(value.suggestion.left),
-          })
-        : language.t("usage.action.each.body", { limit }),
+      title: language.t("usage.action.each.title"),
     }
   }
 
@@ -396,17 +366,10 @@ export function UsageDialogContent(props: {
                         status={
                           row.reached
                             ? language.t("usage.budget.reached")
-                            : language.t("usage.budget.left", { amount: format.money(row.left) })
+                            : language.t("usage.go.used", { percent: Math.round(row.fill * 100) })
                         }
                         reached={row.reached}
-                      >
-                        {row.reached
-                          ? language.t("usage.budget.spentOf", {
-                              spent: format.money(row.spent),
-                              limit: format.money(row.limit, "auto"),
-                            })
-                          : language.t("usage.budget.of", { limit: format.money(row.limit, "auto") })}
-                      </Spend>
+                      />
                     </div>
                     <Track fill={row.fill} reached={row.reached} />
                   </Item>
@@ -418,9 +381,13 @@ export function UsageDialogContent(props: {
                 <div class="flex items-center gap-4 self-stretch px-4">
                   <div class="flex min-w-0 flex-1 flex-col gap-1">
                     <Line class="font-[530] text-v2-text-text-base">{action(value()).title}</Line>
-                    <p class="m-0 text-[13px] leading-text-base font-[440] tracking-[-0.04px] text-v2-text-text-muted">
-                      {action(value()).body}
-                    </p>
+                    <Show when={action(value()).body}>
+                      {(body) => (
+                        <p class="m-0 text-[13px] leading-text-base font-[440] tracking-[-0.04px] text-v2-text-text-muted">
+                          {body()}
+                        </p>
+                      )}
+                    </Show>
                   </div>
                   <Button variant="neutral" onClick={switchModel}>
                     {language.t("usage.action.switch")}
@@ -519,7 +486,7 @@ function GoItem(props: { row: GoRow; used: string; children: JSX.Element }) {
   )
 }
 
-function Spend(props: { status: string; reached: boolean; children: JSX.Element }) {
+function Spend(props: { status: string; reached: boolean; children?: JSX.Element }) {
   return (
     <div class="flex shrink-0 items-center gap-1.5">
       <Line
@@ -527,10 +494,16 @@ function Spend(props: { status: string; reached: boolean; children: JSX.Element 
       >
         {props.status}
       </Line>
-      <svg width="3" height="3" viewBox="0 0 3 3" aria-hidden="true" class="shrink-0 text-v2-icon-icon-muted">
-        <circle cx="1.5" cy="1.5" r="0.5625" fill="currentColor" />
-      </svg>
-      <Line class="text-v2-text-text-muted">{props.children}</Line>
+      <Show when={props.children}>
+        {(children) => (
+          <>
+            <svg width="3" height="3" viewBox="0 0 3 3" aria-hidden="true" class="shrink-0 text-v2-icon-icon-muted">
+              <circle cx="1.5" cy="1.5" r="0.5625" fill="currentColor" />
+            </svg>
+            <Line class="text-v2-text-text-muted">{children()}</Line>
+          </>
+        )}
+      </Show>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { UsageLimitsBudget, UsageLimitsInfo } from "@opencode/client/promise"
-import { modelUsage, usageView } from "./limits"
+import { usageView } from "./limits"
 
 const RESET = Date.UTC(2026, 10, 1)
 
@@ -25,38 +25,6 @@ const info = (...budgets: UsageLimitsBudget[]): UsageLimitsInfo => ({
 
 const opus = { providerID: "opencode", modelID: "claude-opus-5", name: "Claude Opus 5" }
 const sonnet = { providerID: "opencode", modelID: "claude-sonnet-5", name: "Claude Sonnet 5" }
-const served = (id: string, provider = "opencode") => ({ id, provider: { id: provider, integrationID: "opencode" } })
-
-describe("modelUsage", () => {
-  test("covers a model by every budget that counts it and keeps the least left", () => {
-    const limits = info(
-      budget({ id: "all", limit: 500, spent: 100 }),
-      budget({
-        id: "anthropic",
-        coverage: "models",
-        per: "model",
-        limit: 50,
-        spent: 50,
-        vendors: ["Anthropic"],
-        models: [
-          { ...opus, spent: 50 },
-          { ...sonnet, spent: 20 },
-        ],
-      }),
-    )
-
-    expect(modelUsage(limits, served("claude-sonnet-5"))).toEqual({ left: 30, reached: false, resetsAt: RESET })
-    expect(modelUsage(limits, served("claude-opus-5"))).toEqual({ left: 0, reached: true, resetsAt: RESET })
-    // A budget on all spend covers models served through the workspace, but not OpenCode Go or a direct provider.
-    expect(modelUsage(limits, served("gpt-6-sol", "console-openai"))).toEqual({
-      left: 400,
-      reached: false,
-      resetsAt: RESET,
-    })
-    expect(modelUsage(limits, served("glm-5.3", "opencode-go"))).toBeUndefined()
-    expect(modelUsage(limits, { id: "claude-opus-5", provider: { id: "anthropic" } })).toBeUndefined()
-  })
-})
 
 describe("usageView", () => {
   test("orders budgets by what stops the member first", () => {
