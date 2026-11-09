@@ -219,6 +219,7 @@ const makeRunnerState = (compaction?: SessionRunnerModel.Resolved["compaction"])
     }).pipe(Effect.andThen(Deferred.succeed(barrier.release, undefined)), Effect.asVoid)
   return {
     currentModel: model,
+    availableModels: new Array<Model.Info>(),
     compaction,
     modelResolveHook: resolvesModel,
     systemBaseline: "Initial context",
@@ -418,7 +419,7 @@ const layer = Layer.unwrap(
     const promptModels = Layer.mock(Model.Service, {
       get: () => Effect.undefined,
       all: () => Effect.succeed([]),
-      available: () => Effect.succeed([]),
+      available: () => Effect.succeed(state.availableModels),
       default: () => Effect.undefined,
       configuredDefault: () => Effect.undefined,
       small: () => Effect.undefined,
@@ -6745,6 +6746,40 @@ describe("SessionRunnerLLM", () => {
         },
       },
     ])
+  })
+
+  scenario("hops back to the session model when every other free model is exhausted", function* (s) {
+    // The session model just answered the previous step, so it is a valid
+    // hop target: the router must not pre-exclude it from the chain, or a
+    // step fails with the chain "exhausted" while the only working model
+    // sits unused.
+    const modelA = Model.Info.default(Provider.ID.make("fake-a"), Model.ID.make("model-a"))
+    const modelB = Model.Info.default(Provider.ID.make("fake-b"), Model.ID.make("model-b"))
+    s.availableModels.push(modelA, modelB)
+    yield* s.session.switchModel({
+      sessionID,
+      model: Model.Ref.make({ id: Model.ID.make("model-b"), providerID: Provider.ID.make("fake-b") }),
+    })
+    // The chain head (model-a) refuses with a free-limit 429.
+    const body = JSON.stringify({
+      type: "error",
+      error: { type: "FreeUsageLimitError", message: "You have used all your free messages today." },
+    })
+    const failure = RequestExecutor.httpFailure({
+      message: "You have used all your free messages today.",
+      url: "https://example.invalid/v1/chat/completions",
+      status: 429,
+      responseHeaders: {},
+      responseBody: body,
+    })
+    yield* s.llm.push(Stream.fail(failure), TestLLM.text("Answered by the session model", "text-hop"))
+
+    yield* s.runPrompt("Hop back to the session model")
+
+    expect(s.requests).toHaveLength(2)
+    expect((yield* s.session.get(sessionID)).model?.id).toBe(Model.ID.make("model-b"))
+    const assistant = requireAssistant(yield* s.context)
+    expect(assistant.content).toMatchObject([{ type: "text", text: "Answered by the session model" }])
   })
 
   scenario("settles malformed streamed tool input before the provider failure", function* (s) {

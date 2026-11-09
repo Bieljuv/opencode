@@ -243,8 +243,11 @@ const layer = Layer.effect(
       let recoverContinuation = true
       let retryAttempt: number | undefined
       // ManosTech router: the hop chain for this step, from the providers
-      // connected right now. The current model counts as tried, so a hop
-      // never returns to it.
+      // connected right now. Only models that actually fail in this step
+      // count as tried: the session model just answered the previous step,
+      // so it is a valid hop target. Pre-seeding it here once made a step
+      // fail with the chain "exhausted" while the only working model sat
+      // unused.
       const available = yield* models.available()
       const configured = yield* models.configuredDefault()
       const lastUser = [...first.messages]
@@ -259,22 +262,26 @@ const layer = Layer.effect(
         complexity: SessionRouter.classifyComplexity(lastUser?.text ?? ""),
         effort,
       })
-      const tried = new Set<string>(
-        first.session.model === undefined ? [] : [SessionRouter.refKey(first.session.model)],
-      )
+      const tried = new Set<string>()
       if (!explicit) {
         // The chain head answers this step unless it is already the session
         // model. The switch is published, so the loop below re-resolves the
-        // new model; the user never sees the change.
+        // new model; the user never sees the change. A head that is already
+        // the session model needs no switch and no context reload.
         const head = SessionRouter.nextHop(chain, tried)
         if (head !== undefined) {
-          yield* bus.publish(SessionEvent.ModelSelected, {
-            sessionID,
-            model: head,
-            previous: first.session.model,
-          })
           tried.add(SessionRouter.refKey(head))
-          initial = undefined
+          if (
+            first.session.model === undefined ||
+            SessionRouter.refKey(head) !== SessionRouter.refKey(first.session.model)
+          ) {
+            yield* bus.publish(SessionEvent.ModelSelected, {
+              sessionID,
+              model: head,
+              previous: first.session.model,
+            })
+            initial = undefined
+          }
         }
       }
       while (true) {
