@@ -47,7 +47,7 @@ test("an available recognition starts listening", () => {
 test("the happy path reaches live once the recognition starts", () => {
   const next = replay([{ type: "join" }, { type: "check.ready" }, { type: "recognition.started" }])
 
-  expect(next.state).toEqual({ status: "live" })
+  expect(next.state).toEqual({ status: "live", restarts: 0 })
   expect(next.effects).toContainEqual({ type: "join.timer.clear" })
   expect(next.effects).toContainEqual({ type: "join.resolve" })
 })
@@ -108,13 +108,46 @@ test("a clean end while live restarts the recognition", () => {
   expect(next.effects).toEqual([{ type: "restart.recognition" }])
 })
 
-test("an error while live drops the recording", () => {
+test("a definitive error while live ends the recording with the real reason", () => {
   const live = replay([{ type: "join" }, { type: "check.ready" }, { type: "recognition.started" }]).state
-  const next = transitionBrowserDictation(live, { type: "recognition.error" })
+  const next = transitionBrowserDictation(live, { type: "recognition.error", reason: "microphone" })
 
   expect(next.state).toEqual({ status: "closing", step: "releasing" })
   expect(next.effects).toContainEqual({ type: "stop.recognition" })
-  expect(next.effects).toContainEqual({ type: "notify.dropped" })
+  expect(next.effects).toContainEqual({ type: "notify.failed", reason: "microphone" })
+})
+
+test("an unavailable service while live ends the recording with that reason", () => {
+  const live = replay([{ type: "join" }, { type: "check.ready" }, { type: "recognition.started" }]).state
+  const next = transitionBrowserDictation(live, { type: "recognition.error", reason: "unavailable" })
+
+  expect(next.state).toEqual({ status: "closing", step: "releasing" })
+  expect(next.effects).toContainEqual({ type: "notify.failed", reason: "unavailable" })
+})
+
+test("a transient error while live restarts the recognition", () => {
+  const live = replay([{ type: "join" }, { type: "check.ready" }, { type: "recognition.started" }]).state
+  const next = transitionBrowserDictation(live, { type: "recognition.error", reason: "offline" })
+
+  expect(next.state).toEqual({ status: "live", restarts: 1 })
+  expect(next.effects).toEqual([{ type: "restart.recognition" }])
+})
+
+test("transient errors end the recording once retries run out", () => {
+  const live = replay([{ type: "join" }, { type: "check.ready" }, { type: "recognition.started" }]).state
+  const first = transitionBrowserDictation(live, { type: "recognition.error", reason: "connection" })
+  const second = transitionBrowserDictation(first.state, { type: "recognition.error", reason: "connection" })
+  const third = transitionBrowserDictation(second.state, { type: "recognition.error", reason: "connection" })
+
+  expect(first.state).toEqual({ status: "live", restarts: 1 })
+  expect(second.state).toEqual({ status: "live", restarts: 2 })
+  expect(third.state).toEqual({ status: "live", restarts: 3 })
+
+  const fourth = transitionBrowserDictation(third.state, { type: "recognition.error", reason: "connection" })
+
+  expect(fourth.state).toEqual({ status: "closing", step: "releasing" })
+  expect(fourth.effects).toContainEqual({ type: "stop.recognition" })
+  expect(fourth.effects).toContainEqual({ type: "notify.failed", reason: "connection" })
 })
 
 test("closing a live session stops the recognition and waits for its end", () => {

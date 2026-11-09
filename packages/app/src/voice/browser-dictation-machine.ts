@@ -8,6 +8,13 @@ import type { VoiceEvent } from "./protocol"
  */
 export const BROWSER_DICTATION_JOIN_TIMEOUT = 35_000
 
+/**
+ * Live-error restarts: a transient failure (network, or an unknown service error) is worth
+ * this many more runs before the recording ends with the real reason. A definitive failure
+ * (microphone denied, service not allowed) never restarts — it ends the recording at once.
+ */
+export const BROWSER_DICTATION_LIVE_RETRIES = 3
+
 type ConnectStep =
   /** Checking `window.SpeechRecognition` exists in this Chromium. */
   | { type: "check" }
@@ -17,7 +24,8 @@ type ConnectStep =
 export type BrowserDictationState =
   | { status: "idle" }
   | { status: "connecting"; step: ConnectStep }
-  | { status: "live" }
+  /** `restarts` counts live-error restarts so far; a healthy run never resets it. */
+  | { status: "live"; restarts: number }
   /** `releasing` stops the recognition and waits for its `end` event before resolving the close. */
   | { status: "closing"; step: "releasing" }
   | { status: "closed" }
@@ -29,8 +37,11 @@ export type BrowserDictationEvent =
   | { type: "recognition.result"; event: VoiceEvent }
   /** A clean `end` while live: the service stopped by itself (a pause), so start it again. */
   | { type: "recognition.ended" }
-  /** An error while live: the recording is over. */
-  | { type: "recognition.error" }
+  /**
+   * An error while live, with the reason the service reported (mapped by the transport).
+   * The reason decides whether the recording restarts or ends — it is never dropped.
+   */
+  | { type: "recognition.error"; reason: DictationJoinFailure }
   | { type: "step.failed"; step: "check" | "starting"; reason: DictationJoinFailure }
   | { type: "join.timeout" }
   | { type: "close" }
@@ -48,7 +59,8 @@ export type BrowserDictationEffect =
   | { type: "forward.event"; event: VoiceEvent }
   | { type: "join.resolve" }
   | { type: "join.reject"; reason: DictationJoinFailure }
-  | { type: "notify.dropped" }
+  /** The recording ended with a failure; the button reports this reason, not a generic drop. */
+  | { type: "notify.failed"; reason: DictationJoinFailure }
   | { type: "close.resolve" }
 
 export type BrowserDictationTransition = {
@@ -107,7 +119,7 @@ function connecting(state: Connecting, event: BrowserDictationEvent): BrowserDic
     if (step.type !== "starting") return unchanged(state)
 
     return {
-      state: { status: "live" },
+      state: { status: "live", restarts: 0 },
       effects: [{ type: "join.timer.clear" }, { type: "join.resolve" }],
     }
   }
@@ -129,7 +141,21 @@ function live(state: Live, event: BrowserDictationEvent): BrowserDictationTransi
 
   if (event.type === "recognition.ended") return { state, effects: [{ type: "restart.recognition" }] }
 
-  if (event.type === "recognition.error") return beginClose(state, { type: "notify.dropped" })
+  if (event.type === "recognition.error") {
+    // A transient failure (network, or an unknown service error) is worth another run — the
+    // service often recovers on the next one. A definitive failure (microphone denied, service
+    // not allowed) ends the recording at once, with the real reason for the toast.
+    if (
+      (event.reason === "offline" || event.reason === "connection") &&
+      state.restarts < BROWSER_DICTATION_LIVE_RETRIES
+    )
+      return {
+        state: { ...state, restarts: state.restarts + 1 },
+        effects: [{ type: "restart.recognition" }],
+      }
+
+    return beginClose(state, { type: "notify.failed", reason: event.reason })
+  }
 
   if (event.type === "close") return beginClose(state)
 
