@@ -20,6 +20,7 @@ import { StepFailedError } from "../error.js"
 import { SessionEvent } from "../event.js"
 import { SessionMessage } from "../message.js"
 import { SessionModelRequest } from "../model-request.js"
+import { SessionReporter } from "../reporter.js"
 import { SessionSchema } from "../schema.js"
 import { toSessionError } from "../to-session-error.js"
 import { SessionUsage } from "../usage.js"
@@ -274,6 +275,16 @@ export const make = Effect.gen(function* () {
               snapshot,
               files,
             })
+          // ManosTech: one usage event per completed step, fire-and-forget.
+          // The reporter never fails the step and never blocks it.
+          if (record.finish && usage && !record.failure)
+            yield* Effect.forkDetach(
+              SessionReporter.report({
+                model: `${input.model.ref.providerID}/${input.model.ref.id}`,
+                tokens: usage.tokens,
+                cost: usage.cost,
+              }),
+            )
         }
 
         if (
