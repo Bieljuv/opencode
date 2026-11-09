@@ -70,7 +70,7 @@ describe("ManosTechGatewayPlugin", () => {
         expect(yield* models.configuredDefault()).toEqual({ providerID, modelID: Model.ID.make("auto") })
         const resolved = yield* models.default()
         expect(resolved?.providerID).toBe(providerID)
-        expect(resolved?.id).toBe("auto")
+        expect(resolved?.id).toBe(Model.ID.make("auto"))
       }),
     ),
   )
@@ -104,7 +104,7 @@ describe("ManosTechGatewayPlugin", () => {
           (model) => model?.providerID === providerID && model.id === "auto",
         )
         expect(resolved?.providerID).toBe(providerID)
-        expect(resolved?.id).toBe("auto")
+        expect(resolved?.id).toBe(Model.ID.make("auto"))
       }),
     ),
   )
