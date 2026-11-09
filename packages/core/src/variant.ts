@@ -626,6 +626,7 @@ const PROTOCOLS: Readonly<Record<string, Protocol>> = {
   "@opencode/ai/providers/venice/responses": openResponses,
 
   "@opencode/ai/providers/openai-compatible": openaiCompatible,
+  "@opencode/ai/providers/manostech": openaiCompatible,
   "@opencode/ai/providers/openai/chat": openaiChat,
   "@opencode/ai/providers/azure/chat": openaiChat,
   "@opencode/ai/providers/amazon-bedrock/mantle/chat": openaiChat,
