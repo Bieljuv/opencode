@@ -63,11 +63,11 @@ describe("window updater machine", () => {
 
   // A chunk that failed to load used to leave the click unanswered, with an unhandled rejection.
   test("an actions chunk that fails or stalls says so and lets the user try again", () => {
-    const result = replay([ask("check"), { type: "action.failed", attempt: 1, message: "chunk" }, ask("check")])
+    const result = replay([ask("check"), { type: "action.failed", attempt: 1 }, ask("check")])
 
     expect(result.effects).toEqual([
       { type: "run", action: "check", attempt: 1 },
-      { type: "toast-failed", message: "chunk" },
+      { type: "toast-failed" },
       { type: "run", action: "check", attempt: 2 },
     ])
   })

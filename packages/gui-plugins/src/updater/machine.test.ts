@@ -581,7 +581,10 @@ describe("transitionUpdater", () => {
     const error = new Error("install failed")
     const failed = transitionUpdater(restarting, { type: "restart.failed", attempt: 4, error })
     expect(toUpdaterState(failed.state)).toEqual({ status: "ready", version: "2.0.0" })
-    expect(failed.effects).toEqual([{ type: "installs.reject", waiters: [3], failure: { kind: "error", error } }])
+    expect(failed.effects).toEqual([
+      { type: "log", level: "warning", message: "update install failed", data: { message: "install failed" } },
+      { type: "installs.reject", waiters: [3], failure: { kind: "error", error } },
+    ])
   })
 
   test("an install or check while the app quits into the installer answers at once", () => {
@@ -652,6 +655,28 @@ describe("transitionUpdater", () => {
       { type: "persistence.clear" },
       { type: "checks.resolve", waiters: [2], state: { status: "up-to-date" } },
     ])
+  })
+
+  // A feed failure used to reach the user verbatim in the toast (URL, HTTP status, error page HTML, headers).
+  // The visible state carries no detail now; the raw failure goes to the desktop log only.
+  test("a failed check reports no detail to the user and logs the raw failure", () => {
+    const raw =
+      "Cannot parse releases feed: Error: Unable to find latest version on GitHub (https://github.com/BielJuv/opencode/releases/latest). HttpError: 504"
+
+    const step = run(
+      idle(),
+      { type: "check.requested", waiter: 1 },
+      { type: "check.failed", attempt: 1, message: raw },
+    )
+
+    expect(toUpdaterState(step.state)).toEqual({ status: "error" })
+    expect(step.effects).toContainEqual({ type: "checks.resolve", waiters: [1], state: { status: "error" } })
+    expect(step.effects).toContainEqual({
+      type: "log",
+      level: "warning",
+      message: "update check failed",
+      data: { message: raw },
+    })
   })
 
   test("disposing cancels the running attempt, settles every caller and ignores later events", () => {

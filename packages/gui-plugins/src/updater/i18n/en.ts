@@ -10,6 +10,7 @@ export default {
   "action.reloading": "Reloading…",
   "toast.latest.title": "You're up to date",
   "toast.latest.description": "You're running the latest version of Editor IA ManosTech.",
+  "toast.checkFailed.description": "Couldn't check for updates right now. Try again later.",
   "migration.title": "Move from Beta to Stable",
   "migration.description":
     "For now, Editor IA ManosTech Beta is moving to Editor IA ManosTech Stable. Download version {{version}}, then install Editor IA ManosTech from the disk image to continue receiving updates.",

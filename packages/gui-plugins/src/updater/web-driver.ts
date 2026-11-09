@@ -17,16 +17,14 @@ type Current = {
   timers: { check?: ReturnType<typeof setTimeout>; apply?: ReturnType<typeof setTimeout> }
 }
 
-export type WebUpdateReport =
-  | { readonly result: "up-to-date" }
-  | { readonly result: "failed"; readonly message: string }
+export type WebUpdateReport = { readonly result: "up-to-date" } | { readonly result: "failed" }
 
 export type WebUpdaterOptions = {
   /** The state changed. */
   readonly changed: (state: WebUpdateState) => void
   /** A newer build is ready to load. */
   readonly announce: () => void
-  /** The user's check found nothing newer, or failed with `message` (empty when the browser gave none). */
+  /** The user's check found nothing newer, or failed (the toast shows only the generic message). */
   readonly report: (report: WebUpdateReport) => void
 }
 
@@ -93,8 +91,8 @@ export function startWebUpdater(options: WebUpdaterOptions) {
         .update()
         .then(
           () => dispatch({ type: "check.settled", attempt, worker: newest(registration) }),
-          // The browser rejects with a TypeError or DOMException, both Errors.
-          (error: Error) => dispatch({ type: "check.failed", attempt, message: error.message }),
+          // The browser rejects with a TypeError or DOMException; the detail never reaches the user.
+          () => dispatch({ type: "check.failed", attempt }),
         )
         .finally(() => clearTimeout(timer))
     }
