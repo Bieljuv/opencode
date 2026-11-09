@@ -4,7 +4,6 @@ import { app, BrowserWindow } from "electron"
 import type { Event } from "electron"
 import { Context, Effect, Layer } from "effect"
 import { DeepLinks } from "../deep-links"
-import { ManosTechClientAuth } from "../client-auth"
 import { DesktopLogging, scoped } from "../native/logging"
 import { DesktopStorage } from "../storage"
 import { safeWebContentsURL } from "../windows/state"
@@ -103,19 +102,11 @@ const runtime = Layer.effect(
 
     const deepLinks = yield* DeepLinks.make(focusWindow)
 
-    // The Google sign-in return never reaches the renderer: main owns the
-    // exchange with the panel, so the code and the PKCE verifier stay here.
+    // Every deep link goes to the Console flow: the Google sign-in return
+    // no longer uses the custom scheme (it comes back on the loopback
+    // listener in client-auth), so there is nothing to filter out here.
     const receiveDeepLinks = (urls: readonly string[]) => {
-      const authUrls = urls.filter((url) => url.startsWith("com.manostech.editor:/auth/google"))
-      const otherUrls = urls.filter((url) => !url.startsWith("com.manostech.editor:/auth/google"))
-
-      authUrls.forEach((url) =>
-        ManosTechClientAuth.handleDeepLink(url).catch((error) =>
-          runFork(Effect.logError("google sign-in return failed", { error })),
-        ),
-      )
-
-      if (otherUrls.length) deepLinks.receive(otherUrls)
+      if (urls.length) deepLinks.receive(urls)
     }
 
     const secondInstance = (_event: Event, argv: string[]) => {

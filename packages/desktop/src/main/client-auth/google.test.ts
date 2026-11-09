@@ -1,6 +1,15 @@
 import { createHash } from "node:crypto"
 import { afterAll, describe, expect, test } from "bun:test"
-import { authorizeUrl, createPkce, createState, exchangeCodeForIdToken, GOOGLE_REDIRECT_URI, parseAuthReturn } from "./google"
+import {
+  authorizeUrl,
+  createPkce,
+  createState,
+  exchangeCodeForIdToken,
+  loopbackRedirectUri,
+  parseAuthReturn,
+  startLoopbackListener,
+} from "./google"
+import { nativeT } from "../native/translations"
 
 // Um endpoint de token falso: a troca real é com o Google, mas o envio
 // (form-urlencoded + PKCE) é o mesmo contra qualquer URL.
@@ -14,7 +23,7 @@ const tokenServer = Bun.serve({
       body.get("code") === "code-1" &&
       body.get("client_id") === "cid" &&
       body.get("code_verifier") === "verifier" &&
-      body.get("redirect_uri") === "com.manostech.editor:/auth/google"
+      body.get("redirect_uri") === loopbackRedirectUri(51820)
     )
       return Response.json({ id_token: "idtok", access_token: "acctok" })
 
@@ -38,17 +47,21 @@ describe("createPkce", () => {
   })
 })
 
-describe("authorizeUrl", () => {
-  test("the redirect is the reverse-DNS deep link Google accepts", () => {
-    expect(GOOGLE_REDIRECT_URI).toBe("com.manostech.editor:/auth/google")
+describe("loopbackRedirectUri", () => {
+  test("builds the loopback redirect with the ephemeral port", () => {
+    expect(loopbackRedirectUri(51820)).toBe("http://127.0.0.1:51820/auth/google")
   })
+})
 
-  test("builds the Google authorize URL with the app deep-link return", () => {
-    const url = new URL(authorizeUrl({ clientId: "cid", state: "st", challenge: "ch" }))
+describe("authorizeUrl", () => {
+  test("the redirect is the loopback address", () => {
+    const url = new URL(
+      authorizeUrl({ clientId: "cid", state: "st", challenge: "ch", redirectUri: loopbackRedirectUri(51820) }),
+    )
 
     expect(url.origin + url.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth")
     expect(url.searchParams.get("client_id")).toBe("cid")
-    expect(url.searchParams.get("redirect_uri")).toBe("com.manostech.editor:/auth/google")
+    expect(url.searchParams.get("redirect_uri")).toBe("http://127.0.0.1:51820/auth/google")
     expect(url.searchParams.get("response_type")).toBe("code")
     expect(url.searchParams.get("code_challenge_method")).toBe("S256")
     expect(url.searchParams.get("state")).toBe("st")
@@ -56,8 +69,8 @@ describe("authorizeUrl", () => {
 })
 
 describe("parseAuthReturn", () => {
-  test("accepts the code and state", () => {
-    expect(parseAuthReturn("com.manostech.editor:/auth/google?code=abc&state=st")).toEqual({
+  test("accepts the code and state on the loopback", () => {
+    expect(parseAuthReturn("http://127.0.0.1:51820/auth/google?code=abc&state=st")).toEqual({
       kind: "code",
       code: "abc",
       state: "st",
@@ -65,7 +78,7 @@ describe("parseAuthReturn", () => {
   })
 
   test("accepts the return with a trailing slash before the query", () => {
-    expect(parseAuthReturn("com.manostech.editor:/auth/google/?code=abc&state=st")).toEqual({
+    expect(parseAuthReturn("http://127.0.0.1:51820/auth/google/?code=abc&state=st")).toEqual({
       kind: "code",
       code: "abc",
       state: "st",
@@ -73,32 +86,146 @@ describe("parseAuthReturn", () => {
   })
 
   test("an error return is an error, not a code", () => {
-    expect(parseAuthReturn("com.manostech.editor:/auth/google?error=access_denied")).toEqual({ kind: "error" })
+    expect(parseAuthReturn("http://127.0.0.1:51820/auth/google?error=access_denied")).toEqual({ kind: "error" })
   })
 
-  test("the old scheme is not a Google return", () => {
+  test("an error return keeps the state when present", () => {
+    expect(parseAuthReturn("http://127.0.0.1:51820/auth/google?error=access_denied&state=st")).toEqual({
+      kind: "error",
+      state: "st",
+    })
+  })
+
+  test("the custom scheme is not a Google return anymore", () => {
+    expect(parseAuthReturn("com.manostech.editor:/auth/google?code=abc&state=st")).toBeUndefined()
     expect(parseAuthReturn("manostech://auth/google?code=abc&state=st")).toBeUndefined()
   })
 
   test("anything else is not ours", () => {
-    expect(parseAuthReturn("com.manostech.editor:/console/authorized?window=1")).toBeUndefined()
-    expect(parseAuthReturn("manostech://console/authorized?window=1")).toBeUndefined()
-    expect(parseAuthReturn("com.manostech.editor:/auth/google")).toBeUndefined()
+    expect(parseAuthReturn("http://127.0.0.1:51820/auth/google")).toBeUndefined()
+    expect(parseAuthReturn("http://127.0.0.1:51820/other?code=abc&state=st")).toBeUndefined()
+    expect(parseAuthReturn("http://localhost:51820/auth/google?code=abc&state=st")).toBeUndefined()
+    expect(parseAuthReturn("http://127.0.0.2:51820/auth/google?code=abc&state=st")).toBeUndefined()
+    expect(parseAuthReturn("https://127.0.0.1:51820/auth/google?code=abc&state=st")).toBeUndefined()
     expect(parseAuthReturn("https://example.com/?code=abc&state=st")).toBeUndefined()
+    expect(parseAuthReturn("com.manostech.editor:/console/authorized?window=1")).toBeUndefined()
   })
 })
 
 describe("exchangeCodeForIdToken", () => {
   test("a valid code returns the id token", async () => {
     expect(
-      await exchangeCodeForIdToken(env, { clientId: "cid", code: "code-1", codeVerifier: "verifier" }),
+      await exchangeCodeForIdToken(env, {
+        clientId: "cid",
+        code: "code-1",
+        codeVerifier: "verifier",
+        redirectUri: loopbackRedirectUri(51820),
+      }),
     ).toBe("idtok")
   })
 
   test("a rejected code returns undefined", async () => {
-    expect(await exchangeCodeForIdToken(env, { clientId: "cid", code: "ruim", codeVerifier: "verifier" })).toBe(
-      undefined,
-    )
+    expect(
+      await exchangeCodeForIdToken(env, {
+        clientId: "cid",
+        code: "ruim",
+        codeVerifier: "verifier",
+        redirectUri: loopbackRedirectUri(51820),
+      }),
+    ).toBe(undefined)
+  })
+})
+
+describe("startLoopbackListener", () => {
+  test("the redirect is loopback on an ephemeral port", async () => {
+    const listener = await startLoopbackListener("st")
+
+    try {
+      const redirect = new URL(listener.redirectUri)
+
+      expect(redirect.protocol).toBe("http:")
+      expect(redirect.hostname).toBe("127.0.0.1")
+      expect(redirect.port).not.toBe("")
+      expect(redirect.pathname).toBe("/auth/google")
+    } finally {
+      listener.close()
+    }
+  })
+
+  test("captures the code and answers with the success page", async () => {
+    const listener = await startLoopbackListener("st")
+
+    try {
+      const response = await fetch(`${listener.redirectUri}?code=abc&state=st`)
+
+      expect(response.status).toBe(200)
+      expect(response.headers.get("content-type")).toContain("text/html")
+      expect(await response.text()).toContain(nativeT("desktop.google.loopback.success.title"))
+      await expect(listener.code).resolves.toEqual({ kind: "code", code: "abc", state: "st" })
+    } finally {
+      listener.close()
+    }
+  })
+
+  test("an error return resolves as an error with the error page", async () => {
+    const listener = await startLoopbackListener("st")
+
+    try {
+      const response = await fetch(`${listener.redirectUri}?error=access_denied&state=st`)
+
+      expect(response.status).toBe(200)
+      expect(await response.text()).toContain(nativeT("desktop.google.loopback.error.title"))
+      await expect(listener.code).resolves.toEqual({ kind: "error", state: "st" })
+    } finally {
+      listener.close()
+    }
+  })
+
+  test("a wrong state is refused and the listener keeps waiting", async () => {
+    const listener = await startLoopbackListener("st")
+
+    try {
+      const refused = await fetch(`${listener.redirectUri}?code=abc&state=wrong`)
+
+      expect(refused.status).toBe(400)
+
+      const response = await fetch(`${listener.redirectUri}?code=abc&state=st`)
+
+      expect(response.status).toBe(200)
+      await expect(listener.code).resolves.toEqual({ kind: "code", code: "abc", state: "st" })
+    } finally {
+      listener.close()
+    }
+  })
+
+  test("a path outside the return is refused and the listener keeps waiting", async () => {
+    const listener = await startLoopbackListener("st")
+
+    try {
+      const origin = new URL(listener.redirectUri).origin
+      const refused = await fetch(`${origin}/other?code=abc&state=st`)
+
+      expect(refused.status).toBe(404)
+
+      const response = await fetch(`${listener.redirectUri}?code=abc&state=st`)
+
+      expect(response.status).toBe(200)
+      await expect(listener.code).resolves.toEqual({ kind: "code", code: "abc", state: "st" })
+    } finally {
+      listener.close()
+    }
+  })
+
+  test("the listener closes after resolving", async () => {
+    const listener = await startLoopbackListener("st")
+
+    try {
+      await fetch(`${listener.redirectUri}?code=abc&state=st`)
+      await expect(listener.code).resolves.toEqual({ kind: "code", code: "abc", state: "st" })
+      await expect(fetch(`${listener.redirectUri}?code=abc&state=st`)).rejects.toThrow()
+    } finally {
+      listener.close()
+    }
   })
 })
 

@@ -5,7 +5,15 @@ import { MANOSTECH_GOOGLE_CLIENT_ID } from "../constants"
 import { openExternalURL } from "../files"
 import { emitIpcEvent } from "../ipc-events"
 import { getMainWindows } from "../windows"
-import { authorizeUrl, createPkce, createState, exchangeCodeForIdToken, parseAuthReturn } from "./google"
+import {
+  authorizeUrl,
+  createPkce,
+  createState,
+  exchangeCodeForIdToken,
+  startLoopbackListener,
+  type AuthReturn,
+  type LoopbackListener,
+} from "./google"
 import { connectGatewayCredential, disconnectGatewayCredential, isGatewayActive, resolveGatewayBaseUrl, todayInSaoPaulo, DEFAULT_GATEWAY_URL } from "./gateway"
 import * as Panel from "./panel"
 import { clearClientIdentity, writeClientIdentity } from "./reporter-file"
@@ -62,6 +70,7 @@ type PendingGoogle = {
   readonly verifier: string
   readonly state: string
   readonly startedAt: number
+  readonly redirectUri: string
 }
 
 let pendingGoogle: PendingGoogle | undefined
@@ -327,10 +336,33 @@ export async function googleStart(): Promise<{ available: boolean }> {
   if (!MANOSTECH_GOOGLE_CLIENT_ID) return { available: false }
 
   const pkce = createPkce()
-  pendingGoogle = { verifier: pkce.verifier, state: createState(), startedAt: Date.now() }
-  await openExternalURL(
-    authorizeUrl({ clientId: MANOSTECH_GOOGLE_CLIENT_ID, state: pendingGoogle.state, challenge: pkce.challenge }),
+  const state = createState()
+
+  let listener: LoopbackListener
+
+  try {
+    listener = await startLoopbackListener(state)
+  } catch {
+    return { available: false }
+  }
+
+  pendingGoogle = { verifier: pkce.verifier, state, startedAt: Date.now(), redirectUri: listener.redirectUri }
+  finishGoogleLoopback(listener.code).catch(() => notifyClientChanged())
+
+  const opened = await openExternalURL(
+    authorizeUrl({
+      clientId: MANOSTECH_GOOGLE_CLIENT_ID,
+      state,
+      challenge: pkce.challenge,
+      redirectUri: listener.redirectUri,
+    }),
   )
+
+  if (!opened) {
+    listener.close()
+    pendingGoogle = undefined
+    return { available: false }
+  }
 
   return { available: true }
 }
@@ -340,63 +372,63 @@ export async function googleAvailable(): Promise<boolean> {
 }
 
 /**
- * Recebe um deep-link `com.manostech.editor:/auth/google`. Devolve true quando o link
- * era nosso (mesmo que o fluxo tenha falhado); false para qualquer outro.
+ * Fecha o login Google iniciado por googleStart: espera o código chegar
+ * no loopback, valida o state e o prazo, troca o código pelo ID token no
+ * Google e entra no painel com ele. Qualquer falha só avisa o renderer,
+ * que volta para o login.
  */
-export async function handleDeepLink(url: string): Promise<boolean> {
-  const parsed = parseAuthReturn(url)
-
-  if (!parsed) return false
+async function finishGoogleLoopback(code: Promise<AuthReturn>): Promise<void> {
+  const result = await code
 
   const pending = pendingGoogle
   pendingGoogle = undefined
 
-  if (parsed.kind === "error") {
+  if (result.kind === "error") {
     notifyClientChanged()
 
-    return true
+    return
   }
 
-  if (!pending || pending.state !== parsed.state || Date.now() - pending.startedAt > GOOGLE_FLOW_TTL_MS) {
+  if (!pending || pending.state !== result.state || Date.now() - pending.startedAt > GOOGLE_FLOW_TTL_MS) {
     notifyClientChanged()
 
-    return true
+    return
   }
 
   if (!MANOSTECH_GOOGLE_CLIENT_ID) {
     notifyClientChanged()
 
-    return true
+    return
   }
 
   // O painel aceita o ID token, não o código: a troca acontece no Google.
+  // O redirect_uri da troca tem que ser o mesmo do authorize.
   const idToken = await exchangeCodeForIdToken(process.env, {
     clientId: MANOSTECH_GOOGLE_CLIENT_ID,
-    code: parsed.code,
+    code: result.code,
     codeVerifier: pending.verifier,
+    redirectUri: pending.redirectUri,
   })
 
   if (!idToken) {
     notifyClientChanged()
 
-    return true
+    return
   }
 
-  const result = await Panel.googleLogin(Panel.panelBaseUrl(process.env), {
+  const loginResult = await Panel.googleLogin(Panel.panelBaseUrl(process.env), {
     idToken,
     deviceId: deviceId(),
   })
 
-  if (result.ok) {
-    saveSession(result.value)
-    storeGatewayCredentials(result.value.apiKey, result.value.gatewayUrl)
-    writeClientIdentity({ id: result.value.client.id, email: result.value.client.email })
+  if (loginResult.ok) {
+    saveSession(loginResult.value)
+    storeGatewayCredentials(loginResult.value.apiKey, loginResult.value.gatewayUrl)
+    writeClientIdentity({ id: loginResult.value.client.id, email: loginResult.value.client.email })
     await refreshGatewayCredential()
   }
 
   notifyClientChanged()
-
-  return true
 }
 
 export function notifyClientChanged(): void {
