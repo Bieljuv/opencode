@@ -85,5 +85,17 @@ export const ManosTechGatewayPlugin = define({
         })
       }
     })
+    yield* ctx.model.transform((models) => {
+      // With a gateway credential connected the provider is available, so
+      // its model is in the catalog: new sessions default to it, unless
+      // the user pinned another model in config (an explicit default wins
+      // whichever transform runs first). Without a credential the model is
+      // not in the catalog and nothing changes; on logout the next rebuild
+      // starts from an empty default again. The default is internal — no
+      // model, provider, or tier name reaches visible text.
+      if (models.get("manostech", "auto") === undefined) return
+      if (models.default.get() !== undefined) return
+      models.default.set("manostech", "auto")
+    })
   }),
 })
