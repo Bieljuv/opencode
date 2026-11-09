@@ -331,7 +331,10 @@ export const ErrorPage: Component<ErrorPageProps> = (props) => {
     if (effect.type === "updater.install") return settle(Promise.try(() => updater()?.install()).then(() => undefined))
 
     settle(
-      Promise.try(() => updater()?.check()).then((state) => (state?.status === "error" ? state.message : undefined)),
+      Promise.try(() => updater()?.check()).then((state) =>
+        // The check's failure detail never reaches this page: only the generic message.
+        state?.status === "error" ? language.t("common.requestFailed") : undefined,
+      ),
     )
   }
 

@@ -15,7 +15,7 @@ type Context = SetupContext<typeof definition>
  * confirms the installer download first, and resolves once the dialog shows.
  */
 export function install(ctx: Context, client: Client) {
-  const download = () => client.install().catch((cause: unknown) => requestFailed(ctx, cause))
+  const download = () => client.install().catch(() => requestFailed(ctx))
 
   const state = client.state()
 
@@ -34,7 +34,7 @@ export async function check(ctx: Context, client: Client) {
 
   const state = await client
     .check({ signal: ctx.signal })
-    .catch((cause: unknown) => requestFailed(ctx, cause))
+    .catch(() => requestFailed(ctx))
     .finally(() => toaster.dismiss(checking))
 
   if (!state || ctx.signal.aborted) return
@@ -61,16 +61,21 @@ export async function check(ctx: Context, client: Client) {
         ],
       })
     case "error":
-      return void showToast({ title: ctx.t("common.requestFailed"), description: state.message })
+      return void showToast({
+        title: ctx.t("common.requestFailed"),
+        description: ctx.t("toast.checkFailed.description"),
+      })
   }
 }
 
-function requestFailed(ctx: Context, cause: unknown) {
+// A failed check or install never shows the failure's detail: the raw error goes to the desktop log (main), and the
+// user sees only the generic message.
+function requestFailed(ctx: Context) {
   if (ctx.signal.aborted) return
 
   showToast({
     title: ctx.t("common.requestFailed"),
-    description: cause instanceof Error && cause.message ? cause.message : undefined,
+    description: ctx.t("toast.checkFailed.description"),
   })
 }
 

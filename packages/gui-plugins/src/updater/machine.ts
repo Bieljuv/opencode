@@ -244,8 +244,6 @@ function sameView(a: UpdaterState, b: UpdaterState) {
 }
 
 function viewDetail(view: UpdaterState) {
-  if (view.status === "error") return view.message
-
   if (
     view.status === "downloading" ||
     view.status === "ready" ||
@@ -335,7 +333,7 @@ export type UpdaterMachineState =
       readonly plan: InstallingPlan
       readonly installWaiters: readonly number[]
     })
-  | (Meta & { readonly status: "error"; readonly message: string })
+  | (Meta & { readonly status: "error" })
   | { readonly status: "disposed"; readonly last: UpdaterState }
 
 type Active = Exclude<UpdaterMachineState, { readonly status: "disabled" | "disposed" }>
@@ -435,7 +433,7 @@ export function toUpdaterState(state: UpdaterMachineState): UpdaterState {
 
   if (state.status === "installing") return { status: "installing", version: state.plan.version }
 
-  if (state.status === "error") return { status: "error", message: state.message }
+  if (state.status === "error") return { status: "error" }
 
   return { status: state.status }
 }
@@ -593,7 +591,9 @@ function settled(state: Active, event: Settled): UpdaterMachineTransition {
     if (event.type === "check.succeeded") return discovered(state, event.target, state.checkWaiters)
 
     if (event.type === "check.failed")
-      return withChecks({ ...meta(state), status: "error", message: event.message }, state.checkWaiters)
+      return withChecks({ ...meta(state), status: "error" }, state.checkWaiters, [
+        failureLog("update check failed", event.message),
+      ])
   }
 
   if (state.status === "downloading") {
@@ -605,7 +605,9 @@ function settled(state: Active, event: Settled): UpdaterMachineTransition {
       )
 
     if (event.type === "stage.failed")
-      return withChecks({ ...meta(state), status: "error", message: event.message }, state.checkWaiters)
+      return withChecks({ ...meta(state), status: "error" }, state.checkWaiters, [
+        failureLog("update download failed", event.message),
+      ])
   }
 
   if (state.status === "ready" && state.refresh) return refreshSettled(state, state.refresh, event)
@@ -720,6 +722,7 @@ function restartSettled(
   // ApplicationLifecycle resumed the other plugins before rejecting, so the user can retry.
   if (plan.step === "restarting" && event.type === "restart.failed")
     return unchanged({ ...meta(state), status: "ready", version: plan.version }, [
+      failureLog("update install failed", event.error.message),
       rejectInstalls(state.installWaiters, { kind: "error", error: event.error }),
     ])
 
@@ -752,7 +755,10 @@ function externalSettled(
     return unchanged(offered, [{ type: "installs.resolve", waiters: state.installWaiters }])
 
   if (plan.step === "opening" && event.type === "external.failed")
-    return unchanged(offered, [rejectInstalls(state.installWaiters, { kind: "error", error: event.error })])
+    return unchanged(offered, [
+      failureLog("external update failed", event.error.message),
+      rejectInstalls(state.installWaiters, { kind: "error", error: event.error }),
+    ])
 
   return unchanged(state)
 }
@@ -872,6 +878,12 @@ function meta(state: Active): Meta {
     issued: state.issued,
     cached: state.cached,
   }
+}
+
+function failureLog(message: string, detail: string): UpdaterMachineEffect {
+  // The raw failure goes to the desktop log file only; the state the windows see carries no detail, so no surface
+  // can show a URL, status, header or error page to the user.
+  return { type: "log", level: "warning", message, data: { message: detail } }
 }
 
 function stagedRefreshFailed(staged: string, message: string): UpdaterMachineEffect {

@@ -11,7 +11,8 @@ import { Ipc } from "./core.js"
  * - `download-required`: `version` needs a manual download; `install` opens it.
  * - `up-to-date`: the last check found nothing newer.
  * - `installing`: `version` is installing.
- * - `error`: the last check or download failed with `message`.
+ * - `error`: the last check or download failed. The failure's detail is never carried here: the raw error goes to
+ *   the logs only, so no surface that reads this state can show a URL, status, header or error page to the user.
  */
 export const UpdaterState = Schema.Union([
   Schema.Struct({ status: Schema.Literal("disabled") }),
@@ -22,7 +23,7 @@ export const UpdaterState = Schema.Union([
   Schema.Struct({ status: Schema.Literal("download-required"), version: Schema.String }),
   Schema.Struct({ status: Schema.Literal("up-to-date") }),
   Schema.Struct({ status: Schema.Literal("installing"), version: Schema.String }),
-  Schema.Struct({ status: Schema.Literal("error"), message: Schema.String }),
+  Schema.Struct({ status: Schema.Literal("error") }),
 ])
 
 /** The updater's state; see `UpdaterState`. */

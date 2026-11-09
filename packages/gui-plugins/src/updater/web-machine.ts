@@ -23,7 +23,8 @@ type Meta = {
  * - `ready`: a newer build is downloaded and waits for a reload.
  * - `applying`: the newer build was asked to take over; every window reloads once it does.
  * - `reloading`: this window is reloading into the newer build (or a reset).
- * - `error`: the user's last check or download failed.
+ * - `error`: the user's last check or download failed. The failure's detail is never carried here: the user sees
+ *   only the generic message, never the browser's error text.
  * - `disposed`: the window let the updater go; nothing runs after it.
  */
 export type WebUpdateState =
@@ -35,14 +36,14 @@ export type WebUpdateState =
   | (Meta & { readonly status: "ready" })
   | (Meta & { readonly status: "applying" })
   | { readonly status: "reloading" }
-  | (Meta & { readonly status: "error"; readonly message: string })
+  | (Meta & { readonly status: "error" })
   | { readonly status: "disposed" }
 
 export type WebUpdateEvent =
   | { readonly type: "registered"; readonly worker: WebWorker }
   | { readonly type: "check.requested"; readonly manual: boolean; readonly at: number }
   | { readonly type: "check.settled"; readonly attempt: number; readonly worker: WebWorker }
-  | { readonly type: "check.failed"; readonly attempt: number; readonly message: string }
+  | { readonly type: "check.failed"; readonly attempt: number }
   /** The browser's update request ran past `CHECK_TIMEOUT_MS` without settling. */
   | { readonly type: "check.timeout"; readonly attempt: number }
   | { readonly type: "worker.installing" }
@@ -66,9 +67,9 @@ export type WebUpdateEffect =
   | { readonly type: "reset" }
   /** A newer build is ready: offer the reload. */
   | { readonly type: "announce" }
-  /** Answer the user's check: nothing newer, or it failed with `message`. */
+  /** Answer the user's check: nothing newer, or it failed (the toast shows only the generic message). */
   | { readonly type: "report"; readonly result: "up-to-date" }
-  | { readonly type: "report"; readonly result: "failed"; readonly message: string }
+  | { readonly type: "report"; readonly result: "failed" }
 
 export type WebUpdateTransition = { readonly state: WebUpdateState; readonly effects: readonly WebUpdateEffect[] }
 
@@ -118,11 +119,10 @@ export function transitionWebUpdate(state: WebUpdateState, event: WebUpdateEvent
 
       // An automatic check fails whenever the device is offline; only the user's own check says so.
       if (!state.manual) return unchanged({ ...meta, status: "idle" })
-      const message = event.type === "check.failed" ? event.message : ""
 
       return {
-        state: { ...meta, status: "error", message },
-        effects: [{ type: "report", result: "failed", message }],
+        state: { ...meta, status: "error" },
+        effects: [{ type: "report", result: "failed" }],
       }
     }
 
@@ -142,8 +142,8 @@ export function transitionWebUpdate(state: WebUpdateState, event: WebUpdateEvent
       if (!state.manual) return unchanged({ ...meta, status: "idle" })
 
       return {
-        state: { ...meta, status: "error", message: "" },
-        effects: [{ type: "report", result: "failed", message: "" }],
+        state: { ...meta, status: "error" },
+        effects: [{ type: "report", result: "failed" }],
       }
     case "apply.requested":
       if (state.status !== "ready") return unchanged(state)

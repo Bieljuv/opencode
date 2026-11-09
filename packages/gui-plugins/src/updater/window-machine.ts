@@ -20,14 +20,16 @@ export type WindowUpdaterEvent =
   | { readonly type: "action.requested"; readonly action: "check" | "install"; readonly available: boolean }
   /** The action finished and answered the user. */
   | { readonly type: "action.settled"; readonly attempt: number }
-  /** The actions chunk failed to load or ran out of time, so the action never started. */
-  | { readonly type: "action.failed"; readonly attempt: number; readonly message?: string }
+  /** The actions chunk failed to load or ran out of time, so the action never started. The failure's detail never
+   * reaches the user: the toast shows only the generic message. */
+  | { readonly type: "action.failed"; readonly attempt: number }
   | { readonly type: "disposed" }
 
 export type WindowUpdaterEffect =
   /** Loads the actions chunk under `ACTION_CHUNK_TIMEOUT_MS` and runs the action. */
   | { readonly type: "run"; readonly action: "check" | "install"; readonly attempt: number }
-  | { readonly type: "toast-failed"; readonly message?: string }
+  /** The action never started, or main is not there to run it: show only the generic failure message. */
+  | { readonly type: "toast-failed" }
 
 export type WindowUpdaterTransition = {
   readonly state: WindowUpdaterState
@@ -64,7 +66,7 @@ export function transitionWindowUpdater(state: WindowUpdaterState, event: Window
 
   return {
     state: { status: "idle", issued: state.attempt },
-    effects: [{ type: "toast-failed", message: event.message }],
+    effects: [{ type: "toast-failed" }],
   }
 }
 

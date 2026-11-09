@@ -42,9 +42,9 @@ const reports: readonly Report[] = [
   },
   {
     name: "a failed check",
-    settle: { type: "check.failed", attempt: 1, message: "offline" },
+    settle: { type: "check.failed", attempt: 1 },
     status: "error",
-    effects: [{ type: "report", result: "failed", message: "offline" }],
+    effects: [{ type: "report", result: "failed" }],
   },
 ]
 
@@ -104,7 +104,7 @@ describe("web update machine", () => {
       manual(0),
       { type: "check.settled", attempt: 1, worker: "none" },
       manual(1),
-      { type: "check.failed", attempt: 1, message: "late" },
+      { type: "check.failed", attempt: 1 },
     ])
 
     expect(result.state).toMatchObject({ status: "checking", attempt: 2 })
@@ -118,7 +118,7 @@ describe("web update machine", () => {
       { type: "worker.redundant" } as const,
     ]
 
-    expect(replay(steps(manual(0))).effects.at(-1)).toEqual({ type: "report", result: "failed", message: "" })
+    expect(replay(steps(manual(0))).effects.at(-1)).toEqual({ type: "report", result: "failed" })
     expect(replay(steps(auto(0))).state.status).toBe("idle")
   })
 
@@ -182,7 +182,7 @@ describe("web update machine", () => {
     ])
 
     expect(asked.state.status).toBe("error")
-    expect(asked.effects.at(-1)).toEqual({ type: "report", result: "failed", message: "" })
+    expect(asked.effects.at(-1)).toEqual({ type: "report", result: "failed" })
   })
 
   test("nothing runs after the updater is disposed", () => {

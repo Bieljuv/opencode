@@ -42,7 +42,10 @@ export function webUpdates(ctx: SetupContext<typeof definition>) {
           description: ctx.t("toast.latest.description", { version: ctx.app.version }),
         })
 
-      showToast({ title: ctx.t("common.requestFailed"), description: report.message || undefined })
+      showToast({
+        title: ctx.t("common.requestFailed"),
+        description: ctx.t("toast.checkFailed.description"),
+      })
     },
   })
 
