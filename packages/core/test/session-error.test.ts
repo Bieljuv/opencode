@@ -23,6 +23,7 @@ import { Provider } from "@opencode/core/provider"
 import { Tool } from "@opencode/schema/tool"
 import { toSessionError } from "@opencode/core/session/to-session-error"
 import { SessionRunnerRetry } from "@opencode/core/session/runner/retry"
+import { StepFailedError } from "@opencode/core/session/error"
 
 const llm = (reason: AIError["reason"]) => new AIError({ reason })
 
@@ -128,6 +129,66 @@ describe("toSessionError", () => {
     )
     expect(SessionRunnerRetry.isRetryable(other)).toBe(true)
     expect(toSessionError(other)).toMatchObject({ type: "provider.rate-limit", retryAfterMs: 10_000 })
+  })
+
+  test("collapses limit refusals the classifier misses into the generic exhaustion error", () => {
+    const exhausted = { type: "provider.exhausted", message: "Tente novamente mais tarde." }
+
+    // A free-limit refusal worded as a plain rate limit — no
+    // FreeUsageLimitError code anywhere — used to reach the runner as a
+    // throttle, which retried the same model until the turn died instead
+    // of hopping. The cap is in the message, so it is exhaustion.
+    const worded = RequestExecutor.httpFailure({
+      message: "You have used all your free messages today.",
+      url: "https://opencode.ai/inference/openai/v1/chat/completions",
+      status: 429,
+      responseBody: JSON.stringify({
+        error: { type: "rate_limit_error", message: "You have used all your free messages today." },
+      }),
+    })
+    expect(toSessionError(worded)).toEqual(exhausted)
+
+    // Same refusal, underscored code the exact-code match misses.
+    const underscored = RequestExecutor.httpFailure({
+      message: "Rate limit exceeded. Please try again later.",
+      url: "https://opencode.ai/inference/openai/v1/chat/completions",
+      status: 429,
+      responseBody: JSON.stringify({ error: { type: "free_usage_limit", message: "Rate limit exceeded." } }),
+    })
+    expect(toSessionError(underscored)).toEqual(exhausted)
+
+    // A gateway guarding a cap with 403: an auth error by status, a quota
+    // refusal by content.
+    const forbidden = RequestExecutor.httpFailure({
+      message: "Free message allowance exhausted for today.",
+      url: "https://api.example.com/v1/chat/completions",
+      status: 403,
+      responseBody: JSON.stringify({ error: { type: "forbidden", message: "Free message allowance exhausted." } }),
+    })
+    expect(toSessionError(forbidden)).toEqual(exhausted)
+
+    // A plain throttle stays a throttle: no cap signal anywhere.
+    const throttle = RequestExecutor.httpFailure({
+      message: "Too many requests. Please try again later.",
+      url: "https://api.example.com/v1/chat/completions",
+      status: 429,
+      responseBody: JSON.stringify({ error: { type: "rate_limit_error", message: "Too many requests." } }),
+    })
+    expect(toSessionError(throttle)).toMatchObject({ type: "provider.rate-limit" })
+  })
+
+  test("collapses a limit type carried by a step failure into the generic exhaustion error", () => {
+    const free = new StepFailedError({
+      error: { type: "provider.free-limit", message: "Free usage limit reached." },
+    })
+    expect(toSessionError(free)).toEqual({
+      type: "provider.exhausted",
+      message: "Tente novamente mais tarde.",
+    })
+    const other = new StepFailedError({
+      error: { type: "provider.internal", message: "The service failed." },
+    })
+    expect(toSessionError(other)).toEqual({ type: "provider.internal", message: "The service failed." })
   })
 
   test("collapses model and workspace budget limits into one generic exhaustion error", () => {
@@ -285,10 +346,13 @@ describe("toSessionError", () => {
         }),
       ),
     )
+    // "Free quota exhausted" names a cap, not a throttle: the router hops
+    // to the next model instead of retrying the same one, so the refusal
+    // collapses into the generic exhaustion error — which still leaks
+    // nothing (no model, no provider, no tier, no quota).
     expect(leaked).toEqual({
-      type: "provider.rate-limit",
-      message: "O serviço está ocupado no momento. Tente novamente em instantes.",
-      retryAfterMs: 60_000,
+      type: "provider.exhausted",
+      message: "Tente novamente mais tarde.",
     })
     expect(leaked.message).not.toContain("openrouter")
     expect(leaked.message).not.toContain("free")

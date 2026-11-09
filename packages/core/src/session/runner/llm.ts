@@ -15,6 +15,7 @@ import { SessionInbox } from "../inbox.js"
 import { SessionBackground } from "../background.js"
 import { Job } from "../../job.js"
 import { SessionHistory } from "../history.js"
+import { SessionHistoryPackage } from "../history-package.js"
 import { SessionModelRequest } from "../model-request.js"
 import { SessionRouter } from "../router.js"
 import { SessionModelTransport } from "../model-transport.js"
@@ -242,8 +243,11 @@ const layer = Layer.effect(
       let recoverContinuation = true
       let retryAttempt: number | undefined
       // ManosTech router: the hop chain for this step, from the providers
-      // connected right now. The current model counts as tried, so a hop
-      // never returns to it.
+      // connected right now. Only models that actually fail in this step
+      // count as tried: the session model just answered the previous step,
+      // so it is a valid hop target. Pre-seeding it here once made a step
+      // fail with the chain "exhausted" while the only working model sat
+      // unused.
       const available = yield* models.available()
       const configured = yield* models.configuredDefault()
       const lastUser = [...first.messages]
@@ -258,22 +262,26 @@ const layer = Layer.effect(
         complexity: SessionRouter.classifyComplexity(lastUser?.text ?? ""),
         effort,
       })
-      const tried = new Set<string>(
-        first.session.model === undefined ? [] : [SessionRouter.refKey(first.session.model)],
-      )
+      const tried = new Set<string>()
       if (!explicit) {
         // The chain head answers this step unless it is already the session
         // model. The switch is published, so the loop below re-resolves the
-        // new model; the user never sees the change.
+        // new model; the user never sees the change. A head that is already
+        // the session model needs no switch and no context reload.
         const head = SessionRouter.nextHop(chain, tried)
         if (head !== undefined) {
-          yield* bus.publish(SessionEvent.ModelSelected, {
-            sessionID,
-            model: head,
-            previous: first.session.model,
-          })
           tried.add(SessionRouter.refKey(head))
-          initial = undefined
+          if (
+            first.session.model === undefined ||
+            SessionRouter.refKey(head) !== SessionRouter.refKey(first.session.model)
+          ) {
+            yield* bus.publish(SessionEvent.ModelSelected, {
+              sessionID,
+              model: head,
+              previous: first.session.model,
+            })
+            initial = undefined
+          }
         }
       }
       while (true) {
@@ -294,7 +302,11 @@ const layer = Layer.effect(
           model: loaded.model,
           tools: loaded.tools,
           initial: loaded.initial,
-          messages: loaded.messages,
+          // ManosTech history packaging: the turn only resends the last 20
+          // messages plus a condensed summary of the rest, so a long
+          // conversation stops re-sending its whole context on every turn.
+          // The full history stays in the session; only the request is packed.
+          messages: SessionHistoryPackage.packageHistory(loaded.messages),
         })
         const prepared = yield* context.request
           .primary({
@@ -339,7 +351,12 @@ const layer = Layer.effect(
               // ManosTech router: on exhausted credit, hop to the next
               // connected model instead of failing the turn. The switch is
               // published as ModelSelected, so the retry re-resolves the new
-              // model; the user never sees the hop.
+              // model; the user never sees the hop. When the whole chain is
+              // exhausted, fail at once with the generic message: falling
+              // through would let the retry policy burn its same-model
+              // attempts (a rate-limit-shaped exhaustion is retryable) and
+              // only then fail — with the original error, not the generic
+              // one.
               if (SessionRouter.isExhaustionError(error)) {
                 const next = SessionRouter.nextHop(chain, tried)
                 if (next !== undefined) {
@@ -351,6 +368,7 @@ const layer = Layer.effect(
                   })
                   return { retry: true as const, attempt: (retryAttempt ?? 1) + 1, delay: 0 }
                 }
+                return { retry: false as const }
               }
               return yield* retry.decide({
                 cause,

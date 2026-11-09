@@ -230,10 +230,19 @@ describe("nextHop", () => {
 })
 
 describe("isExhaustionError", () => {
-  test("only the collapsed exhaustion type hops", () => {
-    expect(isExhaustionError({ type: "provider.exhausted" })).toBe(true)
-    expect(isExhaustionError({ type: "provider.free-limit" })).toBe(false)
+  test("every limit type hops; a throttle or auth error does not", () => {
+    for (const type of [
+      "provider.exhausted",
+      "provider.free-limit",
+      "provider.go-limit",
+      "provider.budget-limit",
+      "provider.model-budget-limit",
+      "provider.quota",
+      "provider.chatgpt-limit",
+    ])
+      expect(isExhaustionError({ type })).toBe(true)
     expect(isExhaustionError({ type: "provider.rate-limit" })).toBe(false)
     expect(isExhaustionError({ type: "provider.auth" })).toBe(false)
+    expect(isExhaustionError({ type: "provider.internal" })).toBe(false)
   })
 })

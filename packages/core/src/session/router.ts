@@ -85,13 +85,25 @@ export function refKey(ref: Pick<Model.Ref, "providerID" | "id">): string {
 }
 
 /**
- * True for the collapsed exhaustion error. `toSessionError` folds every
- * quota/limit subtype (free-limit, go-limit, budget-limit,
- * model-budget-limit, quota, chatgpt-limit) into `provider.exhausted`, so
- * this single type is the hop signal.
+ * Every session error type that means a quota/limit ran out. `toSessionError`
+ * folds every quota/limit subtype into `provider.exhausted`, but a limit
+ * refusal can also arrive under its own subtype — an older server, a stored
+ * message, or a gateway that names the cap directly — and every one of them
+ * is a hop signal, never a stop. A plain throttle (`provider.rate-limit`)
+ * is not: it retries the same model with backoff.
  */
+const EXHAUSTION_TYPES: ReadonlySet<string> = new Set([
+  "provider.exhausted",
+  "provider.free-limit",
+  "provider.go-limit",
+  "provider.budget-limit",
+  "provider.model-budget-limit",
+  "provider.quota",
+  "provider.chatgpt-limit",
+])
+
 export function isExhaustionError(error: { readonly type: string }): boolean {
-  return error.type === "provider.exhausted"
+  return EXHAUSTION_TYPES.has(error.type)
 }
 
 /** Effort from prompt metadata; anything unknown falls back to automatic. */
