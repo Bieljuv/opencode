@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test"
 import { statSync } from "node:fs"
-import { cp, mkdtemp, rm } from "node:fs/promises"
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { createRequire } from "node:module"
 import os from "node:os"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
-import type { Configuration } from "electron-builder"
+import type { Configuration, CustomWindowsSignTaskConfiguration } from "electron-builder"
 import { getConfig } from "./electron-builder.config"
 import { CLI_BINARIES, nodePtyPackage } from "./script/utils"
 
@@ -18,23 +18,30 @@ const channels = [
   { channel: "prod", appId: "com.manostech.editor" },
 ] as const
 
-function load(channel: string, target?: string): Configuration {
+function load(channel: string, target?: string, signCommand?: string): Configuration {
   const previous = process.env.OPENCODE_CHANNEL
   const previousTarget = process.env.OPENCODE_TARGET
+  const previousSignCommand = process.env.MANOSTECH_SIGN_CMD
   process.env.OPENCODE_CHANNEL = channel
 
   if (target !== undefined) process.env.OPENCODE_TARGET = target
   else delete process.env.OPENCODE_TARGET
+
+  if (signCommand !== undefined) process.env.MANOSTECH_SIGN_CMD = signCommand
+  else delete process.env.MANOSTECH_SIGN_CMD
 
   try {
     return getConfig()
   } finally {
     delete process.env.OPENCODE_CHANNEL
     delete process.env.OPENCODE_TARGET
+    delete process.env.MANOSTECH_SIGN_CMD
 
     if (previous !== undefined) process.env.OPENCODE_CHANNEL = previous
 
     if (previousTarget !== undefined) process.env.OPENCODE_TARGET = previousTarget
+
+    if (previousSignCommand !== undefined) process.env.MANOSTECH_SIGN_CMD = previousSignCommand
   }
 }
 
@@ -120,10 +127,14 @@ test("the production Icon Composer package references its bundled artwork", asyn
 
 test("shared packaging defaults", async () => {
   const config = load("dev")
-  // Packaging runs in secretless build jobs; the release workflow signs and notarizes afterwards.
+  // Packaging runs in secretless build jobs; Windows signing only happens
+  // when MANOSTECH_SIGN_CMD is configured (audit item I13) — without it
+  // the installer ships unsigned exactly as today, and the updater must
+  // not start demanding a signature it never had.
   expect(config.mac?.sign).toBeUndefined()
   expect(config.mac?.notarize).toBeUndefined()
   expect(config.win?.signtoolOptions).toBeUndefined()
+  expect(config.win?.verifyUpdateCodeSignature).toBe(false)
   expect(config.dmg?.sign).not.toBe(true)
   expect(config.mac?.extendInfo?.NSAutoFillRequiresTextContentTypeForOneTimeCodeOnMac).toBe(true)
   const include = path.join(import.meta.dirname, "resources/windows/installer.nsh")
@@ -133,6 +144,50 @@ test("shared packaging defaults", async () => {
   expect(config.extraResources).toEqual([
     { from: "resources/", to: "", filter: ["opencode-cli", "opencode-cli.exe", "opencode-cli.version"] },
   ])
+})
+
+test.each(channels)("windows signing hook for $channel", ({ channel }) => {
+  const unsigned = load(channel)
+  expect(unsigned.win?.signtoolOptions).toBeUndefined()
+  expect(unsigned.win?.verifyUpdateCodeSignature).toBe(false)
+
+  const signed = load(channel, undefined, "signtool sign /a")
+  expect(typeof signed.win?.signtoolOptions?.sign).toBe("function")
+  expect(signed.win?.signtoolOptions?.signingHashAlgorithms).toEqual(["sha256"])
+  expect(signed.win?.verifyUpdateCodeSignature).toBe(true)
+})
+
+test("windows signing hook runs the configured command with the file path last", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "opencode-sign-hook-"))
+  try {
+    const stub = path.join(dir, "sign-stub.mjs")
+    const log = path.join(dir, "calls.log")
+    await writeFile(
+      stub,
+      `import { appendFileSync } from "node:fs"\nappendFileSync(${JSON.stringify(log)}, JSON.stringify(process.argv.slice(2)) + "\\n")\n`,
+    )
+    const target = path.join(dir, "editor-ia-manostech-win-x64.exe")
+    const config = load("dev", undefined, `node ${stub} ${log} "--marker=hello world"`)
+    const sign = config.win?.signtoolOptions?.sign
+    expect(typeof sign).toBe("function")
+    await sign({ path: target } as unknown as CustomWindowsSignTaskConfiguration)
+    const calls = (await readFile(log, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+    expect(calls).toEqual([[log, "--marker=hello world", target]])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test("windows signing hook fails the build when the configured command fails", async () => {
+  const config = load("dev", undefined, `node -e "process.exit(3)"`)
+  const sign = config.win?.signtoolOptions?.sign
+  expect(typeof sign).toBe("function")
+  await expect(
+    sign({ path: "editor-ia-manostech-win-x64.exe" } as unknown as CustomWindowsSignTaskConfiguration),
+  ).rejects.toThrow(/Failed to sign .* \(exit code 3\)/)
 })
 
 test("trims external dependencies without excluding runtime files", () => {

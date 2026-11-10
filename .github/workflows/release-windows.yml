@@ -4,8 +4,15 @@ name: release-windows
 # to GitHub Releases — the auto-update feed (electron-updater, github
 # provider). The installer + latest.yml become release assets; the installed
 # app checks the latest release and downloads the update from there.
-# No signing and no extra tokens: release creation uses the built-in
-# GITHUB_TOKEN (gh CLI, preinstalled on the runner).
+# No signing by default and no extra tokens: release creation uses the
+# built-in GITHUB_TOKEN (gh CLI, preinstalled on the runner). Windows code
+# signing is opt-in via the MANOSTECH_SIGN_CMD env var
+# (packages/desktop/script/sign-windows.ts): without it the installer ships
+# unsigned exactly as today; with it, electron-builder signs the app
+# executable, the NSIS installer and the uninstaller, and the updater
+# verifies the signature. No certificate is configured here — buying one
+# (Certum Standard OV, ~US$ 99/year, see the Forge signing guide) is a
+# separate decision.
 #
 # Trigger: push a tag `editor-vX.Y.Z` (e.g. `editor-v3.0.0`). The tag IS the
 # release version (OPENCODE_VERSION comes from it), so the tag must be
