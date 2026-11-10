@@ -1,0 +1,99 @@
+name: build-windows
+
+# Test build of the rebranded desktop (Editor IA ManosTech) for Windows.
+# Produces an UNSIGNED NSIS installer as a workflow artifact — nothing is
+# published, signed or released, and no secrets or tokens are used.
+# Mirrors the upstream release flow (build-cli -> build-desktop -> installer)
+# collapsed into one job, without the sign/publish jobs.
+#
+# The test artifact is NOT identical to the release artifact: it is built
+# without the release secrets, so the Google button stays hidden and the
+# usage reporter stays mute. It validates compilation and packaging only.
+#
+# Triggers: manual dispatch, any push to dev or to a manostech-* branch
+# (so the workflow runs from the branch itself), or any pull request to dev.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["dev", "manostech-*"]
+  pull_request:
+    branches: ["dev"]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows-x64:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      OPENCODE_CHANNEL: dev
+      OPENCODE_TARGET: windows-x64
+    steps:
+      - name: Check out
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      # The repo's own setup action: Node 24 (node-gyp needs Node >= 22),
+      # Bun from packageManager (1.4.4, overridden here), then
+      # `bun install --frozen-lockfile`.
+      - name: Set up Bun
+        uses: ./.github/actions/setup-bun
+        with:
+          bun-version: 1.4.4
+
+      # Builds packages/cli/dist/cli-windows-x64-baseline — the CLI the
+      # desktop bundles. Built from this commit so desktop and CLI agree.
+      # No BUN_COMPILE_RELEASE: Bun.build uses the installed Bun 1.4.4 as
+      # the compile base, so no GitHub API call (and no token) is needed.
+      # The bundled models.dev catalog is the snapshot committed in the
+      # repo; upstream fetches a fresh one for releases.
+      - name: Build CLI
+        working-directory: packages/cli
+        run: bun run build
+
+      # Builds the desktop into packages/desktop/out and stages the CLI
+      # into packages/desktop/resources (opencode-cli.exe + .version).
+      - name: Build desktop
+        working-directory: packages/desktop
+        run: bun run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      # Packs the unpacked app into dist/desktop/app (no installer yet).
+      - name: Pack unpacked app
+        working-directory: packages/desktop
+        timeout-minutes: 60
+        run: bun run pack
+
+      # Builds the NSIS installer around the unpacked app.
+      # NOTE: pack.ts's OPENCODE_DESKTOP_APP path is not used here on
+      # purpose: it copies a hardcoded `dist/opencode-desktop-win-x64.exe`,
+      # but the rebrand renamed the artifact to
+      # `editor-ia-manostech-win-x64.exe`, so that path would fail.
+      # Calling electron-builder directly with --prepackaged produces the
+      # same installer without that copy.
+      - name: Pack NSIS installer
+        working-directory: packages/desktop
+        timeout-minutes: 60
+        run: bunx electron-builder --win --x64 --publish never --config electron-builder.config.ts --prepackaged ../../dist/desktop/app
+
+      - name: Upload installer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: editor-ia-manostech-windows-x64
+          path: |
+            packages/desktop/dist/editor-ia-manostech-win-x64.exe
+            packages/desktop/dist/latest.yml
+          if-no-files-found: error
+          retention-days: 30
