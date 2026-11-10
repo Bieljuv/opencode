@@ -6,14 +6,19 @@ name: build-windows
 # Mirrors the upstream release flow (build-cli -> build-desktop -> installer)
 # collapsed into one job, without the sign/publish jobs.
 #
-# Triggers: manual dispatch, or any push to a manostech-* branch (so the
-# workflow runs from the branch itself). The dev trigger is added when this
-# workflow is merged.
+# The test artifact is NOT identical to the release artifact: it is built
+# without the release secrets, so the Google button stays hidden and the
+# usage reporter stays mute. It validates compilation and packaging only.
+#
+# Triggers: manual dispatch, any push to dev or to a manostech-* branch
+# (so the workflow runs from the branch itself), or any pull request to dev.
 
 on:
   workflow_dispatch:
   push:
-    branches: ["manostech-*"]
+    branches: ["dev", "manostech-*"]
+  pull_request:
+    branches: ["dev"]
 
 permissions:
   contents: read
