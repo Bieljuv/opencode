@@ -27,6 +27,14 @@ export * as SessionRouter from "./router.js"
  * keyword rules: a question is answered directly (simple), a small change
  * is simple, and only a long, multi-part, or architectural request is
  * complex.
+ *
+ * Gateway mode: when the ManosTech gateway is active, the only model this
+ * router ever sees is `manostech/auto`, so the chain built here has a
+ * single element and no hop ever happens in the app — provider failover
+ * and model selection happen on the server, invisible to the app. The law
+ * above still describes the local fallback (direct provider keys), and
+ * complexity classification and effort keep running; they just no longer
+ * pick a local model or rescue a turn.
  */
 import { Model } from "@opencode/schema/model"
 
