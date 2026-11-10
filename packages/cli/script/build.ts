@@ -15,6 +15,7 @@ import { verifyArtifact, verifySimulationGraph } from "./verify-artifact"
 import { resolveOpencodePty } from "./opencode-pty"
 import { NativeArch } from "../../../script/native-arch"
 import { bundledModelsSnapshot, modelsSnapshotPlugin } from "../../core/script/models-snapshot"
+import { selectBuildTargets, targetName, type BuildTarget } from "./build-targets"
 
 const dir = path.resolve(import.meta.dirname, "..")
 const binary = "opencode"
@@ -37,37 +38,13 @@ const highlights = Script.preview ? undefined : embed(process.env.OPENCODE_RELEA
 const releaseAssets = new Map<string, Promise<Map<string, string>>>()
 const modelsSnapshot = modelsSnapshotPlugin(await bundledModelsSnapshot())
 
-const allTargets: {
-  os: string
-  arch: "arm64" | "x64"
-  abi?: "musl"
-  avx2?: false
-}[] = [
-  { os: "linux", arch: "arm64" },
-  { os: "linux", arch: "x64" },
-  { os: "linux", arch: "x64", avx2: false },
-  { os: "linux", arch: "arm64", abi: "musl" },
-  { os: "linux", arch: "x64", abi: "musl" },
-  { os: "linux", arch: "x64", abi: "musl", avx2: false },
-  { os: "darwin", arch: "arm64" },
-  { os: "darwin", arch: "x64" },
-  { os: "darwin", arch: "x64", avx2: false },
-  { os: "win32", arch: "arm64" },
-  { os: "win32", arch: "x64" },
-  { os: "win32", arch: "x64", avx2: false },
-]
-
-const targets =
-  requestedTarget !== undefined
-    ? allTargets.filter((item) => targetName(item) === `${binary}-${requestedTarget}`)
-    : singleFlag
-      ? allTargets.filter((item) => {
-          if (item.os !== process.platform || item.arch !== process.arch) return false
-          if (item.avx2 === false) return baselineFlag
-          return item.abi === undefined
-        })
-      : allTargets
-if (!targets.length) throw new Error(`Unknown build target: ${requestedTarget}`)
+const targets = selectBuildTargets({
+  requestedTarget,
+  single: singleFlag,
+  baseline: baselineFlag,
+  platform: process.platform,
+  arch: process.arch,
+})
 
 // Bun 1.4.4 skips native packages for the other libc by default, but the musl targets need them.
 if (!skipInstall)
@@ -243,7 +220,7 @@ export default { path: file, version: ${JSON.stringify(opencodePty.version)}, sh
   await verifyArtifact(path.join(outdir, name))
 }
 
-async function compileExecutable(item: (typeof allTargets)[number]) {
+async function compileExecutable(item: BuildTarget) {
   const release = process.env.BUN_COMPILE_RELEASE
   if (!release) return
 
@@ -330,16 +307,4 @@ function compileReleaseAssets(release: string) {
     })
   releaseAssets.set(release, pending)
   return pending
-}
-
-function targetName(item: (typeof allTargets)[number]) {
-  return [
-    binary,
-    item.os === "win32" ? "windows" : item.os,
-    item.arch,
-    item.avx2 === false ? "baseline" : undefined,
-    item.abi,
-  ]
-    .filter(Boolean)
-    .join("-")
 }

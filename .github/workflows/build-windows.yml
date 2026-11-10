@@ -54,13 +54,17 @@ jobs:
 
       # Builds packages/cli/dist/cli-windows-x64-baseline — the CLI the
       # desktop bundles. Built from this commit so desktop and CLI agree.
+      # The --single --baseline flags pick the baseline binary of
+      # OPENCODE_TARGET (windows-x64): without them the CLI build would
+      # produce the plain cli-windows-x64 and the desktop would find no
+      # local CLI and download the published upstream one instead.
       # No BUN_COMPILE_RELEASE: Bun.build uses the installed Bun 1.4.4 as
       # the compile base, so no GitHub API call (and no token) is needed.
       # The bundled models.dev catalog is the snapshot committed in the
       # repo; upstream fetches a fresh one for releases.
       - name: Build CLI
         working-directory: packages/cli
-        run: bun run build
+        run: bun run build --single --baseline
 
       # Builds the desktop into packages/desktop/out and stages the CLI
       # into packages/desktop/resources (opencode-cli.exe + .version).
