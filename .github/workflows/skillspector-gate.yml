@@ -1,0 +1,59 @@
+name: skillspector-gate
+
+# ManosTech skill gate: no agent skill enters the app without passing the
+# NVIDIA SkillSpector security scan (static analysis only, --no-llm: nothing
+# leaves the machine, no key needed). Fails closed on DO NOT INSTALL
+# (score > 50). Runs only on PRs that touch skill files, so unrelated PRs
+# are never blocked by it. Manual dispatch runs the full scan.
+#
+# Skill roots (see .github/scripts/skillspector-gate.sh): skills shipped by
+# this fork (packages/plugins, .opencode/skills) plus upstream's figma plugin
+# (ships in the app) and the test fixtures that carry SKILL.md.
+
+on:
+  pull_request:
+    branches: [dev]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "packages/plugins/**/SKILL.md"
+      - "packages/plugins/**/skills/**"
+      - ".opencode/skills/**"
+      - "packages/core/test/config/fixture/skills/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: skillspector gate
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # A pull request checks out its merge into the current base; the first parent is that base.
+          fetch-depth: 2
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # Pinned to the version verified locally (v2.12.0). The scan runs with
+      # --no-llm inside the gate script: static analysis only, no key.
+      - name: Install SkillSpector
+        run: uv tool install git+https://github.com/NVIDIA/skillspector.git@v2.12.0
+
+      - name: Scan changed skills
+        if: github.event_name == 'pull_request'
+        run: .github/scripts/skillspector-gate.sh --changed HEAD^1
+
+      - name: Scan all skills
+        if: github.event_name == 'workflow_dispatch'
+        run: .github/scripts/skillspector-gate.sh --all
