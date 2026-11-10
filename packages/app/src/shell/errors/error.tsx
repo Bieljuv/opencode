@@ -9,6 +9,7 @@ import { usePlatform } from "@/runtime/platform/platform"
 import { useLanguage } from "@/runtime/i18n/language"
 import { createIpcClients } from "@/runtime/plugin/ipc"
 import { errorDescriptionKey, errorStatus } from "./description"
+import { errorDetailsForDisplay } from "./details"
 import {
   INITIAL_ERROR_PAGE_STATE,
   isUpdaterBusy,
@@ -269,7 +270,10 @@ interface ErrorPageProps {
 export const ErrorPage: Component<ErrorPageProps> = (props) => {
   const platform = usePlatform()
   const language = useLanguage()
+  // The full chain stays in the main-process log (Export Logs) and in a Sentry
+  // report; the field below only ever shows the masked line.
   const formattedError = () => formatError(props.error, language.t)
+  const displayedError = () => errorDetailsForDisplay(props.error, language.t)
   const status = () => errorStatus(props.error)
   const [pageState, setPageState] = createSignal(INITIAL_ERROR_PAGE_STATE)
   let capture: typeof captureException | undefined
@@ -310,7 +314,8 @@ export const ErrorPage: Component<ErrorPageProps> = (props) => {
           dispatch(
             error === undefined ? { type: "action.succeeded", attempt } : { type: "action.failed", attempt, error },
           ),
-        (cause) => dispatch({ type: "action.failed", attempt, error: formatError(cause, language.t) }),
+        // An action's failure detail never reaches this page: only the generic message.
+        () => dispatch({ type: "action.failed", attempt, error: language.t("common.requestFailed") }),
       )
 
     if (effect.type === "logs.export") {
@@ -419,7 +424,7 @@ export const ErrorPage: Component<ErrorPageProps> = (props) => {
           </p>
         </div>
         <TextField
-          value={formattedError()}
+          value={displayedError()}
           readOnly
           copyable
           multiline
