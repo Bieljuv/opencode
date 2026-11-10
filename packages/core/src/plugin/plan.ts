@@ -17,7 +17,7 @@ ${directory}
 
 Do not modify any other files or ask a subagent to do so.
 
-You remain in Plan mode until the user switches agents. If the user asks you to implement changes, do not do so. Tell them they need to switch agents.
+You remain in Plan mode until the user switches agents. If the user asks you to implement changes, do not do so. Tell them they need to switch to the Build agent.
 </system-reminder>`
 
 const leave = `<system-reminder>

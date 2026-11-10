@@ -163,6 +163,7 @@ describe("plan plugin reminders", () => {
       expect(persisted[0]).toContain("Do not create or update plan files unless the user explicitly asks you to")
       expect(persisted[0]).toContain(planDirectory)
       expect(persisted[0]).toContain("Do not modify any other files")
+      expect(persisted[0]).toContain("switch to the Build agent")
       expect(persisted[1]).toContain("NO LONGER in Plan mode")
     }),
   )
