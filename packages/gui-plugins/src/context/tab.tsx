@@ -12,7 +12,7 @@ import { useI18n } from "@opencode/ui/context/i18n"
 import { File } from "@opencode/session-ui/file"
 import { Markdown } from "@opencode/session-ui/markdown"
 import type { SessionMessageInfo } from "@opencode/client/promise"
-import { lastAssistantWithUsage } from "@opencode/client/solid"
+import { cumulativeSessionUsage, lastAssistantWithUsage } from "@opencode/client/solid"
 import { createKeyed, usePlugin, type MountedSession } from "@opencode/plugin/gui"
 import { catalogModel, syncCatalog } from "./catalog"
 import { fetchSessionExport, sanitizeMessageForDisplay, sessionExportFilename } from "./export"
@@ -113,7 +113,8 @@ export default function SessionContextTab(props: { session: MountedSession }) {
   // Model switches are hop metadata, not conversation — the raw list omits them, like the export.
   const rawMessages = createMemo(() => messages().filter((message) => message.type !== "model-switched"))
 
-  // Same step as the TUI and the header button: after the last completed compaction and before an undo boundary.
+  // The context window now: the latest step after the last compaction. Its usage is the
+  // window gauge (how full the context is), not the session spend.
   const context = createMemo(() => {
     const message = lastAssistantWithUsage(messages(), info()?.revert?.messageID)
 
@@ -129,13 +130,14 @@ export default function SessionContextTab(props: { session: MountedSession }) {
 
     return {
       message,
-      tokens: message.tokens,
       limit: entry?.model?.limit.context,
-      input: message.tokens.input,
-      total,
       usage: entry?.model?.limit.context ? Math.round((total / entry.model.limit.context) * 100) : null,
     }
   })
+
+  // Every token the session has spent, across all models and providers that answered.
+  // The total only grows: a model switch or a compaction never moves it back.
+  const cumulative = createMemo(() => cumulativeSessionUsage(messages(), info()?.revert?.messageID))
 
   const formatter = createMemo(() => createSessionContextFormatter(i18n.locale()))
 
@@ -186,15 +188,15 @@ export default function SessionContextTab(props: { session: MountedSession }) {
     { label: "stats.provider", value: providerLabel },
     { label: "stats.model", value: modelLabel },
     { label: "stats.limit", value: () => formatter().number(context()?.limit) },
-    { label: "stats.totalTokens", value: () => formatter().number(context()?.total) },
+    { label: "stats.totalTokens", value: () => formatter().number(cumulative().total) },
     { label: "stats.usage", value: () => formatter().percent(context()?.usage) },
-    { label: "stats.inputTokens", value: () => formatter().number(context()?.input) },
-    { label: "stats.outputTokens", value: () => formatter().number(context()?.tokens.output) },
-    { label: "stats.reasoningTokens", value: () => formatter().number(context()?.tokens.reasoning) },
+    { label: "stats.inputTokens", value: () => formatter().number(cumulative().input) },
+    { label: "stats.outputTokens", value: () => formatter().number(cumulative().output) },
+    { label: "stats.reasoningTokens", value: () => formatter().number(cumulative().reasoning) },
     {
       label: "stats.cacheTokens",
       value: () =>
-        `${formatter().number(context()?.tokens.cache.read)} / ${formatter().number(context()?.tokens.cache.write)}`,
+        `${formatter().number(cumulative().cache.read)} / ${formatter().number(cumulative().cache.write)}`,
     },
     { label: "stats.userMessages", value: () => counts().user.toLocaleString(i18n.locale()) },
     { label: "stats.assistantMessages", value: () => counts().assistant.toLocaleString(i18n.locale()) },
