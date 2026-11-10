@@ -1,6 +1,20 @@
 import { describe, expect, test } from "bun:test"
 import { Message, ToolMessage, ToolResultPart, Media, UserMessage } from "@opencode/ai/effect"
-import { boundImages, HIDE_MODEL_IDENTITY, unsupportedParts } from "@opencode/core/session/model-request"
+import { OpenAIChat } from "@opencode/ai/protocols"
+import { Agent } from "@opencode/schema/agent"
+import { Model } from "@opencode/schema/model"
+import { Provider } from "@opencode/schema/provider"
+import {
+  baseTranscript,
+  boundImages,
+  DIRECT_REPLY,
+  FAILED_TOOL_RETRY,
+  HIDE_MODEL_IDENTITY,
+  unsupportedParts,
+} from "@opencode/core/session/model-request"
+import { SessionMessage } from "@opencode/core/session/message"
+import { SessionRunnerModel } from "@opencode/core/session/runner/model"
+import { DateTime, Effect } from "effect"
 
 const capabilities = (input: string[]) => ({ tools: true, input, output: ["text"] })
 
@@ -270,5 +284,84 @@ describe("SessionModelRequest.HIDE_MODEL_IDENTITY", () => {
     ]) {
       expect(HIDE_MODEL_IDENTITY).toContain(topic)
     }
+  })
+})
+
+describe("SessionModelRequest.DIRECT_REPLY", () => {
+  test("a greeting or unrelated question is not a request to continue the task", () => {
+    for (const topic of [
+      "not a request to continue that task",
+      "answer it directly in chat",
+      "and then wait for the user",
+      "do not resume the previous task",
+      "do not call tools, do not edit files, and do not create a task card",
+      "only resumes when the user explicitly asks to continue it",
+      '"continue"',
+      '"continua"',
+      '"pode continuar"',
+      "A question about the active task gets a direct chat answer too",
+    ]) {
+      expect(DIRECT_REPLY).toContain(topic)
+    }
+    for (const greeting of ['"oi"', '"olá"', '"bom dia"', '"boa tarde"', '"boa noite"']) {
+      expect(DIRECT_REPLY).toContain(greeting)
+    }
+  })
+})
+
+describe("SessionModelRequest.FAILED_TOOL_RETRY", () => {
+  test("a failed tool call is never repeated identically", () => {
+    for (const topic of [
+      "never repeat the identical call",
+      "including any closest lines it shows",
+      "re-read the file first",
+      "If the same operation fails a second time, stop and tell the user what went wrong",
+    ]) {
+      expect(FAILED_TOOL_RETRY).toContain(topic)
+    }
+  })
+})
+
+describe("SessionModelRequest.baseTranscript direct reply", () => {
+  const model = SessionRunnerModel.resolved(OpenAIChat.route.model({ id: "gpt-5.5", provider: "test" }), {
+    capabilities: { tools: true, input: ["text"], output: ["text"] },
+    cost: [],
+    limit: { context: 200_000, output: 32_000 },
+  })
+  const textUser = (text: string) =>
+    SessionMessage.User.make({
+      id: SessionMessage.ID.create(),
+      type: "user",
+      text,
+      time: { created: DateTime.makeUnsafe(0) },
+    })
+  const textAssistant = (text: string) =>
+    SessionMessage.Assistant.make({
+      id: SessionMessage.ID.create(),
+      type: "assistant",
+      agent: Agent.ID.make("build"),
+      model: Model.Ref.make({ id: Model.ID.make("model"), providerID: Provider.ID.make("provider") }),
+      content: [SessionMessage.AssistantText.make({ type: "text", text })],
+      time: { created: DateTime.makeUnsafe(0) },
+    })
+
+  test("a greeting after an in-progress task still carries the direct-reply rule", () => {
+    const transcript = baseTranscript({
+      agent: Agent.Info.default(Agent.ID.make("build")),
+      model,
+      tools: { definitions: [], execute: () => Effect.die("unused tool execution") },
+      initial: [],
+      messages: [
+        textUser("Troque os sons do chat para Web Audio"),
+        textAssistant("Vou trocar os sons do chat para Web Audio."),
+        textUser("oi"),
+      ],
+    })
+    const system = transcript.system.map((part) => part.text).join("\n")
+    expect(system).toContain("not a request to continue that task")
+    expect(system).toContain("never repeat the identical call")
+    const last = transcript.messages.at(-1)
+    expect(last?.role).toBe("user")
+    expect(JSON.stringify(last)).toContain('"oi"')
   })
 })
