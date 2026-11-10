@@ -6,7 +6,7 @@ import { SessionProgressIndicatorV2 } from "@opencode/session-ui/v2/session-prog
 import { createEffect, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
 import { useLanguage } from "@/runtime/i18n/language"
 import { formatKeybind } from "@/shell/commands/command"
-import { formatElapsed } from "./activity-chips"
+import { formatElapsed } from "../duration"
 
 export type SubagentStatus = "running" | "succeeded" | "failed" | "interrupted"
 

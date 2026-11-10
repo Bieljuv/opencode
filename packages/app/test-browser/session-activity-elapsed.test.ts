@@ -8,7 +8,7 @@ mock.module("@/runtime/i18n/language", () => ({
   useLanguage: () => ({ t, activitySummary: () => "work" }),
 }))
 
-const { formatElapsed } = await import("@/session/composer/activity-chips")
+const { formatElapsed } = await import("@/session/duration")
 
 describe("formatElapsed", () => {
   test.each([
