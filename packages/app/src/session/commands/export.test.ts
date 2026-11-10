@@ -301,6 +301,166 @@ describe("sanitizeSessionExport", () => {
       expect(json).toContain(kept)
     }
   })
+
+  test("scrubs provider and model names from the conversation text", () => {
+    const user = {
+      id: "msg_user_text",
+      type: "user",
+      text: "Use o mimo-v2.6-flash-free e veja ~/.opencode/skills",
+      time: { created: 1000 },
+    }
+
+    const assistant = {
+      id: "msg_assistant_text",
+      type: "assistant",
+      agent: "build",
+      tokens,
+      time: { created: 1100 },
+      content: [
+        { type: "text", text: "Rodei com openrouter/anthropic/claude-sonnet-4.5 e deepseek-chat." },
+        { type: "text", text: "An active OpenCode Go subscription is required to use Go models." },
+        { type: "text", text: "Os modelos opencode-go e o hy4 ficam no manostech/auto." },
+        { type: "text", text: "Use a [Go](/console/go) subscription de outros clientes." },
+        { type: "text", text: "Veja [Go](/console/go) para mais detalhes." },
+      ],
+      metadata: {
+        toolResult: '{"model": "openai/gpt-oss-120b", "providerID": "openrouter"}',
+      },
+    }
+
+    const compaction = {
+      id: "msg_compaction_text",
+      type: "compaction",
+      status: "completed",
+      reason: "auto",
+      tokens,
+      time: { created: 1200 },
+      summary: "A sessão usou o opencode e o google/v1beta/models para gerar a imagem.",
+    }
+
+    const info = { id: "ses_1" } as SessionInfo
+    const messages = [user, assistant, compaction] as unknown as SessionMessageInfo[]
+
+    const result = sanitizeSessionExport({ info, messages })
+    const json = JSON.stringify(result)
+
+    for (const leaked of [
+      "opencode",
+      "OpenCode",
+      "mimo-v2.6-flash-free",
+      "claude-sonnet-4.5",
+      "deepseek-chat",
+      "hy4",
+      "gpt-oss-120b",
+      "manostech/auto",
+      "opencode-go",
+      "providerID",
+      "openrouter",
+      "openai",
+      "google/v1beta",
+      "An active OpenCode Go subscription",
+      "[Go](/console/go)",
+    ]) {
+      expect(json).not.toContain(leaked)
+    }
+
+    for (const kept of [
+      "Use o Automático e veja ~/.editor/skills",
+      "Rodei com Automático e Automático.",
+      "Tente novamente mais tarde.",
+      "Os modelos Automático e o Automático ficam no Automático.",
+      "Veja Automático para mais detalhes.",
+      "A sessão usou o editor e o Automático/models para gerar a imagem.",
+    ]) {
+      expect(json).toContain(kept)
+    }
+
+    expect(result.messages).toHaveLength(3)
+    expect(result.messages[1]).toEqual({
+      id: "msg_assistant_text",
+      type: "assistant",
+      agent: "build",
+      tokens,
+      time: { created: 1100 },
+      content: [
+        { type: "text", text: "Rodei com Automático e Automático." },
+        { type: "text", text: "Tente novamente mais tarde." },
+        { type: "text", text: "Os modelos Automático e o Automático ficam no Automático." },
+        { type: "text", text: "Tente novamente mais tarde." },
+        { type: "text", text: "Veja Automático para mais detalhes." },
+      ],
+      metadata: {
+        toolResult: '{"model": "Automático", "Automático": "Automático"}',
+      },
+    })
+  })
+
+  test("keeps a web search and file paths that only look like a model reference", () => {
+    const assistant = {
+      id: "msg_assistant_keep",
+      type: "assistant",
+      agent: "build",
+      tokens,
+      time: { created: 1100 },
+      content: [
+        { type: "text", text: "Vou buscar no Google e ver api/leads e chat/completions." },
+        {
+          type: "text",
+          text: "Arquivo em C:/Users/ManosTech/AppData/Local/Temp/opencode/previas-test/gerar.js",
+        },
+        { type: "text", text: "Resposta em application/json de public/app.js." },
+      ],
+    }
+
+    const info = { id: "ses_1" } as SessionInfo
+    const messages = [assistant] as unknown as SessionMessageInfo[]
+
+    const json = JSON.stringify(sanitizeSessionExport({ info, messages }))
+
+    for (const kept of [
+      "buscar no Google",
+      "api/leads",
+      "chat/completions",
+      "C:/Users/ManosTech/AppData/Local/Temp/editor/previas-test/gerar.js",
+      "application/json",
+      "public/app.js",
+    ]) {
+      expect(json).toContain(kept)
+    }
+  })
+
+  test("keeps image data that happens to contain a model word", () => {
+    const blob = `${"A".repeat(100)}+GLm2+${"B".repeat(100)}`
+
+    const assistant = {
+      id: "msg_assistant_blob",
+      type: "assistant",
+      agent: "build",
+      tokens,
+      time: { created: 1100 },
+      content: [
+        { type: "text", text: blob },
+        { type: "text", text: "o modelo hy4 respondeu" },
+      ],
+    }
+
+    const info = { id: "ses_1" } as SessionInfo
+    const messages = [assistant] as unknown as SessionMessageInfo[]
+
+    const result = sanitizeSessionExport({ info, messages })
+
+    expect(result.messages[0]).toEqual({
+      id: "msg_assistant_blob",
+      type: "assistant",
+      agent: "build",
+      tokens,
+      time: { created: 1100 },
+      content: [
+        { type: "text", text: blob },
+        { type: "text", text: "o modelo Automático respondeu" },
+      ],
+    })
+  })
 })
 
 describe("saveSessionExport", () => {
