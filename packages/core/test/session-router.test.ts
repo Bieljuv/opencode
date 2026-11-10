@@ -369,7 +369,7 @@ describe("nextHopWithLargerWindow", () => {
 })
 
 describe("isHopSignal", () => {
-  test("every limit type, a plain throttle, and mid-task failures hop; auth, content-filter, and invalid-request do not", () => {
+  test("every limit type, a plain throttle, auth, and mid-task failures hop; content-filter and invalid-request do not", () => {
     for (const type of [
       "provider.exhausted",
       "provider.free-limit",
@@ -379,6 +379,8 @@ describe("isHopSignal", () => {
       "provider.quota",
       "provider.chatgpt-limit",
       "provider.rate-limit",
+      // A dead key is per provider: the next provider answers instead of the turn dying on it.
+      "provider.auth",
       // A model that freezes or fails mid-task is skipped, not retried until the turn dies.
       "provider.timeout",
       "provider.internal",
@@ -386,8 +388,44 @@ describe("isHopSignal", () => {
       "provider.context-too-long",
     ])
       expect(isHopSignal({ type })).toBe(true)
-    for (const type of ["provider.auth", "provider.content-filter", "provider.invalid-request"])
+    for (const type of ["provider.content-filter", "provider.invalid-request"])
       expect(isHopSignal({ type })).toBe(false)
+  })
+
+  test("an auth failure hops to another provider instead of killing the turn (log 2026-11-10)", () => {
+    // Gabriel's "oi" (2026-11-10 16:01:15Z): the first model failed with
+    // quota and the router hopped, but the second failed with auth and
+    // the turn died there with 841 models untried. The hop decisions the
+    // runner makes, in order: exhaustion hops to the next model, auth
+    // hops to a model of another provider, and the third model answers.
+    const chain = buildChain(
+      [free("openrouter", "a-free"), free("nvidia", "b-free"), free("google", "c-free")],
+      { complexity: "simple", effort: "automatico" },
+    )
+    expect(chain.length).toBe(3)
+    const tried = new Set<string>()
+    // First model: quota exhausted — hop to the next model in the chain.
+    const first = nextHop(chain, tried)
+    expect(first).toBeDefined()
+    expect(isHopSignal({ type: "provider.exhausted" })).toBe(true)
+    if (first === undefined) return
+    tried.add(refKey(first))
+    const second = nextHop(chain, tried)
+    expect(second).toBeDefined()
+    if (second === undefined) return
+    expect(second.providerID).not.toBe(first.providerID)
+    // Second model: dead key — hop again, to another provider, not death.
+    expect(isHopSignal({ type: "provider.auth" })).toBe(true)
+    expect(isExhaustionError({ type: "provider.auth" })).toBe(false)
+    tried.add(refKey(second))
+    const third = nextHopFromProvider(chain, tried, second.providerID)
+    expect(third).toBeDefined()
+    if (third === undefined) return
+    expect(third.providerID).not.toBe(second.providerID)
+    // Third model answers; the turn never sees either failure.
+    tried.add(refKey(third))
+    expect(nextHop(chain, tried)).toBeUndefined()
+    expect(nextHopFromProvider(chain, tried, third.providerID)).toBeUndefined()
   })
 })
 

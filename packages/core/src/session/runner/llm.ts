@@ -388,17 +388,23 @@ const layer = Layer.effect(
               // (timeout, provider failure, broken reply) hops the same
               // way: it cannot carry this task, so the next capable model
               // tries instead of retrying the same one until the turn
-              // dies. A prompt the model cannot hold hops to a bigger
-              // window, never to a smaller one. The switch is published as
-              // ModelSelected, so the retry re-resolves the new model;
-              // the user never sees the hop. When the whole chain is
-              // exhausted, an exhaustion error fails at once with the
-              // generic message: falling through would let the retry
-              // policy burn its same-model attempts (a rate-limit-shaped
-              // exhaustion is retryable) and only then fail — with the
-              // original error, not the generic one. A throttle or a
-              // mid-task failure with no hop left falls through to the
-              // same-model retry instead.
+              // dies. An authentication failure hops the same way: the
+              // credential is per provider, so a dead key on one provider
+              // must not condemn the models of the others, and the hop
+              // prefers a different provider. A prompt the model cannot
+              // hold hops to a bigger window, never to a smaller one. The
+              // switch is published as ModelSelected, so the retry
+              // re-resolves the new model; the user never sees the hop.
+              // When the whole chain is exhausted, an exhaustion error
+              // fails at once with the generic message: falling through
+              // would let the retry policy burn its same-model attempts
+              // (a rate-limit-shaped exhaustion is retryable) and only
+              // then fail — with the original error, not the generic one.
+              // An auth error with no hop left fails at once the same
+              // way: retrying the same model would fail the same way,
+              // and the per-model auth error must never reach the user.
+              // A throttle or a mid-task failure with no hop left falls
+              // through to the same-model retry instead.
               // Diagnostic log only, never the screen: each hop records
               // which model was tried and why the chain stopped.
               if (SessionRouter.isHopSignal(error)) {
@@ -437,6 +443,20 @@ const layer = Layer.effect(
                     chain: chain.length,
                   })
                   return { retry: false as const }
+                }
+                if (error.type === "provider.auth") {
+                  // A dead key never heals with backoff: the same model
+                  // would fail the same way, so the turn ends now with
+                  // the generic message instead of the auth error.
+                  yield* Effect.logWarning("manostech router chain exhausted", {
+                    sessionID,
+                    lastModel: SessionRouter.refKey(loaded.model.ref),
+                    errorType: error.type,
+                    errorStatus: error.status,
+                    tried: tried.size,
+                    chain: chain.length,
+                  })
+                  return yield* new StepFailedError({ error: SessionRouter.CASCADE_EXHAUSTED })
                 }
                 yield* Effect.logInfo("manostech router no hop left, same-model retry", {
                   sessionID,
