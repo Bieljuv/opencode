@@ -269,10 +269,17 @@ const layer = Layer.effect(
       // a model that answered a small probe can still freeze on the real
       // request, so the size used here is the packed turn, never a probe.
       const promptTokens = SessionCompaction.estimateContext(first)
+      // A new turn rotates the starting free model past the one that
+      // answered the previous turn, so consecutive turns spread across
+      // the free pool instead of draining a single model to its free
+      // limit. An explicit model never rotates; a continuation step
+      // keeps the turn's model (see stepHead below).
+      const rotateAfter = !explicit && step === 1 ? first.session.model : undefined
       const chain = SessionRouter.buildChain(available, {
         complexity,
         effort,
         promptTokens,
+        rotateAfter,
       })
       const tried = new Set<string>()
       // Diagnostic log only, never the screen: the next failure has to
@@ -294,8 +301,10 @@ const layer = Layer.effect(
         // The chain head answers this step unless it is already the session
         // model. The switch is published, so the loop below re-resolves the
         // new model; the user never sees the change. A head that is already
-        // the session model needs no switch and no context reload.
-        const head = SessionRouter.nextHop(chain, tried)
+        // the session model needs no switch and no context reload. On a
+        // continuation step the head is the turn's model, so rotation never
+        // switches models mid-task.
+        const head = SessionRouter.stepHead(chain, tried, first.session.model, step === 1)
         if (head !== undefined) {
           tried.add(SessionRouter.refKey(head))
           if (

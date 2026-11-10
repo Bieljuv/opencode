@@ -11,6 +11,11 @@ export * as SessionRouter from "./router.js"
  * The law, in order:
  * - Free models first, always. Simple chats and requests use the lightest
  *   free model, even among the free ones.
+ * - Turns rotate the starting free model round-robin per session: each
+ *   new turn starts at the next capable free model after the one that
+ *   answered the previous turn, so one free model does not absorb every
+ *   turn until its free limit breaks. The rest of the chain stays the
+ *   fallback, and a complex turn never rotates down to a free model.
  * - On error or exhausted credit, hop to the next free model. Never stop at
  *   a paywall: subscription models (OpenCode Go) are never in any chain.
  * - Complex requests use paid models with a configured key — Kimi K3.1 Pro
@@ -462,6 +467,23 @@ function orderFree(free: readonly Model.Info[], effort: Effort): Model.Info[] {
 }
 
 /**
+ * Round-robin over the free run: the run starts at the model after
+ * `after`, wrapping to the first. A model outside the run (or no `after`)
+ * leaves the order untouched, so the first turn of a session and a turn
+ * that ended on a paid model both start at the preferred free model. A
+ * single-model run never changes.
+ */
+function rotateFreeRun(
+  free: readonly Model.Ref[],
+  after: Pick<Model.Ref, "providerID" | "id"> | undefined,
+): Model.Ref[] {
+  if (after === undefined) return [...free]
+  const index = free.findIndex((ref) => ref.providerID === after.providerID && ref.id === after.id)
+  if (index < 0) return [...free]
+  return [...free.slice(index + 1), ...free.slice(0, index + 1)]
+}
+
+/**
  * The hop chain for one turn: ordered model refs, each carrying the variant
  * that expresses the effort on that model.
  *
@@ -477,10 +499,21 @@ function orderFree(free: readonly Model.Info[], effort: Effort): Model.Info[] {
  * When the filter would empty the pool, it is dropped entirely: the turn
  * still runs, and compaction handles the overflow. A filter that leaves no
  * free model capable escalates the chain to the paid models that fit.
+ *
+ * `rotateAfter` is the model that answered the previous turn: the free
+ * run starts at the next capable free model after it, so consecutive
+ * turns spread across the free pool instead of draining one model to its
+ * free limit. It only moves the free run — a complex turn still starts
+ * on its paid head, never on a free model.
  */
 export function buildChain(
   available: readonly Model.Info[],
-  input: { complexity: Complexity; effort: Effort; promptTokens?: number },
+  input: {
+    complexity: Complexity
+    effort: Effort
+    promptTokens?: number
+    rotateAfter?: Pick<Model.Ref, "providerID" | "id">
+  },
 ): Model.Ref[] {
   const pool = available.filter(isRoutable)
   const { promptTokens } = input
@@ -502,13 +535,14 @@ export function buildChain(
     })
   }
   const orderedFree = orderFree(free, input.effort).map(toRef)
+  const rotatedFree = rotateFreeRun(orderedFree, input.rotateAfter)
   if (input.complexity === "complex")
     return [
       ...(kimi === undefined ? [] : [toRef(kimi)]),
       ...otherPaid.map(toRef),
-      ...orderedFree,
+      ...rotatedFree,
     ]
-  return [...orderedFree, ...otherPaid.map(toRef), ...(kimi === undefined ? [] : [toRef(kimi)])]
+  return [...rotatedFree, ...otherPaid.map(toRef), ...(kimi === undefined ? [] : [toRef(kimi)])]
 }
 
 /** First chain ref not tried yet in this turn, or undefined when exhausted. */
@@ -517,6 +551,28 @@ export function nextHop(
   tried: ReadonlySet<string>,
 ): Model.Ref | undefined {
   return chain.find((ref) => !tried.has(refKey(ref)))
+}
+
+/**
+ * The model a step starts on. A new turn takes the chain head (already
+ * rotated past the model that answered the previous turn); a continuation
+ * step keeps the turn's model when it is still in the chain, so rotation
+ * never switches models mid-task. Falls back to the chain head when the
+ * session has no model or it left the chain.
+ */
+export function stepHead(
+  chain: readonly Model.Ref[],
+  tried: ReadonlySet<string>,
+  sessionModel: Model.Ref | undefined,
+  isNewTurn: boolean,
+): Model.Ref | undefined {
+  if (!isNewTurn && sessionModel !== undefined) {
+    const current = chain.find(
+      (ref) => refKey(ref) === refKey(sessionModel) && !tried.has(refKey(ref)),
+    )
+    if (current !== undefined) return current
+  }
+  return nextHop(chain, tried)
 }
 
 /**
