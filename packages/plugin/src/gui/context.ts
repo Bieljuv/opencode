@@ -19,6 +19,7 @@ import type {
   Attention,
   ClientUsage,
   Commands,
+  DailyTokens,
   Desktop,
   Dialogs,
   Embeds,
@@ -161,6 +162,21 @@ export interface Context extends BaseContext {
    * ```
    */
   readonly clientUsage: (() => Promise<ClientUsage | undefined>) | undefined
+  /**
+   * Tokens spent today (America/Sao_Paulo) across every session on a
+   * server, from the server's own session data; undefined on the web
+   * and when the server cannot answer. The Context tab falls back to
+   * the session total then. Only the total and the day reach the
+   * plugin — never which model or provider answered, and never a
+   * limit or a quota.
+   *
+   * @example
+   * ```ts
+   * const today = (await ctx.dailyTokens?.(serverID))?.total
+   * if (today === undefined) return
+   * ```
+   */
+  readonly dailyTokens: ((serverID: string) => Promise<DailyTokens | undefined>) | undefined
   /**
    * Dialogs that close with the owner that opened them, else when the plugin goes away.
    *

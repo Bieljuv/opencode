@@ -37,6 +37,7 @@ import {
 } from "@opencode/plugin/gui"
 import { BuiltinPanel, type BuiltinStoreFrom, type BuiltinStoreOptions } from "@opencode/plugin/gui/builtin"
 import { usePlatform } from "@/runtime/platform/platform"
+import { fetchDailyTokens } from "@/client/daily-tokens"
 import { same } from "@/runtime/persistence/equality"
 import { Persist, persisted, removePersisted } from "@/runtime/persistence/storage"
 import { useGlobal, type ServerCtx } from "@/runtime/server/runtime"
@@ -349,13 +350,28 @@ export function createHostApis() {
     // app — the plugin only needs the percents and the instants.
     clientUsage: () => {
       const getClientUsage = platform.getClientUsage
+
       if (!getClientUsage) return undefined
 
       return async () => {
         const usage = await getClientUsage()
+
         if (!usage) return undefined
 
         return { percent: usage.percent, resetsAt: usage.resetsAt, weekly: usage.weekly }
+      }
+    },
+    // ManosTech: tokens spent today across every session on a server, from
+    // the server's own session data — the direct-model work the plan bar
+    // never sees. Undefined on the web and when the server cannot answer;
+    // the plugin falls back to the session total then.
+    dailyTokens: () => {
+      return async (serverID: string) => {
+        const server = current()?.server(serverID)
+
+        if (!server) return undefined
+
+        return fetchDailyTokens(server.client).catch(() => undefined)
       }
     },
     app: () => ({

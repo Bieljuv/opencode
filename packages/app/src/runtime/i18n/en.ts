@@ -493,7 +493,6 @@ export const dict = {
   "client.account.signedInAs": "Signed in as {{email}}",
   "client.account.signOut": "Sign out",
   "client.usage.today": "Today's usage",
-  "client.usage.warning": "You've used {{percent}}% of today's usage · resets at midnight",
   "client.usage.warningPush.title": "Your usage today is almost used up",
   "client.usage.warningPush.body": "You've used {{percent}}% of today's usage. At 100%, access pauses until midnight.",
   "client.usage.resetsInHours": "resets in {{hours}}h {{minutes}}m",

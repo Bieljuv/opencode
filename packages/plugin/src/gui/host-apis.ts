@@ -1178,6 +1178,20 @@ export interface ClientUsage {
   readonly weekly: WeeklyUsage | undefined
 }
 
+/**
+ * Tokens spent today (America/Sao_Paulo) across every session on one
+ * server, from the server's own session data — the real day
+ * accumulation, whatever answered. Only the total and the day reach
+ * the interface — never which model or provider answered, and never a
+ * limit or a quota.
+ */
+export interface DailyTokens {
+  /** Tokens spent today across every session on the server. */
+  readonly total: number
+  /** The day the total covers, as `YYYY-MM-DD` in America/Sao_Paulo. */
+  readonly date: string
+}
+
 /** What `Desktop.pick` asks for. */
 export interface PickOptions {
   /** Picks folders instead of files. Defaults to false. */

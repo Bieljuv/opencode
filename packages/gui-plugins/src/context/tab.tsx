@@ -1,4 +1,4 @@
-import { createMemo, createSignal, on, onCleanup, For, Show } from "solid-js"
+import { createMemo, createSignal, on, onCleanup, onMount, For, Show } from "solid-js"
 import type { JSX } from "solid-js"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { checksum } from "@opencode/util/encode"
@@ -13,7 +13,7 @@ import { File } from "@opencode/session-ui/file"
 import { Markdown } from "@opencode/session-ui/markdown"
 import type { SessionMessageInfo } from "@opencode/client/promise"
 import { cumulativeSessionUsage, lastAssistantWithUsage } from "@opencode/client/solid"
-import { createKeyed, usePlugin, type MountedSession } from "@opencode/plugin/gui"
+import { createKeyed, usePlugin, type DailyTokens, type MountedSession } from "@opencode/plugin/gui"
 import { catalogModel, syncCatalog } from "./catalog"
 import { fetchSessionExport, sanitizeMessageForDisplay, sessionExportFilename } from "./export"
 import { createSessionContextFormatter } from "./format"
@@ -140,6 +140,43 @@ export default function SessionContextTab(props: { session: MountedSession }) {
   // The total only grows: a model switch or a compaction never moves it back.
   const cumulative = createMemo(() => cumulativeSessionUsage(messages(), info()?.revert?.messageID))
 
+  // ManosTech: the day total — every token spent today across every
+  // session on this server, from the server's own session data. While
+  // it loads (or when the host cannot answer) the stat falls back to
+  // the session total, so the number never blanks and never goes back.
+  // The per-session numbers below stay per session: only "Total de
+  // tokens" is the day total.
+  const [daily, setDaily] = createSignal<DailyTokens | undefined>(undefined)
+
+  const loadDaily = async () => {
+    const serverID = props.session.server.id
+    const getDailyTokens = ctx.dailyTokens
+
+    if (!getDailyTokens) return
+
+    const value = await getDailyTokens(serverID).catch(() => undefined)
+
+    if (ctx.signal.aborted) return
+
+    if (!value) return
+
+    if (props.session.server.id !== serverID) return
+
+    setDaily(value)
+  }
+
+  onMount(() => {
+    const timer = setInterval(() => void loadDaily(), 60_000)
+
+    onCleanup(() => clearInterval(timer))
+  })
+
+  // A server change reloads at once instead of waiting for the next poll.
+  createKeyed(
+    () => props.session.server.id,
+    () => void loadDaily(),
+  )
+
   const formatter = createMemo(() => createSessionContextFormatter(i18n.locale()))
 
   const counts = createMemo(() => {
@@ -189,7 +226,7 @@ export default function SessionContextTab(props: { session: MountedSession }) {
     { label: "stats.provider", value: providerLabel },
     { label: "stats.model", value: modelLabel },
     { label: "stats.limit", value: () => formatter().number(context()?.limit) },
-    { label: "stats.totalTokens", value: () => formatter().number(cumulative().total) },
+    { label: "stats.totalTokens", value: () => formatter().number(daily()?.total ?? cumulative().total) },
     { label: "stats.usage", value: () => formatter().percent(context()?.usage) },
     { label: "stats.inputTokens", value: () => formatter().number(cumulative().input) },
     { label: "stats.outputTokens", value: () => formatter().number(cumulative().output) },

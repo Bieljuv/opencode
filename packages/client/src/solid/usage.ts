@@ -22,6 +22,53 @@ export function lastAssistantWithUsage(messages: ReadonlyArray<SessionMessageInf
 }
 
 /**
+ * The day a timestamp falls on in America/Sao_Paulo, `YYYY-MM-DD` — the
+ * same day the daily plan limit resets on. Uses the platform time zone
+ * database, so no offset math and no DST edge: midnight in São Paulo is
+ * 03:00Z. Mirrors `todayInSaoPaulo` in the desktop main process; the
+ * client package cannot import it (dependency direction).
+ */
+export function saoPauloDayKey(timestampMs: number): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(timestampMs))
+}
+
+type AssistantWithTokens = SessionMessageAssistant & { tokens: NonNullable<SessionMessageAssistant["tokens"]> }
+
+function isAssistantWithTokens(message: SessionMessageInfo): message is AssistantWithTokens {
+  return message.type === "assistant" && message.tokens !== undefined
+}
+
+/**
+ * Every token spent on one São Paulo day, across every session that
+ * reports it: the sum over that day's assistant messages with tokens,
+ * whatever model or provider answered. Spend never comes back — a
+ * revert or a compaction does not refund it, and a message counts on
+ * the day it was created, never on the day its session was opened.
+ * Messages without tokens (a step still running, or a step that never
+ * reported usage) count nothing.
+ */
+export function dayUsageTotal(messages: ReadonlyArray<SessionMessageInfo>, day: string): number {
+  return messages
+    .filter(isAssistantWithTokens)
+    .filter((message) => saoPauloDayKey(message.time.created) === day)
+    .reduce(
+      (total, message) =>
+        total +
+        message.tokens.input +
+        message.tokens.output +
+        message.tokens.reasoning +
+        message.tokens.cache.read +
+        message.tokens.cache.write,
+      0,
+    )
+}
+
+/**
  * Every token the session has spent so far: the sum over all assistant steps before the revert
  * boundary, across every model and provider that answered. Spend never comes back — unlike the
  * context window, which only holds the latest step after the last compaction, the total keeps
