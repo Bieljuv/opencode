@@ -63,7 +63,7 @@ export const dict = {
   "command.config.reload.done": "Configuration reloaded",
   "command.config.reload.failed": "Couldn't reload configuration",
   "command.usage.view": "View usage",
-  "command.usage.view.description": "See your OpenCode Go allowance and Console budgets",
+  "command.usage.view.description": "See your OpenCode Go usage and Console budgets",
   "command.session.location.cycle": "Cycle session location",
   "command.session.branch.choose": "Choose base branch",
   "session.location.toggle": "Toggle session location",
@@ -158,7 +158,7 @@ export const dict = {
   "dialog.provider.connections.count.one": "{{count}} connection",
   "dialog.provider.connections.count.other": "{{count}} connections",
   "dialog.provider.tag.recommended": "Recommended",
-  "dialog.provider.opencode.note": "Curated models including Claude, GPT, Gemini and more",
+  "dialog.provider.opencode.note": "Curated models to get you started",
   "dialog.provider.opencode.tagline": "Reliable optimized models",
   "dialog.provider.opencodeGo.tagline": "Low cost subscription for everyone",
   "dialog.provider.anthropic.note": "Direct access to Claude models via API key",
@@ -197,8 +197,8 @@ export const dict = {
 
   "provider.connect.title": "Connect {{provider}}",
   "provider.connect.opencode.name": "OpenCode Console",
-  "provider.connect.opencode.freeName": "OpenCode Free",
-  "provider.connect.opencode.errorTitle": "Connect to OpenCode",
+  "provider.connect.opencode.freeName": "Built-in models",
+  "provider.connect.opencode.errorTitle": "Connect to OpenCode Console",
   "provider.connect.console.title": "Connecting to OpenCode Console",
   "provider.connect.console.titleGo": "Connecting to OpenCode Go",
   "provider.connect.console.retry": "Try again",
@@ -233,7 +233,7 @@ export const dict = {
   "provider.connect.chatgptUsageLimit.close": "Close",
   "provider.connect.console.refreshFailed":
     "Your account is connected, but we couldn't load your models. Try again to refresh them.",
-  "provider.connect.console.connected": "OpenCode connected",
+  "provider.connect.console.connected": "OpenCode Console connected",
   "provider.connect.console.noModels":
     "Your account is connected, but this Console workspace has no available models. Check its setup in Console, then refresh.",
   "provider.connect.console.modelsLoading": "Your models are still loading. Refresh to check again.",
@@ -241,7 +241,7 @@ export const dict = {
   "provider.connect.console.openingBrowser": "Opening browser…",
   "provider.connect.remote.title": "Connecting on “{{server}}”",
   "provider.connect.remote.description":
-    "Your OpenCode credentials will be stored on this server. Models will be available through this server.",
+    "Your credentials will be stored on the ManosTech.AI server. Models will be available through it.",
   "provider.connect.title.anthropicProMax": "Login with Anthropic",
   "provider.connect.claudeAgent.description":
     "Use your Claude plan or another Claude Code login. Install Claude Code and sign in first.",
@@ -511,13 +511,13 @@ export const dict = {
   "server.connect.pair.link": "Run this command on the server's computer to get a pairing link and QR code.",
   "server.connect.scan": "Scan QR code",
   "server.connect.scan.description": "Point your camera at the QR code shown by opencode pair.",
-  "server.connect.scan.invalid": "This is not an OpenCode pairing code. Scan the code shown by opencode pair.",
+  "server.connect.scan.invalid": "This is not a ManosTech.AI pairing code. Scan the code shown by opencode pair.",
   "server.connect.scan.failed": "This browser could not read the QR code. Enter your connection details manually.",
   "server.connect.link.expired": "This pairing link expired or was already used. Run opencode pair to get a new one.",
   "server.connect.link.unreachable":
     "Could not reach {{url}}. Check that this device can reach the server, then try again.",
   "server.connect.link.legacy":
-    "This pairing code is from an older version of OpenCode. Update OpenCode on the server, then run opencode pair again.",
+    "This pairing code is from an older version of ManosTech.AI. Update the server, then run opencode pair again.",
   "server.connect.camera": "Pairing camera",
   "server.connect.camera.starting": "Opening camera…",
   "server.connect.mixedContent":
@@ -537,7 +537,7 @@ export const dict = {
   "dialog.server.menu.show": "Show in project list",
 
   "server.row.incompatible":
-    "This server is running OpenCode {{version}}, which isn't compatible with this app. Upgrade it to OpenCode V2 to continue.",
+    "This ManosTech.AI server is running version {{version}}, which isn't compatible with this app. Upgrade it to version 2 to continue.",
 
   "dialog.project.edit.title": "Edit project",
   "dialog.project.edit.icon": "Icon",
@@ -624,7 +624,7 @@ export const dict = {
   "error.chain.responseBody": "Response body:\n{{body}}",
   "error.chain.didYouMean": "Did you mean: {{suggestions}}",
   "error.chain.modelNotFound": "Model not found: {{provider}}/{{model}}",
-  "error.chain.checkConfig": "Check your config (opencode.json) provider/model names",
+  "error.chain.checkConfig": "Check the provider/model names in your ManosTech.AI config",
   "error.chain.mcpFailed": 'MCP server "{{name}}" failed. Note, Editor IA ManosTech does not support MCP authentication yet.',
   "error.chain.providerAuthFailed": "Provider authentication failed ({{provider}}): {{message}}",
   "error.chain.providerInitFailed":
@@ -685,9 +685,9 @@ export const dict = {
   "session.error.notFound": "This session cannot be found",
   "session.error.notFound.description": "This tab points to a session that no longer exists on this server.",
   "session.error.notFound.closeTab": "Close Tab",
-  "session.error.incompatible": "This server version isn't supported",
+  "session.error.incompatible": "This ManosTech.AI version isn't supported",
   "session.error.incompatible.description":
-    "{{server}} is running OpenCode {{version}}, which isn't compatible with this app. Upgrade the server to OpenCode V2 to continue.",
+    "{{server}} is running version {{version}}, which isn't compatible with this app. Upgrade the ManosTech.AI server to version 2 to continue.",
   "session.error.unreachable": "Can't reach this server",
   "session.error.unreachable.description":
     "{{server}} isn't responding, so this session can't load. It will open automatically once the server is reachable again.",
@@ -931,7 +931,7 @@ export const dict = {
   "settings.plugins.part.server": "Server",
   "settings.plugins.part.tui": "TUI",
   "settings.plugins.parts.note":
-    'Switches turn off only a plugin\'s desktop UI. Add "-<id>" to plugins in your global opencode.json to turn off its server part, or "-" and its TUI plugin\'s ID to plugins in cli.json to turn off its TUI part.',
+    'Switches turn off only a plugin\'s desktop UI. Add "-<id>" to plugins in your global ManosTech.AI configuration file to turn off its server part, or "-" and its terminal plugin\'s ID to plugins in the terminal configuration file to turn off its terminal part.',
   "settings.tab.about": "About",
   "settings.about.checkUpdates": "Check for updates",
   "settings.about.version": "Version {{version}}",
@@ -984,7 +984,7 @@ export const dict = {
   "settings.extensions.tab.mcps": "MCPs",
   "settings.extensions.tab.skills": "Skills",
   "settings.extensions.availableAll": "Available to all projects",
-  "settings.extensions.manageConfig": "Manage in opencode.json",
+  "settings.extensions.manageConfig": "Manage in the ManosTech.AI configuration file",
   "settings.extensions.plugins.loadFailed": "Could not load plugins",
   "project.settings.title": "Edit project",
   "project.settings.autoAccept.description": "Approve this project's permission requests without asking",
@@ -997,8 +997,8 @@ export const dict = {
   "project.settings.icon.description": "Recommended: 128×128px. Click or drag to upload an image.",
   "project.settings.color.description": "Used for the project icon when no custom image is set",
   "project.settings.worktree.startup.description": "Runs once after creating a new worktree",
-  "project.settings.worktree.startup.hint.base": "Use $OPENCODE_WORKTREE_BASE for the base worktree.",
-  "project.settings.worktree.startup.hint.new": "Use $OPENCODE_WORKTREE_PATH for the new worktree.",
+  "project.settings.worktree.startup.hint.base": "Use $MANOSTECH_WORKTREE_BASE for the base worktree.",
+  "project.settings.worktree.startup.hint.new": "Use $MANOSTECH_WORKTREE_PATH for the new worktree.",
   "project.settings.folderMissing.title": "Project folder not found",
   "project.settings.folderMissing.description": "Restore the folder or close this project.",
   "project.settings.extensions.description": "View extensions available to this project",

@@ -7,9 +7,9 @@ import { ProviderIcon } from "@opencode/ui/provider-icon"
 import type { JSX } from "solid-js"
 import { createMemo, For, Match, Show, Switch } from "solid-js"
 import { consoleProviderGroup, consoleProviderName } from "@/providers/catalog/console"
-import { OpenCodeLogo } from "@/providers/opencode-logo"
 import { useLanguage } from "@/runtime/i18n/language"
 import customManagedProvider from "@/providers/custom-managed-provider.svg"
+import manostechMark from "@/assets/manostech-mark.png"
 import "@/settings/settings.css"
 
 type ModelProvider = { id: string; canonical?: string; name: string }
@@ -35,7 +35,7 @@ export function ProviderModelIcon(props: { provider: ModelProvider; class?: stri
   return (
     <Switch>
       <Match when={props.provider.id === "opencode"}>
-        <OpenCodeLogo class={`size-4 ${props.class ?? ""}`} />
+        <img src={manostechMark} alt="" class={`size-4 ${props.class ?? ""}`} />
       </Match>
       <Match when={icon()} keyed>
         {(id) => <ProviderIcon id={id} width={16} height={16} class={props.class} />}
@@ -89,9 +89,9 @@ export function ProviderModelSections<T extends ModelItem>(props: {
     })
   })
 
-  // Only the keyless catalog is free; a Zen key or Console account keeps the provider's own name.
+  // The base provider's models are the built-in catalog, shown under its catalog name.
   const name = (group: ModelGroup<T>) =>
-    group.category === "opencode" && group.items.every((item) => !item.cost?.input)
+    group.category === "opencode"
       ? language.t("provider.connect.opencode.freeName")
       : group.items[0].provider.name
 
@@ -135,7 +135,13 @@ export function ProviderModelSections<T extends ModelItem>(props: {
                 >
                   <Header
                     id={group().category}
-                    icon={<ProviderModelIcon provider={group().items[0].provider} class="shrink-0" />}
+                    icon={
+                      group().category === "opencode" ? (
+                        <img src={manostechMark} alt="" class="size-4 shrink-0" />
+                      ) : (
+                        <ProviderModelIcon provider={group().items[0].provider} class="shrink-0" />
+                      )
+                    }
                     title={name(group())}
                     action={props.action?.(group())}
                   />
@@ -153,7 +159,7 @@ export function ProviderModelSections<T extends ModelItem>(props: {
             >
               <Header
                 id={CONSOLE_GROUP_KEY}
-                icon={<OpenCodeLogo class="size-4 shrink-0" />}
+                icon={<img src={manostechMark} alt="" class="size-4 shrink-0" />}
                 title={language.t("provider.connect.opencode.name")}
                 badge={managed().group.workspace}
               />
@@ -164,7 +170,11 @@ export function ProviderModelSections<T extends ModelItem>(props: {
                       <ProviderModelGroup
                         ref={(element) => props.ref?.(group.category, element)}
                         provider={group.items[0].provider}
-                        name={consoleProviderName(managed().group, group.items[0].provider.name)}
+                        name={
+                          group.items[0].provider.id === "opencode"
+                            ? language.t("provider.connect.opencode.freeName")
+                            : consoleProviderName(managed().group, group.items[0].provider.name)
+                        }
                         expanded={props.expanded(group.category)}
                         disabled={props.disabled}
                         onSetVisibility={

@@ -101,7 +101,7 @@ export function createHomeProjectsController(home: HomeController) {
     },
     utility: {
       settings: openSettings,
-      help: () => platform.openExternal("https://opencode.ai/desktop-feedback"),
+      help: () => platform.openExternal("mailto:contato@manostech-system.com.br?subject=Coment%C3%A1rios%20sobre%20o%20Editor%20IA%20ManosTech"),
     },
   }
 }

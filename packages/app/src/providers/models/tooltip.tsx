@@ -38,6 +38,12 @@ export const ModelTooltip: Component<{ model: ModelInfo; latest?: boolean; free?
 ) => {
   const language = useLanguage()
 
+  // The base provider is the Console service the user signs in to, never the upstream name.
+  const providerName = (model: ModelInfo) =>
+    model.provider.name === "OpenCode"
+      ? language.t("provider.connect.opencode.name")
+      : model.provider.name
+
   const sourceName = (model: ModelInfo) => {
     const value = `${model.id} ${model.name}`.toLowerCase()
 
@@ -51,7 +57,7 @@ export const ModelTooltip: Component<{ model: ModelInfo; latest?: boolean; free?
 
     if (/llama|meta/.test(value)) return language.t("model.provider.meta")
 
-    return model.provider.name
+    return providerName(model)
   }
 
   const inputLabel = (value: string) => {
@@ -125,7 +131,7 @@ export const ModelTooltip: Component<{ model: ModelInfo; latest?: boolean; free?
     return (
       <div class="flex w-[180px] flex-col gap-2">
         <ModelTooltipRow name={language.t("model.tooltip.model")} value={name()} />
-        <ModelTooltipRow name={language.t("model.tooltip.provider")} value={props.model.provider.name} />
+        <ModelTooltipRow name={language.t("model.tooltip.provider")} value={providerName(props.model)} />
         <Show when={inputs()}>
           {(value) => <ModelTooltipRow name={language.t("model.tooltip.inputs")} value={value()} />}
         </Show>

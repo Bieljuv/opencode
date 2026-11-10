@@ -80,6 +80,9 @@ export function createProviderDialogController(options: {
 
     if (!id) return ""
 
+    // The base provider is the Console service the user signs in to.
+    if (id === "opencode") return language.t("provider.connect.opencode.name")
+
     return (
       integrations.list().find((item) => item.id === id)?.name ??
       providers.all().get(id)?.name ??
