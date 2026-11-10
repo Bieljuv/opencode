@@ -16,9 +16,19 @@ import type { SessionUsage } from "./usage.js"
  *
  * Nada do que vai para o painel aparece para o usuário: o modelo é
  * registrado só no painel, nunca na interface.
+ *
+ * Quem reporta o quê (auditoria C5 — nunca os dois para a mesma
+ * chamada): o gateway grava direto no painel o uso das chamadas que
+ * passam por ele, então o repórter SÓ mede o uso direto, fora do
+ * gateway — um passo servido pelo modelo do gateway não gera evento.
+ * Cada evento carrega um `event_id` (UUID) para a ingestão deduplicar
+ * a repetição do mesmo evento.
  */
 
 export const PANEL_INGEST_URL = "https://painel-manostech.manostech.workers.dev/api/ingest"
+
+/** O modelo do gateway (`providerID/modelID`): o repórter não o envia. */
+export const GATEWAY_MODEL_ID = "manostech/auto"
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const SEND_TIMEOUT_MS = 5_000
@@ -33,6 +43,7 @@ export type IngestEvent = {
   readonly client_email: string
   readonly origin: "desktop"
   readonly model: string
+  readonly event_id: string
   readonly tokens_in: number
   readonly tokens_out: number
   readonly cost_usd: number
@@ -82,7 +93,9 @@ export function parseClientIdentity(text: string): ClientIdentity | undefined {
 /**
  * Monta o evento do painel a partir do uso do passo. `tokens_in` soma tudo
  * que entra (inclui cache, que é cobrado como entrada); `tokens_out` soma
- * saída e raciocínio. Um passo sem uso nenhum não gera evento.
+ * saída e raciocínio. Um passo sem uso nenhum não gera evento. Um passo
+ * servido pelo gateway também não gera evento — o gateway já mediu essa
+ * chamada e o painel grava direto; enviar de novo contaria duas vezes.
  */
 export function buildEvent(input: {
   readonly model: string
@@ -90,6 +103,8 @@ export function buildEvent(input: {
   readonly cost: number
   readonly client: ClientIdentity
 }): IngestEvent | undefined {
+  if (input.model === GATEWAY_MODEL_ID) return undefined
+
   const tokensIn = input.tokens.input + input.tokens.cache.read + input.tokens.cache.write
   const tokensOut = input.tokens.output + input.tokens.reasoning
 
@@ -100,6 +115,7 @@ export function buildEvent(input: {
     client_email: input.client.client_email,
     origin: "desktop",
     model: input.model,
+    event_id: crypto.randomUUID(),
     tokens_in: tokensIn,
     tokens_out: tokensOut,
     cost_usd: input.cost,
