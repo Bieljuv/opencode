@@ -2,17 +2,13 @@ import { TextAttributes, type ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import { createSignal, For, Show } from "solid-js"
 import { getScrollAcceleration } from "../util/scroll"
-import { useClipboard } from "../context/clipboard"
 import { useExit } from "../context/exit"
 import { useTuiApp } from "../context/runtime"
-import { describeOS, describeTerminal } from "../util/system"
 
 export function ErrorComponent(props: { error: Error; reset: () => void; mode?: "dark" | "light" }) {
   const term = useTerminalDimensions()
   const exit = useExit()
-  const clipboard = useClipboard()
   const app = useTuiApp()
-  const [copyState, setCopyState] = createSignal<"idle" | "copied" | "failed">("idle")
 
   // Safe fallback palette per mode (mirrors theme/assets/opencode.json) since the
   // theme context may be the thing that crashed.
@@ -43,22 +39,8 @@ export function ErrorComponent(props: { error: Error; reset: () => void; mode?: 
 
   const message = props.error.message || "An unknown error occurred."
   const stack = props.error.stack || "No stack trace available."
-  const issueURL = buildIssueURL(message, stack, app.version)
-
-  const copyReport = () => {
-    void clipboard
-      .write(issueURL.toString())
-      .then(() => setCopyState("copied"))
-      .catch(() => setCopyState("failed"))
-  }
 
   const actions = [
-    {
-      key: "c",
-      label: () => ({ idle: "Copy report", copied: "✓ Copied", failed: "Copy failed" })[copyState()],
-      copy: true,
-      onUse: copyReport,
-    },
     { key: "r", label: () => "Restart", onUse: props.reset },
     { key: "q", label: () => "Quit", onUse: () => exit() },
   ]
@@ -96,7 +78,6 @@ export function ErrorComponent(props: { error: Error; reset: () => void; mode?: 
     if (evt.name === "home" && scroll) return scroll.scrollTo(0)
     if (evt.name === "end" && scroll) return scroll.scrollTo(scroll.scrollHeight)
     if (evt.name === "q") return exit()
-    if (evt.name === "c") return copyReport()
     if (evt.name === "r") return props.reset()
   })
 
@@ -143,29 +124,18 @@ export function ErrorComponent(props: { error: Error; reset: () => void; mode?: 
           <For each={actions}>
             {(action, index) => {
               const isSelected = () => selected() === index()
-              const copyColor = () =>
-                action.copy
-                  ? copyState() === "copied"
-                    ? colors.success
-                    : copyState() === "failed"
-                      ? colors.error
-                      : undefined
-                  : undefined
               return (
                 <box flexDirection="column" alignItems="center" flexShrink={0}>
                   <box
                     onMouseDown={() => setSelected(index())}
                     onMouseUp={() => action.onUse()}
-                    backgroundColor={copyColor() ?? (isSelected() ? colors.primary : colors.element)}
+                    backgroundColor={isSelected() ? colors.primary : colors.element}
                     minWidth={15}
                     alignItems="center"
                     paddingLeft={2}
                     paddingRight={2}
                   >
-                    <text
-                      attributes={TextAttributes.BOLD}
-                      fg={copyColor() || isSelected() ? colors.onPrimary : colors.text}
-                    >
+                    <text attributes={TextAttributes.BOLD} fg={isSelected() ? colors.onPrimary : colors.text}>
                       {action.label()}
                     </text>
                   </box>
@@ -203,56 +173,10 @@ export function ErrorComponent(props: { error: Error; reset: () => void; mode?: 
         {/* Footer */}
         <Show when={showFooter()}>
           <box flexDirection="column" alignItems="center" flexShrink={0}>
-            <text fg={colors.muted}>
-              {copyState() === "copied"
-                ? "Report copied — paste it into a new GitHub issue."
-                : copyState() === "failed"
-                  ? "Clipboard write failed. Try again or report the crash manually."
-                  : "Copy the report and open a GitHub issue to help us fix this."}
-            </text>
             <text fg={colors.muted}>OpenCode {app.version}</text>
           </box>
         </Show>
       </box>
     </box>
   )
-}
-
-function buildIssueURL(message: string, stack: string, version: string) {
-  // Field keys match the ids in .github/ISSUE_TEMPLATE/bug-report.yml so the issue
-  // form opens pre-filled. Populating os/terminal/reproduce keeps the report past
-  // the contributing-guidelines compliance check, which pushes for system info.
-  const url = new URL("https://github.com/anomalyco/opencode/issues/new?template=bug-report.yml")
-  url.searchParams.set("title", `TUI crash: ${message}`)
-  url.searchParams.set("opencode-version", version)
-  url.searchParams.set("os", describeOS())
-  url.searchParams.set("terminal", describeTerminal())
-  url.searchParams.set(
-    "reproduce",
-    "Reported automatically from the OpenCode crash screen. If you can, describe what you were doing when it crashed.",
-  )
-
-  // Budget the stack against the fully URL-encoded length (not the raw length) so
-  // the final link stays under GitHub's practical limit; flag truncation so a
-  // clipped trace is obvious. searchParams.set handles encoding without throwing,
-  // so measuring url.toString() is both correct and safe on any input.
-  const MAX_URL_LENGTH = 6000
-  const marker = "\n… (truncated)"
-  const head = `The OpenCode TUI crashed with an unexpected error.\n\n**Error:** ${message}\n\n**Stack trace:**\n`
-  const setBody = (body: string) => url.searchParams.set("description", head + "```\n" + body + "\n```")
-
-  setBody(stack)
-  if (url.toString().length <= MAX_URL_LENGTH) return url
-
-  // Largest raw stack prefix whose encoded URL (with the marker) still fits.
-  let lo = 0
-  let hi = stack.length
-  while (lo < hi) {
-    const mid = Math.ceil((lo + hi) / 2)
-    setBody(stack.slice(0, mid) + marker)
-    if (url.toString().length <= MAX_URL_LENGTH) lo = mid
-    else hi = mid - 1
-  }
-  setBody(stack.slice(0, lo) + marker)
-  return url
 }

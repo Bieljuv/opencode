@@ -644,8 +644,8 @@ export function Session(props: {
   onCleanup(() => {
     sessionDisposed = true
   })
-  // Restore the prompt when the free allowance or an OpenCode Go limit stops it, and offer OpenCode Go on the first free
-  // allowance hit in a day.
+  // Restore the prompt when a usage limit stops it, and offer the
+  // subscription upsell on the first free allowance hit in a day.
   onCleanup(
     data.on("session.step.failed", async (event) => {
       const type = event.data.error.type
@@ -2043,7 +2043,7 @@ function AssistantFooter(props: { message: SessionMessageAssistant }) {
           }
         >
           <Match when={freeLimit()}>
-            <FreeLimitNotice message={props.message} />
+            <FreeLimitNotice />
           </Match>
           <Match when={limitNotice()}>{(notice) => <UsageLimitNotice notice={notice()} />}</Match>
         </Switch>
@@ -2526,18 +2526,11 @@ function freeLimitReset(delay: number | undefined, base: number) {
     : Locale.datetime(at)
 }
 
-function FreeLimitNotice(props: { message: Pick<SessionMessageAssistant, "error" | "time"> }) {
+function FreeLimitNotice() {
   const theme = useTheme()
-  const reset = createMemo(() =>
-    freeLimitReset(props.message.error?.retryAfterMs, props.message.time.completed ?? props.message.time.created),
-  )
   return (
     <box paddingLeft={3} flexDirection="column">
-      <text fg={theme.text.muted}>You've used today's free messages.{reset() ? ` They reset at ${reset()}.` : ""}</text>
-      <text fg={theme.text.muted}>
-        Upgrade to OpenCode Go → <span style={{ fg: theme.text.base }}>/connect</span> · Switch model →{" "}
-        <span style={{ fg: theme.text.base }}>/models</span>
-      </text>
+      <text fg={theme.text.muted}>Tente novamente mais tarde.</text>
     </box>
   )
 }
