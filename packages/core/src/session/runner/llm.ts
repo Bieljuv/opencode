@@ -259,9 +259,14 @@ const layer = Layer.effect(
           : SessionRouter.effortFromVariant(first.model.ref.variant)
       const explicit = configured !== undefined || first.agent.info.model !== undefined
       const complexity = SessionRouter.classifyComplexity(lastUser?.text ?? "")
+      // The chain only carries models that fit this turn's real prompt:
+      // a model that answered a small probe can still freeze on the real
+      // request, so the size used here is the packed turn, never a probe.
+      const promptTokens = SessionCompaction.estimateContext(first)
       const chain = SessionRouter.buildChain(available, {
         complexity,
         effort,
+        promptTokens,
       })
       const tried = new Set<string>()
       // Diagnostic log only, never the screen: the next failure has to
@@ -272,6 +277,7 @@ const layer = Layer.effect(
         sessionID,
         available: available.length,
         chain: chain.length,
+        promptTokens,
         sessionModel:
           first.session.model === undefined ? undefined : SessionRouter.refKey(first.session.model),
         complexity,
@@ -368,22 +374,31 @@ const layer = Layer.effect(
               // throttle hops too — a 429 is a per-model or per-account
               // cap, and another provider answers now while the same
               // model would burn its backoff retries and die with the
-              // throttle message. The switch is published as
+              // throttle message. A model that freezes or fails mid-task
+              // (timeout, provider failure, broken reply) hops the same
+              // way: it cannot carry this task, so the next capable model
+              // tries instead of retrying the same one until the turn
+              // dies. A prompt the model cannot hold hops to a bigger
+              // window, never to a smaller one. The switch is published as
               // ModelSelected, so the retry re-resolves the new model;
               // the user never sees the hop. When the whole chain is
               // exhausted, an exhaustion error fails at once with the
               // generic message: falling through would let the retry
               // policy burn its same-model attempts (a rate-limit-shaped
               // exhaustion is retryable) and only then fail — with the
-              // original error, not the generic one. A throttle with no
-              // hop left falls through to the same-model retry instead.
+              // original error, not the generic one. A throttle or a
+              // mid-task failure with no hop left falls through to the
+              // same-model retry instead.
               // Diagnostic log only, never the screen: each hop records
               // which model was tried and why the chain stopped.
               if (SessionRouter.isHopSignal(error)) {
                 const exhausted = SessionRouter.isExhaustionError(error)
+                const tooLong = error.type === SessionRouter.CONTEXT_OVERFLOW_TYPE
                 const next = exhausted
                   ? SessionRouter.nextHop(chain, tried)
-                  : SessionRouter.nextHopFromProvider(chain, tried, loaded.model.ref.providerID)
+                  : tooLong
+                    ? SessionRouter.nextHopWithLargerWindow(available, chain, tried, loaded.model)
+                    : SessionRouter.nextHopFromProvider(chain, tried, loaded.model.ref.providerID)
                 if (next !== undefined) {
                   tried.add(SessionRouter.refKey(next))
                   yield* Effect.logInfo("manostech router hop", {
@@ -432,13 +447,21 @@ const layer = Layer.effect(
               })
             }),
           recoverContinuation,
-          recoverOverflow: Effect.suspend(() =>
-            recoverOverflow
-              ? compaction
-                  .compact({ reason: "overflow", context: loaded, estimate })
-                  .pipe(Effect.map((result) => result.status === "completed"))
-              : Effect.succeed(false),
-          ),
+          recoverOverflow: Effect.suspend(() => {
+            if (!recoverOverflow) return Effect.succeed(false)
+            // A bigger model takes this prompt whole: hop to it instead of
+            // shrinking the prompt for a model that cannot hold it. The
+            // retry callback below makes the hop; compaction only runs
+            // when no bigger model remains in the chain.
+            if (
+              SessionRouter.nextHopWithLargerWindow(available, chain, tried, loaded.model) !==
+              undefined
+            )
+              return Effect.succeed(false)
+            return compaction
+              .compact({ reason: "overflow", context: loaded, estimate })
+              .pipe(Effect.map((result) => result.status === "completed"))
+          }),
         })
         retryAttempt = undefined
         const completed = yield* SessionStep.Outcome.$match(outcome, {

@@ -367,8 +367,11 @@ describe("toSessionError", () => {
         ),
       ),
     ).toEqual({
-      type: "provider.invalid-request",
-      message: "O pedido não pôde ser enviado. Tente reformular.",
+      // A prompt the model cannot hold is a capacity failure, not a bad
+      // request: the type hops to a bigger model, while the status and the
+      // body (data only, never rendered) are preserved as before.
+      type: "provider.context-too-long",
+      message: "Tente novamente mais tarde.",
       status: 413,
       response: { body: '{"error":"context limit"}' },
     })
@@ -581,6 +584,29 @@ describe("toSessionError", () => {
 
     expect(retryable.map(SessionRunnerRetry.isRetryable)).toEqual([true, true, true, true])
     expect(ineligible.map(SessionRunnerRetry.isRetryable)).toEqual([false, false])
+  })
+
+  test("a prompt the model cannot hold is a hop signal, not a bad request", () => {
+    // A context overflow used to reach the runner as a plain invalid
+    // request, which never hops: the turn died on a model whose window
+    // could not hold the prompt instead of moving to a bigger one. The
+    // message stays the same generic one as exhaustion — the user never
+    // sees which model failed or why the chain moved.
+    expect(
+      toSessionError(
+        llm(
+          new InvalidRequestError({
+            message: "This model's maximum context length is 32768 tokens.",
+            classification: "context-overflow",
+          }),
+        ),
+      ),
+    ).toEqual({ type: "provider.context-too-long", message: "Tente novamente mais tarde." })
+    // A plain invalid request without the overflow classification is unchanged.
+    expect(toSessionError(llm(new InvalidRequestError({ message: "request" })))).toEqual({
+      type: "provider.invalid-request",
+      message: "O pedido não pôde ser enviado. Tente reformular.",
+    })
   })
 
   test("honors provider retry header overrides", () => {
