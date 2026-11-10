@@ -31,14 +31,16 @@ export function shouldRetryEnsure(version: string | undefined, message: string) 
 }
 
 /**
- * The probe only adopts a service running the bundled version. When
- * either version is unknown there is nothing to compare and the
- * background verification decides; when both are known and differ, the
- * probed service is the old engine and `ensure` replaces it instead of
- * trusting the background verification alone.
+ * The probe only adopts a service whose version is verified to match the
+ * bundled one. A running version that cannot be verified is not adopted:
+ * the server behind it may predate the bundled CLI (an orphan from an
+ * older release keeps answering with its old code), so `ensure` starts a
+ * new one instead. When the bundled version is unknown there is nothing
+ * to start against (reconnect and beta), so adoption is the only option.
  */
 export function shouldAdoptProbedService(runningVersion: string | undefined, bundledVersion: string | undefined) {
-  if (runningVersion === undefined || bundledVersion === undefined) return true
+  if (bundledVersion === undefined) return true
+  if (runningVersion === undefined) return false
   return runningVersion === bundledVersion
 }
 
