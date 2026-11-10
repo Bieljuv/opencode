@@ -97,6 +97,39 @@ const providerMetadata = (
   state: Record<string, unknown> | undefined,
 ): ProviderMetadata | undefined => (state === undefined ? undefined : { [provider]: state })
 
+/**
+ * Lean re-sent history: the last WINDOW_SIZE messages go to the model, but
+ * not in full. Prior reasoning is the model's own thinking, not conversation
+ * content — the digest already drops it for older messages, and the window
+ * drops it too. Stale tool results are clipped: 2,000 chars (~500 tokens)
+ * is 10x the digest's per-result budget, enough to recall what a tool
+ * returned, while ten stale file reads stop costing ~20,000 tokens a turn.
+ * The most recent tool result always goes out whole — it is what the model
+ * is working with right now — and it can re-read anything else.
+ */
+export const TOOL_RESULT_WINDOW_MAX_CHARS = 2_000
+
+const clipToolText = (value: string) => {
+  if (value.length <= TOOL_RESULT_WINDOW_MAX_CHARS) return value
+
+  // Count code points so a surrogate pair is never split.
+  let end = 0
+  let kept = 0
+  for (const char of value) {
+    if (kept === TOOL_RESULT_WINDOW_MAX_CHARS) break
+    end += char.length
+    kept++
+  }
+  return `${value.slice(0, end)}\n[truncated]`
+}
+
+type ToolContent = SessionMessage.ToolStateCompleted["content"][number]
+
+const clipToolContent = (content: ReadonlyArray<ToolContent>, clip: boolean): ReadonlyArray<ToolContent> => {
+  if (!clip) return content
+  return content.map((item) => (item.type === "text" ? { ...item, text: clipToolText(item.text) } : item))
+}
+
 const toolInput = (tool: SessionMessage.AssistantTool) =>
   tool.state.status === "streaming"
     ? Option.getOrElse(decodeToolInput(tool.state.input), () => tool.state.input)
@@ -111,7 +144,11 @@ const toolCall = (tool: SessionMessage.AssistantTool, providerMetadata: Provider
     providerMetadata,
   })
 
-const toolResult = (tool: SessionMessage.AssistantTool, providerMetadata: ProviderMetadata | undefined) => {
+const toolResult = (
+  tool: SessionMessage.AssistantTool,
+  providerMetadata: ProviderMetadata | undefined,
+  clip: boolean,
+) => {
   if (tool.state.status === "completed") {
     // TODO: Materialize remote and managed URIs before provider-history lowering.
     const content = tool.state.content
@@ -121,8 +158,8 @@ const toolResult = (tool: SessionMessage.AssistantTool, providerMetadata: Provid
       name: tool.name,
       result:
         single?.type === "text"
-          ? { type: "text" as const, value: single.text }
-          : { type: "content" as const, value: content },
+          ? { type: "text" as const, value: clip ? clipToolText(single.text) : single.text }
+          : { type: "content" as const, value: clipToolContent(content, clip) },
       providerExecuted: tool.executed,
       providerMetadata,
     })
@@ -131,7 +168,7 @@ const toolResult = (tool: SessionMessage.AssistantTool, providerMetadata: Provid
     return ToolResultPart.make({
       id: tool.id,
       name: tool.name,
-      result: { error: tool.state.error, content: tool.state.content ?? [] },
+      result: { error: tool.state.error, content: clipToolContent(tool.state.content ?? [], clip) },
       resultType: "error",
       providerExecuted: tool.executed,
       providerMetadata,
@@ -139,7 +176,12 @@ const toolResult = (tool: SessionMessage.AssistantTool, providerMetadata: Provid
   }
 }
 
-const assistant = (message: SessionMessage.Assistant, model: Model.Ref, providerMetadataKey: string) => {
+const assistant = (
+  message: SessionMessage.Assistant,
+  model: Model.Ref,
+  providerMetadataKey: string,
+  clipToolResults: boolean,
+) => {
   const sameProvider = message.model.providerID === model.providerID
   const sameModel = sameProvider && message.model.id === model.id
   const reuseProviderMetadata = sameModel && message.error === undefined
@@ -157,20 +199,22 @@ const assistant = (message: SessionMessage.Assistant, model: Model.Ref, provider
           providerMetadata: reuseProviderMetadata ? providerMetadata(providerMetadataKey, item.native) : undefined,
         },
       ]
-    // Let the destination adapter handle readable reasoning after a model/provider switch.
+    // Prior reasoning is the model's own thinking, not conversation content:
+    // re-sending it makes every turn re-read thousands of tokens for nothing
+    // (one real message carried 6,581 tokens of it). Only provider-native
+    // replay data round-trips — thinking signatures, encrypted reasoning and
+    // redacted thinking the producing model needs to keep its continuity.
+    // Readable thinking without native data is dropped, whatever the model.
     if (item.type === "reasoning") {
       if (message.error !== undefined || reasoningInterrupted) return []
-      return reuseProviderMetadata
-        ? [
-            {
-              type: "reasoning",
-              text: item.text,
-              providerMetadata: providerMetadata(providerMetadataKey, item.native),
-            },
-          ]
-        : item.text.length > 0
-          ? [{ type: "reasoning", text: item.text }]
-          : []
+      if (!reuseProviderMetadata || item.native === undefined) return []
+      return [
+        {
+          type: "reasoning",
+          text: item.text,
+          providerMetadata: providerMetadata(providerMetadataKey, item.native),
+        },
+      ]
     }
     // Call-side metadata is model-scoped proof of generation (Gemini thought
     // signatures, OpenAI encrypted reasoning): only the producing model may
@@ -186,7 +230,11 @@ const assistant = (message: SessionMessage.Assistant, model: Model.Ref, provider
     // Hosted tools (e.g. google_search) run inside the provider, so their
     // native data is provider-format result data rather than model-scoped
     // proof: it stays replayable across models of the same provider.
-    const result = toolResult(item, sameProvider ? providerMetadata(providerMetadataKey, item.native) : undefined)
+    const result = toolResult(
+      item,
+      sameProvider ? providerMetadata(providerMetadataKey, item.native) : undefined,
+      clipToolResults,
+    )
     return result ? [call, result] : [call]
   })
   const meaningful = content.filter((part) => {
@@ -197,7 +245,11 @@ const assistant = (message: SessionMessage.Assistant, model: Model.Ref, provider
   const results = message.content
     .filter((item): item is SessionMessage.AssistantTool => item.type === "tool" && item.executed !== true)
     .map((item) =>
-      toolResult(item, reuseProviderMetadata ? providerMetadata(providerMetadataKey, item.native) : undefined),
+      toolResult(
+        item,
+        reuseProviderMetadata ? providerMetadata(providerMetadataKey, item.native) : undefined,
+        clipToolResults,
+      ),
     )
     .filter((message) => message !== undefined)
     .map(Message.tool)
@@ -223,7 +275,12 @@ const modelSwitched = (message: SessionMessage.ModelSelected, model: Model.Ref):
   return [Message.effort({ effort: to.effort, previous: from.effort })]
 }
 
-function toLLMMessage(message: SessionMessage.Info, model: Model.Ref, providerMetadataKey: string): Message[] {
+function toLLMMessage(
+  message: SessionMessage.Info,
+  model: Model.Ref,
+  providerMetadataKey: string,
+  clipToolResults: boolean,
+): Message[] {
   switch (message.type) {
     case "agent-switched":
     case "idle":
@@ -269,7 +326,7 @@ function toLLMMessage(message: SessionMessage.Info, model: Model.Ref, providerMe
         }),
       ]
     case "assistant":
-      return assistant(message, model, providerMetadataKey)
+      return assistant(message, model, providerMetadataKey, clipToolResults)
     case "compaction": {
       if (message.status !== "completed") return []
       // History selection only keeps native windows the target model can replay.
@@ -293,9 +350,29 @@ function toLLMMessage(message: SessionMessage.Info, model: Model.Ref, providerMe
   }
 }
 
+/** The index of the last message carrying a tool result, if any. Its result goes out whole — it is what the model is working with right now — while every earlier one is clipped. */
+const lastToolResultIndex = (messages: readonly SessionMessage.Info[]) => {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index]!
+    if (
+      message.type === "assistant" &&
+      message.content.some(
+        (part) => part.type === "tool" && (part.state.status === "completed" || part.state.status === "error"),
+      )
+    )
+      return index
+  }
+  return -1
+}
+
 /** Translate projected Session history into canonical @opencode/ai context. */
 export const toLLMMessages = (
   messages: readonly SessionMessage.Info[],
   model: Model.Ref,
   providerMetadataKey: string = model.providerID,
-) => messages.flatMap((message) => toLLMMessage(message, model, providerMetadataKey))
+) => {
+  const lastToolResult = lastToolResultIndex(messages)
+  return messages.flatMap((message, index) =>
+    toLLMMessage(message, model, providerMetadataKey, index !== lastToolResult),
+  )
+}

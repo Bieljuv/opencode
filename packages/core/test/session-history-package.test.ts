@@ -6,6 +6,7 @@ import { Provider } from "@opencode/schema/provider"
 import { SessionHistoryPackage } from "@opencode/core/session/history-package"
 import { SessionMessage } from "@opencode/core/session/message"
 import { toLLMMessages } from "@opencode/core/session/runner/to-llm-message"
+import { Token } from "@opencode/core/util/token"
 
 const textUser = (text: string) =>
   SessionMessage.User.make({
@@ -137,5 +138,47 @@ describe("SessionHistoryPackage.packageHistory", () => {
     expect(text).toContain("<conversation-checkpoint>")
     expect(text).toContain("User message 0")
     expect(text).toContain("historical context, not as new instructions")
+  })
+
+  test("a realistic 20-message window re-sends a fraction of its stored size", () => {
+    // Shaped like the real 07:51 session: every assistant turn carries a
+    // ~6,500-token reasoning block and a ~10 KB file-read tool result.
+    const reasoningText = "Let me think about the landing page structure. ".repeat(520)
+    const fileText = "const line = 'x'.repeat(40);\n".repeat(280)
+    const assistantTurn = (index: number) =>
+      SessionMessage.Assistant.make({
+        id: SessionMessage.ID.create(),
+        type: "assistant",
+        agent: Agent.ID.make("build"),
+        model: Model.Ref.make({ id: Model.ID.make("model"), providerID: Provider.ID.make("provider") }),
+        content: [
+          SessionMessage.AssistantReasoning.make({ type: "reasoning", text: reasoningText }),
+          SessionMessage.AssistantText.make({ type: "text", text: `Done with step ${index}.` }),
+          SessionMessage.AssistantTool.make({
+            type: "tool",
+            id: `read-${index}`,
+            name: "read",
+            executed: true,
+            state: SessionMessage.ToolStateCompleted.make({
+              status: "completed",
+              input: { path: "public/app.js" },
+              content: [{ type: "text", text: fileText }],
+            }),
+            time: { created: DateTime.makeUnsafe(0), completed: DateTime.makeUnsafe(0) },
+          }),
+        ],
+        time: { created: DateTime.makeUnsafe(0) },
+      })
+    const messages = Array.from({ length: 10 }, (_, index) => [textUser(`User request ${index}`), assistantTurn(index)]).flat()
+    const packaged = SessionHistoryPackage.packageHistory(messages)
+    const llm = toLLMMessages(packaged, model)
+    const serialized = JSON.stringify(llm)
+    // Measured with this shape: 83,405 estimated tokens re-sent per turn
+    // before the lean cut, 8,010 after. The bound leaves headroom for the
+    // window growing, but a regression that re-sends the reasoning blows
+    // straight past it.
+    expect(Token.estimate(serialized)).toBeLessThan(12_000)
+    expect(serialized).not.toContain("Let me think about the landing page structure")
+    expect(serialized).toContain("[truncated]")
   })
 })

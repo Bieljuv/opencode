@@ -1093,8 +1093,11 @@ Earlier work
       model,
     )
 
+    // The old model's readable thinking does not re-send after a switch:
+    // its signature is model-scoped proof, not conversation content, so the
+    // new model gets the hosted result payloads without re-reading the
+    // previous model's thought process.
     expect(messages[0]?.content).toEqual([
-      { type: "reasoning", text: "Visible thought" },
       {
         type: "tool-call",
         id: "hosted-old-model",
@@ -1225,5 +1228,219 @@ Earlier work
         providerMetadata: { provider: { phase: "commentary" } },
       },
     ])
+  })
+
+  test("drops readable reasoning without replay data from re-sent history", () => {
+    const messages = toLLMMessages(
+      [
+        SessionMessage.Assistant.make({
+          id: id("assistant-plain-reasoning"),
+          type: "assistant",
+          agent: build,
+          model: { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") },
+          content: [
+            SessionMessage.AssistantReasoning.make({ type: "reasoning", text: "Long thought process that nobody needs to re-read." }),
+            SessionMessage.AssistantText.make({ type: "text", text: "Here is the answer." }),
+          ],
+          time: { created, completed: created },
+        }),
+      ],
+      model,
+    )
+
+    expect(messages[0]?.content).toEqual([{ type: "text", text: "Here is the answer." }])
+  })
+
+  test("clips stale tool results but keeps the most recent whole", () => {
+    const big = "x".repeat(5_000)
+    const tool = (value: string, resultID: string) =>
+      SessionMessage.Assistant.make({
+        id: id(resultID),
+        type: "assistant",
+        agent: build,
+        model: { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") },
+        content: [
+          SessionMessage.AssistantTool.make({
+            type: "tool",
+            id: resultID,
+            name: "read",
+            executed: true,
+            state: SessionMessage.ToolStateCompleted.make({
+              status: "completed",
+              input: { path: "public/app.js" },
+              content: [{ type: "text", text: value }],
+            }),
+            time: { created, completed: created },
+          }),
+        ],
+        time: { created, completed: created },
+      })
+    const messages = toLLMMessages([tool(big, "old-read"), tool(big, "recent-read")], model)
+
+    const resultOf = (index: number) =>
+      messages[index]?.content.find((part) => part.type === "tool-result")
+    const oldResult = resultOf(0)
+    const recentResult = resultOf(1)
+    expect(oldResult?.type === "tool-result" && oldResult.result.type === "text" ? oldResult.result.value : "").toBe(
+      `${"x".repeat(2_000)}\n[truncated]`,
+    )
+    expect(recentResult?.type === "tool-result" && recentResult.result.type === "text" ? recentResult.result.value : "").toBe(big)
+    // The call itself is untouched: the model still knows what it ran.
+    expect(messages[0]?.content.find((part) => part.type === "tool-call")).toMatchObject({
+      id: "old-read",
+      name: "read",
+      input: { path: "public/app.js" },
+    })
+  })
+
+  test("clips text inside multi-part tool results but keeps file attachments whole", () => {
+    const big = "y".repeat(5_000)
+    const messages = toLLMMessages(
+      [
+        SessionMessage.Assistant.make({
+          id: id("assistant-old-multi"),
+          type: "assistant",
+          agent: build,
+          model: { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") },
+          content: [
+            SessionMessage.AssistantTool.make({
+              type: "tool",
+              id: "old-multi",
+              name: "read",
+              executed: true,
+              state: SessionMessage.ToolStateCompleted.make({
+                status: "completed",
+                input: { path: "README.md" },
+                content: [
+                  { type: "text", text: big },
+                  { type: "file", uri: "data:image/png;base64,aGVsbG8=", mime: "image/png", name: "hello.png" },
+                ],
+              }),
+              time: { created, completed: created },
+            }),
+          ],
+          time: { created, completed: created },
+        }),
+        SessionMessage.Assistant.make({
+          id: id("assistant-recent-multi"),
+          type: "assistant",
+          agent: build,
+          model: { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") },
+          content: [
+            SessionMessage.AssistantTool.make({
+              type: "tool",
+              id: "recent-multi",
+              name: "read",
+              executed: true,
+              state: SessionMessage.ToolStateCompleted.make({
+                status: "completed",
+                input: { path: "README.md" },
+                content: [{ type: "text", text: "small" }],
+              }),
+              time: { created, completed: created },
+            }),
+          ],
+          time: { created, completed: created },
+        }),
+      ],
+      model,
+    )
+
+    const oldResult = messages[0]?.content.find((part) => part.type === "tool-result")
+    expect(oldResult?.type === "tool-result" && oldResult.result.type === "content" ? oldResult.result.value : []).toEqual([
+      { type: "text", text: `${"y".repeat(2_000)}\n[truncated]` },
+      { type: "file", uri: "data:image/png;base64,aGVsbG8=", mime: "image/png", name: "hello.png" },
+    ])
+  })
+
+  test("clips stale tool error content but keeps the error itself", () => {
+    const big = "z".repeat(5_000)
+    const messages = toLLMMessages(
+      [
+        SessionMessage.Assistant.make({
+          id: id("assistant-old-error"),
+          type: "assistant",
+          agent: build,
+          model: { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") },
+          content: [
+            SessionMessage.AssistantTool.make({
+              type: "tool",
+              id: "old-error",
+              name: "read",
+              executed: true,
+              state: SessionMessage.ToolStateError.make({
+                status: "error",
+                input: { path: "missing.txt" },
+                error: { type: "unknown", message: "Denied" },
+                content: [{ type: "text", text: big }],
+              }),
+              time: { created, completed: created },
+            }),
+          ],
+          time: { created, completed: created },
+        }),
+        SessionMessage.Assistant.make({
+          id: id("assistant-recent-error"),
+          type: "assistant",
+          agent: build,
+          model: { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") },
+          content: [
+            SessionMessage.AssistantTool.make({
+              type: "tool",
+              id: "recent-error",
+              name: "read",
+              executed: true,
+              state: SessionMessage.ToolStateCompleted.make({
+                status: "completed",
+                input: { path: "README.md" },
+                content: [{ type: "text", text: "small" }],
+              }),
+              time: { created, completed: created },
+            }),
+          ],
+          time: { created, completed: created },
+        }),
+      ],
+      model,
+    )
+
+    const oldResult = messages[0]?.content.find((part) => part.type === "tool-result")
+    expect(oldResult?.type === "tool-result" && oldResult.result.type === "error" ? oldResult.result.value : {}).toEqual({
+      error: { type: "unknown", message: "Denied" },
+      content: [{ type: "text", text: `${"z".repeat(2_000)}\n[truncated]` }],
+    })
+  })
+
+  test("lean re-sending does not touch the stored session", () => {
+    const reasoning = "Thought ".repeat(1_000)
+    const big = "w".repeat(5_000)
+    const stored = SessionMessage.Assistant.make({
+      id: id("assistant-stored"),
+      type: "assistant",
+      agent: build,
+      model: { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") },
+      content: [
+        SessionMessage.AssistantReasoning.make({ type: "reasoning", text: reasoning }),
+        SessionMessage.AssistantTool.make({
+          type: "tool",
+          id: "stored-read",
+          name: "read",
+          executed: true,
+          state: SessionMessage.ToolStateCompleted.make({
+            status: "completed",
+            input: { path: "public/app.js" },
+            content: [{ type: "text", text: big }],
+          }),
+          time: { created, completed: created },
+        }),
+      ],
+      time: { created, completed: created },
+    })
+    const before = JSON.stringify(stored)
+
+    toLLMMessages([stored], model)
+
+    expect(JSON.stringify(stored)).toBe(before)
+    expect(stored.content.some((part) => part.type === "reasoning" && part.text === reasoning)).toBe(true)
   })
 })
