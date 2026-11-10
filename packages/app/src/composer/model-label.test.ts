@@ -39,11 +39,11 @@ test.each([
 
 test.each([
   { direct: provider("openai", "Renamed", { models: [] }), connected: [], expected: "OpenAI" },
-  { direct: provider("openai", "Renamed", { models: [] }), connected: ["openai"], expected: "OpenCode / OpenAI" },
+  { direct: provider("openai", "Renamed", { models: [] }), connected: ["openai"], expected: "OpenCode Console / OpenAI" },
   {
     direct: provider("account", "Owls", { integrationID: "openai", models: [] }),
     connected: ["account"],
-    expected: "OpenCode / OpenAI",
+    expected: "OpenCode Console / OpenAI",
   },
   {
     direct: provider("proxy", "OpenAI", { canonical: "openai", models: [] }),

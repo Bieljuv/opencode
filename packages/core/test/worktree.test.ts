@@ -280,7 +280,7 @@ describe("Worktree", () => {
         .set({
           commands: {
             start:
-              "bun -e \"await Bun.write('setup.json', JSON.stringify([process.env.OPENCODE_WORKTREE_BASE, process.env.OPENCODE_WORKTREE_PATH, process.cwd()]))\"",
+              "bun -e \"await Bun.write('setup.json', JSON.stringify([process.env.OPENCODE_WORKTREE_BASE, process.env.OPENCODE_WORKTREE_PATH, process.cwd(), process.env.MANOSTECH_WORKTREE_BASE, process.env.MANOSTECH_WORKTREE_PATH]))\"",
           },
         })
         .where(eq(ProjectTable.id, input.projectID))
@@ -294,6 +294,8 @@ describe("Worktree", () => {
       expect(yield* Effect.promise(() => Bun.file(path.join(created.directory, "setup.json")).json())).toEqual([
         input.sourceDirectory,
         created.directory,
+        created.directory,
+        input.sourceDirectory,
         created.directory,
       ])
       yield* worktree.remove({ directory: created.directory, force: true })
@@ -335,7 +337,7 @@ describe("Worktree", () => {
         projectID: initial.id,
         commands: {
           start:
-            "bun -e \"await Bun.write('setup.json', JSON.stringify([process.env.OPENCODE_WORKTREE_BASE, process.env.OPENCODE_WORKTREE_PATH, process.cwd()]))\"",
+            "bun -e \"await Bun.write('setup.json', JSON.stringify([process.env.OPENCODE_WORKTREE_BASE, process.env.OPENCODE_WORKTREE_PATH, process.cwd(), process.env.MANOSTECH_WORKTREE_BASE, process.env.MANOSTECH_WORKTREE_PATH]))\"",
         },
       })
 
@@ -357,6 +359,8 @@ describe("Worktree", () => {
       expect(yield* Effect.promise(() => Bun.file(path.join(created.directory, "setup.json")).json())).toEqual([
         clone,
         created.directory,
+        created.directory,
+        clone,
         created.directory,
       ])
     }),

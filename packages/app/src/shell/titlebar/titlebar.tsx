@@ -693,7 +693,7 @@ export function Titlebar(props: { verticalTabs?: { mount?: HTMLElement } }) {
                                 class="flex h-7 shrink-0 items-center gap-2 rounded-[6px] px-2 text-[13px] leading-4 text-v2-text-text-faint hover:bg-v2-background-bg-layer-02 focus-visible:outline-none focus-visible:bg-v2-background-bg-layer-02"
                                 onClick={() => {
                                   closeMobileTabs()
-                                  platform.openExternal("https://opencode.ai/desktop-feedback")
+                                  platform.openExternal("mailto:contato@manostech-system.com.br?subject=Coment%C3%A1rios%20sobre%20o%20Editor%20IA%20ManosTech")
                                 }}
                               >
                                 <Icon name="help" size="small" />

@@ -35,3 +35,8 @@ export function consoleCatalogLoaded(providers: readonly Provider[]) {
 export function consoleProviderName(group: { prefix: string }, name: string) {
   return name.startsWith(group.prefix) ? name.slice(group.prefix.length) : name
 }
+
+// The base provider is the Console service the user signs in to, never the upstream name.
+export function displayProviderName(provider: { id: string; name: string }, consoleName: string) {
+  return provider.id === "opencode" ? consoleName : provider.name
+}

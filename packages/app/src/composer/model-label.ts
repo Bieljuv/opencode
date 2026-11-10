@@ -15,7 +15,7 @@ export function composerModelLabelKey(providerID: string, modelID: string) {
 }
 
 // Native Console models need no provider. A managed provider drops its workspace, and says it routes through
-// OpenCode only when the same provider is also connected directly.
+// OpenCode Console only when the same provider is also connected directly.
 export function composerProviderName(
   providerID: string,
   catalog: ReadonlyMap<string, Provider>,
@@ -43,7 +43,7 @@ export function composerProviderName(
       (item.integrationID ?? item.id) === provider.canonical,
   )
 
-  return direct ? `OpenCode / ${name}` : name
+  return direct ? `OpenCode Console / ${name}` : name
 }
 
 export function composerModelLabels(

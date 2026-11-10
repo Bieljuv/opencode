@@ -243,6 +243,8 @@ const layer = Layer.effect(
               env: {
                 OPENCODE_WORKTREE_BASE: sourceDirectory,
                 OPENCODE_WORKTREE_PATH: result.directory,
+                MANOSTECH_WORKTREE_BASE: sourceDirectory,
+                MANOSTECH_WORKTREE_PATH: result.directory,
               },
               extendEnv: true,
               stdin: "ignore",

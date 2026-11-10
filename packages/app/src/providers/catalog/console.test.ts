@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { consoleProviderGroup, consoleProviderName } from "./console"
+import { consoleProviderGroup, consoleProviderName, displayProviderName } from "./console"
 
 test("groups only providers managed by the active Console workspace", () => {
   const direct = { id: "openai", integrationID: "openai", name: "Anomaly / OpenAI" }
@@ -18,4 +18,9 @@ test("groups only providers managed by the active Console workspace", () => {
   expect(group.providers.map((provider) => provider.id)).toEqual(["opencode", "console-openai", "console-google"])
   expect(consoleProviderName(group, group.providers[1].name)).toBe("OpenAI")
   expect(group.providers).not.toContain(direct)
+})
+
+test("shows the base provider as the Console service", () => {
+  expect(displayProviderName({ id: "opencode", name: "OpenCode" }, "OpenCode Console")).toBe("OpenCode Console")
+  expect(displayProviderName({ id: "anthropic", name: "Anthropic" }, "OpenCode Console")).toBe("Anthropic")
 })

@@ -14,7 +14,7 @@ import { useParams } from "@solidjs/router"
 import { useLanguage } from "@/runtime/i18n/language"
 import { usePlatform } from "@/runtime/platform/platform"
 import { useServerSDK } from "@/runtime/server/client"
-import { consoleProviderName } from "@/providers/catalog/console"
+import { consoleProviderName, displayProviderName } from "@/providers/catalog/console"
 import { useIntegrations } from "@/providers/catalog/integrations"
 import { ProviderModelGroup, ProviderModelIcon } from "@/providers/models/provider-group"
 import type { ModelSelection } from "@/providers/models/selection"
@@ -377,7 +377,7 @@ function ProviderPicker(props: { directory?: string; onSelect: (provider: string
                               "text-v2-text-text-faint": disabled(provider),
                             }}
                           >
-                            {provider.name}
+                            {displayProviderName(provider, language.t("provider.connect.opencode.name"))}
                           </span>
                           <Show when={disabled(provider)}>
                             <span class="min-w-0 truncate font-[440] text-v2-text-text-faint">
@@ -1156,11 +1156,6 @@ function ProviderSteps(props: { provider: string; controller: ProviderDialogCont
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <Show when={!input.body.catalogPending}>
-            <Button onClick={() => platform.openExternal("https://opencode.ai/console")}>
-              {language.t("provider.connect.console.openAgain")}
-            </Button>
-          </Show>
           <Button
             disabled={input.body.refreshing}
             aria-busy={input.body.refreshing}
@@ -1269,7 +1264,9 @@ function ProviderSteps(props: { provider: string; controller: ProviderDialogCont
                               </span>
                               <span class="settings-models-group-label">
                                 <ProviderModelIcon provider={group.provider} class="shrink-0" />
-                                <span class="settings-section-title">{group.provider.name}</span>
+                                <span class="settings-section-title">
+                                  {displayProviderName(group.provider, language.t("provider.connect.opencode.name"))}
+                                </span>
                               </span>
                             </button>
                           </h3>
@@ -1289,7 +1286,11 @@ function ProviderSteps(props: { provider: string; controller: ProviderDialogCont
                     {(item) => (
                       <ProviderModelGroup
                         provider={item.provider}
-                        name={consoleProviderName(group(), item.provider.name)}
+                        name={
+                          item.provider.id === "opencode"
+                            ? language.t("provider.connect.opencode.freeName")
+                            : consoleProviderName(group(), item.provider.name)
+                        }
                         expanded={!input.body.collapsed[item.provider.id]}
                         onExpandedChange={(value) => collapse(item.provider.id, !value)}
                       >
