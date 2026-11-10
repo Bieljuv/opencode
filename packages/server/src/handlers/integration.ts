@@ -106,6 +106,12 @@ export const IntegrationHandler = HttpApiBuilder.group(Api, "server.integration"
       .handle(
         "integration.connect.key",
         Effect.fn(function* (ctx) {
+          // A cold location activates its plugins asynchronously: without
+          // the wait this reads an empty registry and 404s an integration
+          // the plugins are about to register (integration.list waits the
+          // same way). The desktop connects the gateway key right after
+          // the server starts, so it always hit the cold path.
+          yield* Plugin.awaitActivation
           yield* requireConnectable(ctx.params.integrationID)
           const service = yield* Integration.Service
           if (!(yield* service.get(ctx.params.integrationID)))
