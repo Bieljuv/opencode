@@ -64,8 +64,10 @@ export const ManosTechClientGoogleAvailable = Rpc.make("ManosTechClientGoogleAva
 })
 
 export const ManosTechClientGoogleStart = Rpc.make("ManosTechClientGoogleStart", {
-  success: Schema.Struct({ available: Schema.Boolean }),
+  success: Schema.Struct({ available: Schema.Boolean, authorizeUrl: Schema.optional(Schema.String) }),
 })
+
+export const ManosTechClientGoogleCancel = Rpc.make("ManosTechClientGoogleCancel")
 
 export const ManosTechClientUsage = Rpc.make("ManosTechClientUsage", {
   success: Schema.NullOr(ClientUsage),
@@ -91,6 +93,7 @@ export const ManosTechClientRpcs = RpcGroup.make(
   ManosTechClientLogout,
   ManosTechClientGoogleAvailable,
   ManosTechClientGoogleStart,
+  ManosTechClientGoogleCancel,
   ManosTechClientUsage,
   ManosTechClientUsageWarned,
   ManosTechClientTranscribe,

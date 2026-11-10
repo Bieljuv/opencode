@@ -72,6 +72,8 @@ type PendingGoogle = {
   readonly state: string
   readonly startedAt: number
   readonly redirectUri: string
+  readonly authorizeUrl: string
+  readonly close: () => void
 }
 
 let pendingGoogle: PendingGoogle | undefined
@@ -357,11 +359,19 @@ export function getAccount(): { name: string; email: string } | undefined {
   return stored ? { name: stored.client.name, email: stored.client.email } : undefined
 }
 
-export async function googleStart(): Promise<{ available: boolean }> {
+// Inicia o login com Google: abre o navegador na URL de autorização do
+// fluxo loopback e devolve a URL para a tela de espera poder reabri-la ou
+// mostrá-la para copiar quando o navegador não abre sozinho.
+export async function googleStart(): Promise<{ available: boolean; authorizeUrl?: string }> {
   if (!MANOSTECH_GOOGLE_CLIENT_ID) return { available: false }
 
   const pkce = createPkce()
   const state = createState()
+
+  // Um fluxo anterior ainda vivo (Voltar e clicar de novo): o listener
+  // dele só é fechado depois que o novo fluxo está registrado, para o
+  // retorno dele não derrubar o fluxo novo.
+  const previous = pendingGoogle
 
   let listener: LoopbackListener
 
@@ -371,17 +381,24 @@ export async function googleStart(): Promise<{ available: boolean }> {
     return { available: false }
   }
 
-  pendingGoogle = { verifier: pkce.verifier, state, startedAt: Date.now(), redirectUri: listener.redirectUri }
-  finishGoogleLoopback(listener.code).catch(() => notifyClientChanged())
+  const authorizeUrlValue = authorizeUrl({
+    clientId: MANOSTECH_GOOGLE_CLIENT_ID,
+    state,
+    challenge: pkce.challenge,
+    redirectUri: listener.redirectUri,
+  })
+  pendingGoogle = {
+    verifier: pkce.verifier,
+    state,
+    startedAt: Date.now(),
+    redirectUri: listener.redirectUri,
+    authorizeUrl: authorizeUrlValue,
+    close: () => listener.close(),
+  }
+  previous?.close()
+  finishGoogleLoopback(listener.code, state).catch(() => notifyClientChanged())
 
-  const opened = await openExternalURL(
-    authorizeUrl({
-      clientId: MANOSTECH_GOOGLE_CLIENT_ID,
-      state,
-      challenge: pkce.challenge,
-      redirectUri: listener.redirectUri,
-    }),
-  )
+  const opened = await openExternalURL(authorizeUrlValue)
 
   if (!opened) {
     listener.close()
@@ -389,7 +406,16 @@ export async function googleStart(): Promise<{ available: boolean }> {
     return { available: false }
   }
 
-  return { available: true }
+  return { available: true, authorizeUrl: authorizeUrlValue }
+}
+
+// Cancela o login com Google em andamento: fecha o listener e esquece o
+// fluxo. O retorno do listener fechado vira no-op na guarda de
+// finishGoogleLoopback, sem notificar o renderer (que já voltou ao login).
+export function googleCancel(): void {
+  const pending = pendingGoogle
+  pendingGoogle = undefined
+  pending?.close()
 }
 
 export async function googleAvailable(): Promise<boolean> {
@@ -400,12 +426,17 @@ export async function googleAvailable(): Promise<boolean> {
  * Fecha o login Google iniciado por googleStart: espera o código chegar
  * no loopback, valida o state e o prazo, troca o código pelo ID token no
  * Google e entra no painel com ele. Qualquer falha só avisa o renderer,
- * que volta para o login.
+ * que volta para o login. `state` é o do fluxo que iniciou o listener: se
+ * outro fluxo já assumiu (novo login ou cancelamento), o retorno é de um
+ * fluxo velho e é ignorado sem notificar o renderer.
  */
-async function finishGoogleLoopback(code: Promise<AuthReturn>): Promise<void> {
+async function finishGoogleLoopback(code: Promise<AuthReturn>, state: string): Promise<void> {
   const result = await code
 
   const pending = pendingGoogle
+
+  if (!pending || pending.state !== state) return
+
   pendingGoogle = undefined
 
   if (result.kind === "error") {
@@ -414,7 +445,7 @@ async function finishGoogleLoopback(code: Promise<AuthReturn>): Promise<void> {
     return
   }
 
-  if (!pending || pending.state !== result.state || Date.now() - pending.startedAt > GOOGLE_FLOW_TTL_MS) {
+  if (pending.state !== result.state || Date.now() - pending.startedAt > GOOGLE_FLOW_TTL_MS) {
     notifyClientChanged()
 
     return
