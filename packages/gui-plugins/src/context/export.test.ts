@@ -245,12 +245,12 @@ describe("sanitizeSessionExport", () => {
     }
 
     for (const kept of [
-      "Use o Automático e veja ~/.editor/skills",
+      "Use o Automático e veja ~/.ManosTech.AI/skills",
       "Rodei com Automático e Automático.",
       "Tente novamente mais tarde.",
-      "Os modelos Automático e o Automático ficam no Automático.",
+      "Os modelos ManosTech.AI e o Automático ficam no Automático.",
       "Veja Automático para mais detalhes.",
-      "A sessão usou o editor e o Automático/models para gerar a imagem.",
+      "A sessão usou o ManosTech.AI e o Automático/models para gerar a imagem.",
     ]) {
       expect(json).toContain(kept)
     }
@@ -265,7 +265,7 @@ describe("sanitizeSessionExport", () => {
       content: [
         { type: "text", text: "Rodei com Automático e Automático." },
         { type: "text", text: "Tente novamente mais tarde." },
-        { type: "text", text: "Os modelos Automático e o Automático ficam no Automático." },
+        { type: "text", text: "Os modelos ManosTech.AI e o Automático ficam no Automático." },
         { type: "text", text: "Tente novamente mais tarde." },
         { type: "text", text: "Veja Automático para mais detalhes." },
       ],
@@ -327,7 +327,7 @@ describe("sanitizeSessionExport", () => {
       tokens,
       time: { created: 1100 },
       content: [
-        { type: "text", text: "uso do Editor estourada (volta em ~13h)." },
+        { type: "text", text: "uso do ManosTech.AI estourada (volta em ~13h)." },
         { type: "text", text: "Testar Automático por 7 dias e ver os modelos Automático." },
         { type: "text", text: "Sem gastar uso da API e sem uso diário." },
         { type: "text", text: "saldo quase esgotados, adicione saldo." },
@@ -366,6 +366,124 @@ describe("sanitizeSessionExport", () => {
     ]) {
       expect(json).toContain(kept)
     }
+  })
+
+  test("scrubs the English free-tier word from the conversation text", () => {
+    const assistant = {
+      id: "msg_assistant_english_tier",
+      type: "assistant",
+      agent: "build",
+      tokens,
+      time: { created: 1100 },
+      content: [
+        { type: "text", text: "Free usage limit reached. Free models work in OpenCode." },
+        { type: "text", text: "Try another free model for generation." },
+        { type: "text", text: "Os modelos free do fallback morreram (404)." },
+        { type: "text", text: "Rate limit exceeded: free-models-per-day." },
+        { type: "text", text: "O nome era North Mini Code (free)." },
+        { type: "text", text: "Tipo do erro: provider.free-limit." },
+      ],
+    }
+
+    const info = { id: "ses_1" } as SessionInfo
+    const messages = [assistant] as unknown as SessionMessageInfo[]
+
+    const result = sanitizeSessionExport({ info, messages })
+    const json = JSON.stringify(result)
+
+    for (const leaked of [
+      "free",
+      "Free",
+      "FREE",
+      "free tier",
+      "free models",
+      "free-models-per-day",
+      "provider.free-limit",
+      "(free)",
+    ]) {
+      expect(json).not.toContain(leaked)
+    }
+
+    expect(result.messages[0]).toEqual({
+      id: "msg_assistant_english_tier",
+      type: "assistant",
+      agent: "build",
+      tokens,
+      time: { created: 1100 },
+      content: [
+        { type: "text", text: "Automático usage limit reached. Automático models work in ManosTech.AI." },
+        { type: "text", text: "Try another Automático model for generation." },
+        { type: "text", text: "Os modelos Automático do fallback morreram (404)." },
+        { type: "text", text: "Rate limit exceeded: Automático-models-per-day." },
+        { type: "text", text: "O nome era North Mini Code (Automático)." },
+        { type: "text", text: "Tipo do erro: provider.Automático-limit." },
+      ],
+    })
+  })
+
+  test("keeps free as code, disk space and inside identifiers", () => {
+    const assistant = {
+      id: "msg_assistant_free_keep",
+      type: "assistant",
+      agent: "build",
+      tokens,
+      time: { created: 1100 },
+      content: [
+        { type: "text", text: "const freeSpace = disk.freeSpace; free(); const FREE_WIFI = true;" },
+        { type: "text", text: "Only 2 GB free space left on the disk." },
+        { type: "text", text: "Check the free disk space before installing." },
+        { type: "text", text: "The error was FreeUsageLimitError in the log." },
+        { type: "text", text: "Use a free model here." },
+      ],
+    }
+
+    const info = { id: "ses_1" } as SessionInfo
+    const messages = [assistant] as unknown as SessionMessageInfo[]
+
+    const json = JSON.stringify(sanitizeSessionExport({ info, messages }))
+
+    for (const kept of [
+      "const freeSpace = disk.freeSpace; free(); const FREE_WIFI = true;",
+      "Only 2 GB free space left on the disk.",
+      "Check the free disk space before installing.",
+      "The error was FreeUsageLimitError in the log.",
+      "Use a Automático model here.",
+    ]) {
+      expect(json).toContain(kept)
+    }
+  })
+
+  test("keeps the free-tier word inside image data", () => {
+    const blob = `${"A".repeat(100)}free${"B".repeat(100)}`
+
+    const assistant = {
+      id: "msg_assistant_blob_free",
+      type: "assistant",
+      agent: "build",
+      tokens,
+      time: { created: 1100 },
+      content: [
+        { type: "text", text: blob },
+        { type: "text", text: "use a free model" },
+      ],
+    }
+
+    const info = { id: "ses_1" } as SessionInfo
+    const messages = [assistant] as unknown as SessionMessageInfo[]
+
+    const result = sanitizeSessionExport({ info, messages })
+
+    expect(result.messages[0]).toEqual({
+      id: "msg_assistant_blob_free",
+      type: "assistant",
+      agent: "build",
+      tokens,
+      time: { created: 1100 },
+      content: [
+        { type: "text", text: blob },
+        { type: "text", text: "use a Automático model" },
+      ],
+    })
   })
 
   test("keeps tier and quota words inside image data", () => {
@@ -427,7 +545,7 @@ describe("sanitizeSessionExport", () => {
       "buscar no Google",
       "api/leads",
       "chat/completions",
-      "C:/Users/ManosTech/AppData/Local/Temp/editor/previas-test/gerar.js",
+      "C:/Users/ManosTech/AppData/Local/Temp/ManosTech.AI/previas-test/gerar.js",
       "application/json",
       "public/app.js",
     ]) {

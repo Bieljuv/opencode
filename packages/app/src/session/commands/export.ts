@@ -73,11 +73,14 @@ function scrubExportValue(value: JsonValue): JsonValue {
 }
 
 // The replacements are fixed pt-BR data values in the exported file, not UI copy, so they carry no i18n
-// key: "Automático" is the masked model name the whole app already shows, and "Tente novamente mais
-// tarde." is the product's generic error for anything the mask hides.
+// key: "Automático" is the masked model name the whole app already shows, "ManosTech.AI" is the
+// product's brand name, and "Tente novamente mais tarde." is the product's generic error for anything
+// the mask hides.
 const EXPORT_MASK_GENERIC = "Tente novamente mais tarde."
 
 const EXPORT_MASK_MODEL = "Automático"
+
+const EXPORT_MASK_BRAND = "ManosTech.AI"
 
 // Providers that can head a `provider/model` slug in the conversation text. "opencode-go" comes before
 // "opencode" so the longer provider wins.
@@ -217,6 +220,15 @@ const EXPORT_MASK_BARE = new RegExp(
 const EXPORT_MASK_TIER_QUOTA =
   /\b(grátis|gratis|gratuit[oa]s?|pag[oa]s?|cotas?|créditos?|creditos?|limites?)\b/gi
 
+// The English tier word "free" — the equivalent of "grátis" — reads "Automático" when it names a
+// tier or a model ("free tier", "free models", "Free usage limit reached", "modelos free"). A call
+// stays code ("free("), and a disk-space phrase stays prose ("free space", "free disk space"):
+// both are read from the characters around the match, because the word itself is identical. Code
+// identifiers that contain the word are out of reach already: \b never matches inside camelCase or
+// snake_case ("freeSpace", "FREE_WIFI", "FreeUsageLimitError"), and the base64 guard below keeps
+// image data intact.
+const EXPORT_MASK_FREE_TIER = /\bfree\b/gi
+
 // A base64 run of 64 or more is image data, not prose: real image blobs in exports run to tens of KB,
 // while the longest path that carries a model word measured 52 chars. The guard applies to the slug,
 // bare-word and tier/quota rules — "opencode" itself is never inside image data and must reach zero
@@ -229,10 +241,10 @@ const EXPORT_MASK_BASE64_CHAR = /[A-Za-z0-9+/=]/
  * Scrubs the masked vocabulary out of one string. Order matters: the Go error first (it contains
  * "OpenCode Go", which the later opencode rule would otherwise rewrite), then the Go console link,
  * then the provider/model slugs (before "opencode" so "opencode/mimo-..." becomes one "Automático"),
- * then "opencode-go" before "opencode" (else it becomes "editor-go"), then the bare model and
- * provider words, then the tier and quota words last (they never overlap the earlier rules, so they
- * only catch what is left). Left alone on purpose: bare "Google" as a search engine and the company
- * name "ManosTech".
+ * then "opencode-go" before "opencode" (else it becomes "ManosTech.AI-go"), then the bare model and
+ * provider words, then the tier and quota words, and the English tier word "free" last (they never
+ * overlap the earlier rules, so they only catch what is left). Left alone on purpose: bare "Google"
+ * as a search engine and the company name "ManosTech".
  */
 function scrubExportText(value: string): string {
   return value
@@ -240,21 +252,11 @@ function scrubExportText(value: string): string {
     .replace(EXPORT_MASK_GO_SENTENCE, EXPORT_MASK_GENERIC)
     .replace(EXPORT_MASK_GO_LINK, EXPORT_MASK_MODEL)
     .replace(EXPORT_MASK_SLUG, scrubExportSlug)
-    .replace(EXPORT_MASK_OPENCODE_GO, EXPORT_MASK_MODEL)
-    .replace(EXPORT_MASK_OPENCODE, scrubExportOpencode)
+    .replace(EXPORT_MASK_OPENCODE_GO, EXPORT_MASK_BRAND)
+    .replace(EXPORT_MASK_OPENCODE, EXPORT_MASK_BRAND)
     .replace(EXPORT_MASK_BARE, scrubExportBare)
     .replace(EXPORT_MASK_TIER_QUOTA, scrubExportTierQuota)
-}
-
-// "opencode" becomes the product's short name, keeping the case the text used so paths, commands and
-// identifiers keep their shape: "~/.opencode/skills" reads "~/.editor/skills", "tentarOpenCode" reads
-// "tentarEditor". The full name would break those.
-function scrubExportOpencode(match: string): string {
-  if (match === "OPENCODE") return "EDITOR"
-
-  if (match.startsWith("O")) return "Editor"
-
-  return "editor"
+    .replace(EXPORT_MASK_FREE_TIER, scrubExportFreeTier)
 }
 
 // The replacer only guards image data and keeps a sentence-final period the pattern may have swallowed
@@ -308,6 +310,17 @@ function scrubExportTierQuota(match: string, offset: number, value: string): str
   if (["cota", "cotas", "limite", "limites"].includes(lower)) return "uso"
 
   if (["crédito", "créditos", "credito", "creditos"].includes(lower)) return "saldo"
+
+  return EXPORT_MASK_MODEL
+}
+
+function scrubExportFreeTier(match: string, offset: number, value: string): string {
+  if (isInsideBase64Run(value, offset, match.length)) return match
+
+  // A call stays code, and a disk-space phrase stays prose; anything else bare is a tier word.
+  if (value[offset + match.length] === "(") return match
+
+  if (/^\s+(disk\s+)?space\b/i.test(value.slice(offset + match.length))) return match
 
   return EXPORT_MASK_MODEL
 }
