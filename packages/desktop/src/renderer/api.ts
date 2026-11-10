@@ -48,6 +48,7 @@ export const api: ElectronAPI = {
   getClientStatus: () => invoke("ManosTechClientStatus"),
   loginClient: (email, password) => invoke("ManosTechClientLogin", { email, password }),
   changeClientPassword: (current, next) => invoke("ManosTechClientChangePassword", { current, next }),
+  forgotClientPassword: (email) => invoke("ManosTechClientForgotPassword", { email }),
   logoutClient: () => invoke("ManosTechClientLogout"),
   getClientGoogleAvailable: () => invoke("ManosTechClientGoogleAvailable"),
   startClientGoogle: () => invoke("ManosTechClientGoogleStart"),

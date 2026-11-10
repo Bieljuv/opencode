@@ -4,6 +4,7 @@ import {
   ensureApiKey,
   fetchApiKey,
   fetchDailyUsage,
+  forgotPassword,
   googleLogin,
   login,
   trialStatus,
@@ -49,6 +50,18 @@ const server = Bun.serve({
         return Response.json({ erro: "a nova senha tem que ter pelo menos 8 caracteres" }, { status: 400 })
 
       return Response.json({ ok: true }, { status: 200 })
+    }
+
+    if (url.pathname === "/api/auth/cliente/esqueci-senha" && request.method === "POST") {
+      if (typeof body.email !== "string" || !body.email.includes("@"))
+        return Response.json({ erro: "informe um e-mail válido" }, { status: 400 })
+
+      // O painel responde a mesma mensagem genérica exista o e-mail ou
+      // não; o app nunca mostra o texto do servidor.
+      return Response.json(
+        { ok: true, mensagem: "Se o e-mail estiver cadastrado, você receberá uma senha temporária." },
+        { status: 200 },
+      )
     }
 
     if (url.pathname === "/api/auth/cliente/sessao" && request.method === "GET")
@@ -219,6 +232,36 @@ describe("login", () => {
 
   test("an unreachable panel maps to network", async () => {
     const result = await login("http://127.0.0.1:1", { email: "a@b.com", password: "x", deviceId: "dev-1" })
+
+    expect(result).toEqual({ ok: false, error: { tag: "network" } })
+  })
+})
+
+describe("forgotPassword", () => {
+  test("a 200 answers ok, whatever the email", async () => {
+    const result = await forgotPassword(base, "ana@exemplo.com")
+
+    expect(result).toEqual({ ok: true, value: { sent: true } })
+  })
+
+  test("a rate-limited recovery maps to unknown (the screen stays generic)", async () => {
+    const limited = Bun.serve({
+      port: 0,
+      fetch: () =>
+        Response.json({ erro: "Muitas tentativas. Tente novamente em alguns minutos." }, { status: 429 }),
+    })
+
+    try {
+      const result = await forgotPassword(`http://127.0.0.1:${limited.port}`, "ana@exemplo.com")
+
+      expect(result).toEqual({ ok: false, error: { tag: "unknown" } })
+    } finally {
+      limited.stop()
+    }
+  })
+
+  test("an unreachable panel maps to network", async () => {
+    const result = await forgotPassword("http://127.0.0.1:1", "ana@exemplo.com")
 
     expect(result).toEqual({ ok: false, error: { tag: "network" } })
   })

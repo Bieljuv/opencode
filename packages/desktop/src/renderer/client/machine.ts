@@ -5,8 +5,9 @@ import type {
 
 /**
  * ManosTech: o portão da conta do cliente. Uma máquina pura: a fase que o
- * usuário vê (checando, login, troca de senha, teste encerrado, pronto).
- * O driver (gate.tsx) roda os efeitos e devolve os resultados como eventos.
+ * usuário vê (checando, login, recuperação de senha, troca de senha, teste
+ * encerrado, pronto). O driver (gate.tsx) roda os efeitos e devolve os
+ * resultados como eventos.
  */
 
 export type ClientGateError = ManosTechClientErrorValue["tag"]
@@ -21,6 +22,13 @@ export type ClientGateState =
     }
   | { readonly status: "waiting-google"; readonly googleAvailable: boolean; readonly authorizeUrl: string | undefined }
   | { readonly status: "change-password"; readonly error: ClientGateError | undefined; readonly busy: boolean }
+  | {
+      readonly status: "forgot"
+      readonly googleAvailable: boolean | undefined
+      readonly error: ClientGateError | undefined
+      readonly busy: boolean
+    }
+  | { readonly status: "forgot-sent"; readonly googleAvailable: boolean | undefined }
   | { readonly status: "trial-expired"; readonly trialEndsAt: string | null }
   | { readonly status: "ready"; readonly trialEndsAt: string | null }
 
@@ -38,6 +46,11 @@ export type ClientGateEvent =
   | { readonly type: "change.submitted"; readonly current: string; readonly next: string }
   | { readonly type: "change.succeeded" }
   | { readonly type: "change.failed"; readonly error: ManosTechClientErrorValue }
+  | { readonly type: "forgot.requested" }
+  | { readonly type: "forgot.submitted"; readonly email: string }
+  | { readonly type: "forgot.succeeded" }
+  | { readonly type: "forgot.failed"; readonly error: ManosTechClientErrorValue }
+  | { readonly type: "forgot.cancelled" }
   | { readonly type: "client.changed" }
   | { readonly type: "revalidate" }
   | { readonly type: "disposed" }
@@ -47,6 +60,7 @@ export type ClientGateEffect =
   | { readonly type: "check-google" }
   | { readonly type: "do-login"; readonly email: string; readonly password: string }
   | { readonly type: "do-change"; readonly current: string; readonly next: string }
+  | { readonly type: "do-forgot"; readonly email: string }
   | { readonly type: "do-google-start" }
   | { readonly type: "do-google-cancel" }
   | { readonly type: "schedule-revalidation" }
@@ -142,9 +156,10 @@ export function transitionClientGate(state: ClientGateState, event: ClientGateEv
   }
 
   if (event.type === "google.availability.settled") {
-    if (state.status !== "login") return unchanged(state)
+    if (state.status === "login" || state.status === "forgot" || state.status === "forgot-sent")
+      return to({ ...state, googleAvailable: event.available })
 
-    return to({ ...state, googleAvailable: event.available })
+    return unchanged(state)
   }
 
   if (event.type === "google.submitted") {
@@ -194,6 +209,36 @@ export function transitionClientGate(state: ClientGateState, event: ClientGateEv
     if (state.status !== "change-password") return unchanged(state)
 
     return to({ ...state, busy: false, error: event.error.tag })
+  }
+
+  if (event.type === "forgot.requested") {
+    if (state.status !== "login" || state.busy) return unchanged(state)
+
+    return to({ status: "forgot", googleAvailable: state.googleAvailable, error: undefined, busy: false })
+  }
+
+  if (event.type === "forgot.submitted") {
+    if (state.status !== "forgot" || state.busy) return unchanged(state)
+
+    return to({ ...state, busy: true }, [{ type: "do-forgot", email: event.email }])
+  }
+
+  if (event.type === "forgot.succeeded") {
+    if (state.status !== "forgot") return unchanged(state)
+
+    return to({ status: "forgot-sent", googleAvailable: state.googleAvailable })
+  }
+
+  if (event.type === "forgot.failed") {
+    if (state.status !== "forgot") return unchanged(state)
+
+    return to({ ...state, busy: false, error: event.error.tag })
+  }
+
+  if (event.type === "forgot.cancelled") {
+    if (state.status !== "forgot" && state.status !== "forgot-sent") return unchanged(state)
+
+    return to({ status: "login", googleAvailable: state.googleAvailable, error: undefined, busy: false })
   }
 
   return unchanged(state)

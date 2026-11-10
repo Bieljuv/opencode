@@ -57,6 +57,14 @@ export const ManosTechClientChangePassword = Rpc.make("ManosTechClientChangePass
   ]),
 })
 
+export const ManosTechClientForgotPassword = Rpc.make("ManosTechClientForgotPassword", {
+  payload: { email: Schema.String },
+  success: Schema.Union([
+    Schema.Struct({ ok: Schema.Literal(true) }),
+    Schema.Struct({ ok: Schema.Literal(false), error: ClientError }),
+  ]),
+})
+
 export const ManosTechClientLogout = Rpc.make("ManosTechClientLogout")
 
 export const ManosTechClientGoogleAvailable = Rpc.make("ManosTechClientGoogleAvailable", {
@@ -90,6 +98,7 @@ export const ManosTechClientRpcs = RpcGroup.make(
   ManosTechClientStatus,
   ManosTechClientLogin,
   ManosTechClientChangePassword,
+  ManosTechClientForgotPassword,
   ManosTechClientLogout,
   ManosTechClientGoogleAvailable,
   ManosTechClientGoogleStart,
@@ -110,6 +119,10 @@ export type ManosTechClientLoginValue =
   | { readonly ok: false; readonly error: ManosTechClientErrorValue }
 
 export type ManosTechClientChangePasswordValue =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly error: ManosTechClientErrorValue }
+
+export type ManosTechClientForgotPasswordValue =
   | { readonly ok: true }
   | { readonly ok: false; readonly error: ManosTechClientErrorValue }
 

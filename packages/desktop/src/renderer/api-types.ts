@@ -2,6 +2,7 @@ import type { DesktopMenuAction, DesktopZoomLevel } from "@opencode/app/desktop-
 import type { DesktopNativeBundle } from "@opencode/app/i18n/desktop-native"
 import type {
   ManosTechClientChangePasswordValue,
+  ManosTechClientForgotPasswordValue,
   ManosTechClientLoginValue,
   ManosTechClientStatusValue,
   ManosTechClientTranscribeValue,
@@ -51,6 +52,7 @@ export type ElectronAPI = {
   getClientStatus(): Promise<ManosTechClientStatusValue>
   loginClient(email: string, password: string): Promise<ManosTechClientLoginValue>
   changeClientPassword(current: string, next: string): Promise<ManosTechClientChangePasswordValue>
+  forgotClientPassword(email: string): Promise<ManosTechClientForgotPasswordValue>
   logoutClient(): Promise<void>
   getClientGoogleAvailable(): Promise<boolean>
   startClientGoogle(): Promise<{ available: boolean; authorizeUrl?: string }>

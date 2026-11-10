@@ -102,6 +102,15 @@ export function ManosTechClientGate(props: { api: ElectronAPI }) {
           () => dispatch({ type: "change.failed", error: { tag: "network" } }),
         )
 
+      case "do-forgot":
+        return void props.api.forgotClientPassword(effect.email).then(
+          (result) =>
+            result.ok
+              ? dispatch({ type: "forgot.succeeded" })
+              : dispatch({ type: "forgot.failed", error: result.error }),
+          () => dispatch({ type: "forgot.failed", error: { tag: "network" } }),
+        )
+
       case "do-google-start":
         return void props.api.startClientGoogle().then(
           (result) =>
@@ -200,6 +209,18 @@ export function ManosTechClientGate(props: { api: ElectronAPI }) {
     }
   }
 
+  const forgotBusy = () => {
+    const current = state()
+
+    return current.status === "forgot" && current.busy
+  }
+
+  const forgotError = (): ClientGateError | undefined => {
+    const current = state()
+
+    return current.status === "forgot" ? current.error : undefined
+  }
+
   const submitLogin = (event: Event) => {
     event.preventDefault()
     dispatch({ type: "login.submitted", email: email(), password: password() })
@@ -216,6 +237,11 @@ export function ManosTechClientGate(props: { api: ElectronAPI }) {
 
     setMismatch(false)
     dispatch({ type: "change.submitted", current: currentPassword(), next: nextPassword() })
+  }
+
+  const submitForgot = (event: Event) => {
+    event.preventDefault()
+    dispatch({ type: "forgot.submitted", email: email() })
   }
 
   return (
@@ -283,6 +309,9 @@ export function ManosTechClientGate(props: { api: ElectronAPI }) {
               {language.t(loginBusy() ? "client.login.entering" : "client.login.button")}
             </Button>
           </form>
+          <Button variant="ghost" disabled={loginBusy()} onClick={() => dispatch({ type: "forgot.requested" })}>
+            {language.t("client.login.forgotPassword")}
+          </Button>
           <Show when={googleVisible()}>
             <div class="client-gate-divider">
               <span>{language.t("client.login.or")}</span>
@@ -291,6 +320,62 @@ export function ManosTechClientGate(props: { api: ElectronAPI }) {
               {language.t("client.login.google")}
             </Button>
           </Show>
+        </GateShell>
+      </Match>
+
+      <Match when={state().status === "forgot"}>
+        <GateShell>
+          <header>
+            <h1>{language.t("client.forgotPassword.title")}</h1>
+            <p>{language.t("client.forgotPassword.description")}</p>
+          </header>
+          <form onSubmit={submitForgot}>
+            <div class="client-gate-field">
+              <label for="client-gate-forgot-email">{language.t("client.login.email")}</label>
+              <TextInput
+                id="client-gate-forgot-email"
+                name="email"
+                dir="ltr"
+                type="email"
+                inputMode="email"
+                autocapitalize="off"
+                spellcheck={false}
+                autocomplete="username"
+                required
+                appearance="large"
+                placeholder={language.t("client.login.email.placeholder")}
+                value={email()}
+                disabled={forgotBusy()}
+                aria-describedby={forgotError() ? "client-gate-forgot-error" : undefined}
+                onInput={(event) => setEmail(event.currentTarget.value)}
+              />
+            </div>
+            <Show when={forgotError()}>
+              {(error) => (
+                <span id="client-gate-forgot-error" class="client-gate-error" role="alert">
+                  {language.t(errorKey(error()))}
+                </span>
+              )}
+            </Show>
+            <Button type="submit" variant="submit" disabled={forgotBusy()}>
+              {language.t(forgotBusy() ? "client.forgotPassword.sending" : "client.forgotPassword.button")}
+            </Button>
+          </form>
+          <Button variant="ghost" onClick={() => dispatch({ type: "forgot.cancelled" })}>
+            {language.t("client.forgotPassword.back")}
+          </Button>
+        </GateShell>
+      </Match>
+
+      <Match when={state().status === "forgot-sent"}>
+        <GateShell>
+          <header>
+            <h1>{language.t("client.forgotPassword.title")}</h1>
+            <p>{language.t("client.forgotPassword.sent")}</p>
+          </header>
+          <Button variant="submit" onClick={() => dispatch({ type: "forgot.cancelled" })}>
+            {language.t("client.forgotPassword.back")}
+          </Button>
         </GateShell>
       </Match>
 
