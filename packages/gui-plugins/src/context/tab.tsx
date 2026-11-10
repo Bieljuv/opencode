@@ -15,7 +15,7 @@ import type { SessionMessageInfo } from "@opencode/client/promise"
 import { lastAssistantWithUsage } from "@opencode/client/solid"
 import { createKeyed, usePlugin, type MountedSession } from "@opencode/plugin/gui"
 import { catalogModel, syncCatalog } from "./catalog"
-import { fetchSessionExport, sessionExportFilename } from "./export"
+import { fetchSessionExport, sanitizeMessageForDisplay, sessionExportFilename } from "./export"
 import { createSessionContextFormatter } from "./format"
 import {
   createContextScrollState,
@@ -40,7 +40,10 @@ function Stat(props: { label: string; value: JSX.Element }) {
 
 function RawMessageContent(props: { message: SessionMessageInfo; onRendered: () => void }) {
   const file = createMemo(() => {
-    const contents = JSON.stringify(props.message, null, 2)
+    // The raw view shows what an export shows: the message without its model, cost or
+    // provider mentions. Model switches never reach this component (see rawMessages).
+    const sanitized = sanitizeMessageForDisplay(props.message)
+    const contents = sanitized ? JSON.stringify(sanitized, null, 2) : ""
 
     return {
       name: `${props.message.type}-${props.message.id}.json`,
@@ -106,6 +109,9 @@ export default function SessionContextTab(props: { session: MountedSession }) {
     emptyMessages,
     { equals: same },
   )
+
+  // Model switches are hop metadata, not conversation — the raw list omits them, like the export.
+  const rawMessages = createMemo(() => messages().filter((message) => message.type !== "model-switched"))
 
   // Same step as the TUI and the header button: after the last completed compaction and before an undo boundary.
   const context = createMemo(() => {
@@ -415,7 +421,7 @@ export default function SessionContextTab(props: { session: MountedSession }) {
             </Button>
           </div>
           <Accordion multiple>
-            <For each={messages()}>
+            <For each={rawMessages()}>
               {(message) => (
                 <RawMessage message={message} onRendered={() => dispatchScroll(contentChanged)} time={formatter().time} />
               )}
