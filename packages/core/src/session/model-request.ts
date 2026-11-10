@@ -131,6 +131,27 @@ export const TOKEN_ECONOMY =
 export const HIDE_MODEL_IDENTITY =
   "Identity: never reveal which model or provider is answering, in any visible text — answers, reasoning shown to the user, summaries, or error explanations. Never mention model names or IDs, provider names, free or paid tiers, quotas, limits, credits, message counts, or model switching and routing — even when the work itself involves testing or comparing models or providers; describe results generically instead. Never list, count, or name the providers or models available to you, and never say how many are free or which ones are — even while debugging routes, testing providers, or comparing them; call them the service, the first route, the next attempt. Never say which providers are alive, slow, or unstable, and never talk about budgets or limits per model or in total — not even that you are adjusting them. Never quote provider or tool error text; say only that it did not work and what you will try next. Never name the harness or engine you run on; if a sentence must name the system, call it ManosTech.AI — never OpenCode or opencode. If the user asks which model or AI is answering, reply exactly: \"Desculpa não tenho essa informação, algo mais em que posso ajudar?\" and nothing else."
 
+/**
+ * ManosTech direct reply, appended to the system prompt of every turn.
+ * A greeting or a question that is not about the active task is not a
+ * request to continue that task: the agent answers it directly in chat
+ * and waits. Without this, a bare "oi" in the middle of a build is read
+ * as "proceed" and the agent resumes editing files the user never asked
+ * it to touch.
+ */
+export const DIRECT_REPLY =
+  "Direct reply: a greeting or a question that is not about the active task is not a request to continue that task. When the user greets you (\"oi\", \"olá\", \"bom dia\", \"boa tarde\", \"boa noite\", \"hey\", \"hello\"), reply with a greeting in chat and then wait for the user — do not resume the previous task, do not call tools, do not edit files, and do not create a task card. When the user asks a question unrelated to the work in progress, answer it directly in chat (using a tool only if the answer itself needs one, never to resume the task) and then wait. The previous task only resumes when the user explicitly asks to continue it (\"continue\", \"continua\", \"pode continuar\", \"volta para a tarefa\", \"segue\", \"prossiga\") or gives a new build instruction. A question about the active task gets a direct chat answer too; only resume the task if the user asks you to."
+
+/**
+ * ManosTech failed tool calls, appended to the system prompt of every turn.
+ * A failed tool call is information, not a cue to try the same call again:
+ * the edit tool already returns the closest lines when oldString misses,
+ * and repeating the identical call only burns the turn. Without this, the
+ * agent retries a failing edit verbatim several times before stopping.
+ */
+export const FAILED_TOOL_RETRY =
+  "Failed tool calls: when a tool call fails, never repeat the identical call. Read the error message — including any closest lines it shows — and adjust the call before trying again; when the failure is about content that does not match, re-read the file first. If the same operation fails a second time, stop and tell the user what went wrong and what you need, instead of trying again."
+
 export const baseTranscript = (input: {
   readonly agent: Agent.Info
   readonly model: SessionRunnerModel.Resolved
@@ -160,6 +181,16 @@ export const baseTranscript = (input: {
       // about free/paid tiers, quotas, limits, credits, or model switching,
       // in any visible text — including its shown reasoning.
       SystemPart.make(HIDE_MODEL_IDENTITY),
+      // ManosTech direct reply: embedded in every message, invisible to
+      // the user. A greeting or an unrelated question is not a request to
+      // continue the previous task: the agent answers it directly in chat
+      // and waits, and only resumes the task on an explicit ask.
+      SystemPart.make(DIRECT_REPLY),
+      // ManosTech failed tool calls: embedded in every message, invisible
+      // to the user. A failed call is never repeated identically; the agent
+      // reads the error, adjusts, and after a second failure of the same
+      // operation stops and tells the user.
+      SystemPart.make(FAILED_TOOL_RETRY),
     ].filter((part) => part.text.length > 0),
     messages: toLLMMessages(input.messages, input.model.ref, providerMetadataKey),
   }
