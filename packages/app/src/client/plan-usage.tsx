@@ -1,4 +1,5 @@
 import { createEffect, createSignal, For, onCleanup, onMount, Show } from "solid-js"
+import type { WeeklyUsage } from "@opencode/plugin/gui"
 import { useLanguage } from "@/runtime/i18n/language"
 import { usePlatform } from "@/runtime/platform/platform"
 
@@ -21,6 +22,8 @@ export type PlanUsage = {
   readonly percent: number
   readonly resetsAt: string
   readonly warnedToday: boolean
+  /** O uso semanal, quando o painel o reporta; ausente = sem limite semanal, a barra some. */
+  readonly weekly?: WeeklyUsage
 }
 
 export type PlanUsageTone = "ok" | "warn" | "danger"

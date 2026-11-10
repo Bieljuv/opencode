@@ -347,6 +347,124 @@ describe("fetchDailyUsage", () => {
     })
   })
 
+  test("a response without a weekly object hides only the weekly bar", async () => {
+    const usage = await fetchDailyUsage(base, "key-1")
+
+    expect(usage?.weekly).toBeUndefined()
+  })
+
+  test("a weekly object comes back with the daily one", async () => {
+    const weekly = Bun.serve({
+      port: 0,
+      fetch: () =>
+        Response.json({
+          usado_percentual: 40,
+          reseta_em: "2026-11-10T03:00:00Z",
+          semanal: {
+            limite_tokens: 80_000_000,
+            usado_tokens: 69_600_000,
+            usado_percentual: 87,
+            bloqueado: false,
+            liberacao_em: null,
+            reseta_em: "2026-11-17T03:00:00Z",
+          },
+        }),
+    })
+
+    try {
+      expect(await fetchDailyUsage(`http://127.0.0.1:${weekly.port}`, "key-1")).toEqual({
+        percent: 40,
+        resetsAt: "2026-11-10T03:00:00Z",
+        weekly: { percent: 87, resetsAt: "2026-11-17T03:00:00Z", blocked: false, releasesAt: undefined },
+      })
+    } finally {
+      weekly.stop()
+    }
+  })
+
+  test("a blocked week carries the release instant", async () => {
+    const blocked = Bun.serve({
+      port: 0,
+      fetch: () =>
+        Response.json({
+          usado_percentual: 100,
+          reseta_em: "2026-11-10T03:00:00Z",
+          semanal: {
+            limite_tokens: 80_000_000,
+            usado_tokens: 80_000_000,
+            usado_percentual: 100,
+            bloqueado: true,
+            liberacao_em: "2026-11-10T17:00:00Z",
+            reseta_em: "2026-11-17T03:00:00Z",
+          },
+        }),
+    })
+
+    try {
+      const usage = await fetchDailyUsage(`http://127.0.0.1:${blocked.port}`, "key-1")
+
+      expect(usage?.weekly).toEqual({
+        percent: 100,
+        resetsAt: "2026-11-17T03:00:00Z",
+        blocked: true,
+        releasesAt: "2026-11-10T17:00:00Z",
+      })
+    } finally {
+      blocked.stop()
+    }
+  })
+
+  test("no weekly limit, or a malformed weekly object, hides only the weekly bar", async () => {
+    const noLimit = Bun.serve({
+      port: 0,
+      fetch: () =>
+        Response.json({
+          usado_percentual: 40,
+          reseta_em: "2026-11-10T03:00:00Z",
+          semanal: {
+            limite_tokens: null,
+            usado_tokens: 0,
+            usado_percentual: 0,
+            bloqueado: false,
+            liberacao_em: null,
+            reseta_em: "2026-11-17T03:00:00Z",
+          },
+        }),
+    })
+
+    const malformed = Bun.serve({
+      port: 0,
+      fetch: () =>
+        Response.json({
+          usado_percentual: 40,
+          reseta_em: "2026-11-10T03:00:00Z",
+          semanal: {
+            limite_tokens: 80_000_000,
+            usado_tokens: 0,
+            usado_percentual: 150,
+            bloqueado: false,
+            liberacao_em: null,
+            reseta_em: "2026-11-17T03:00:00Z",
+          },
+        }),
+    })
+
+    try {
+      const withoutLimit = await fetchDailyUsage(`http://127.0.0.1:${noLimit.port}`, "key-1")
+
+      expect(withoutLimit?.percent).toBe(40)
+      expect(withoutLimit?.weekly).toBeUndefined()
+
+      const malformedUsage = await fetchDailyUsage(`http://127.0.0.1:${malformed.port}`, "key-1")
+
+      expect(malformedUsage?.percent).toBe(40)
+      expect(malformedUsage?.weekly).toBeUndefined()
+    } finally {
+      noLimit.stop()
+      malformed.stop()
+    }
+  })
+
   test("a wrong key, a bad shape, and an unreachable panel all mean no data (fail-open)", async () => {
     expect(await fetchDailyUsage(base, "key-errada")).toBeUndefined()
     expect(await fetchDailyUsage("http://127.0.0.1:1", "key-1")).toBeUndefined()

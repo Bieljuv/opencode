@@ -1148,6 +1148,36 @@ export interface Desktop {
   pick(options?: PickOptions): Promise<readonly string[]>
 }
 
+/**
+ * The signed-in client's weekly plan usage, as the panel reports it in
+ * `GET /api/uso` (`semanal`). Only the percent and the instants reach the
+ * interface — never token counts or the size of the allowance.
+ */
+export interface WeeklyUsage {
+  /** The week's usage as a percent of the weekly allowance, 0–100. */
+  readonly percent: number
+  /** When the weekly allowance turns over. */
+  readonly resetsAt: string
+  /** True while the weekly allowance is spent and the client waits for the next block. */
+  readonly blocked: boolean
+  /** When the next block is released, while blocked; undefined otherwise. */
+  readonly releasesAt: string | undefined
+}
+
+/**
+ * The signed-in client's plan usage, as the panel reports it in
+ * `GET /api/uso`. Only the percents and the instants reach the interface —
+ * never token counts or the size of the allowance.
+ */
+export interface ClientUsage {
+  /** Today's usage as a percent of the daily allowance, 0–100. */
+  readonly percent: number
+  /** When the daily allowance turns over. */
+  readonly resetsAt: string
+  /** The weekly allowance, when the panel reports one; undefined when the client has no weekly limit. */
+  readonly weekly: WeeklyUsage | undefined
+}
+
 /** What `Desktop.pick` asks for. */
 export interface PickOptions {
   /** Picks folders instead of files. Defaults to false. */

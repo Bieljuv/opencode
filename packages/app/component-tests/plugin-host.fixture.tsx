@@ -127,6 +127,8 @@ function fakeApis(storage: (plugin: string) => Storage): HostApiFactories {
     servers: () => servers,
     workspaces: () => workspaces,
     desktop: () => undefined,
+    // No client account in the component tests: the weekly bar stays hidden.
+    clientUsage: () => undefined,
     sessions: () => ({ list: () => [], current: () => undefined }),
     screen: () => ({ current: () => undefined }),
     layout: () => layout,

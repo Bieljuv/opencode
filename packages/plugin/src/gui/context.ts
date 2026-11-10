@@ -17,6 +17,7 @@ import type {
 import type {
   Appearance,
   Attention,
+  ClientUsage,
   Commands,
   Desktop,
   Dialogs,
@@ -148,6 +149,18 @@ export interface Context extends BaseContext {
    * ```
    */
   readonly desktop: Desktop | undefined
+  /**
+   * The signed-in client's plan usage, from the panel; undefined on the web
+   * and when the client has no plan usage to show. The host caches the last
+   * fetch for a minute, so polling it once a minute costs no extra request.
+   *
+   * @example
+   * ```ts
+   * const weekly = (await ctx.clientUsage?.())?.weekly
+   * if (!weekly) return
+   * ```
+   */
+  readonly clientUsage: (() => Promise<ClientUsage | undefined>) | undefined
   /**
    * Dialogs that close with the owner that opened them, else when the plugin goes away.
    *
