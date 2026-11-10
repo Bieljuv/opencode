@@ -38,6 +38,14 @@ export * as SessionRouter from "./router.js"
  * moved to paid — the user only sees the result, or the generic message
  * when nothing works.
  *
+ * Speed: the cascade is fast or it is a bad experience. A model that
+ * produces no output within the first-output deadline is frozen and the
+ * runner hops at once instead of waiting out the transport timeouts
+ * (5 minutes for headers, 15 between chunks). And a step that produced
+ * no output at all within the cascade budget gives up with the generic
+ * message instead of hopping through frozen models forever. A healthy
+ * first answer arrives in seconds, so neither limit ever touches it.
+ *
  * Gateway mode: when the ManosTech gateway is active, the only model this
  * router ever sees is `manostech/auto`, so the chain built here has a
  * single element and no hop ever happens in the app — provider failover
@@ -47,6 +55,7 @@ export * as SessionRouter from "./router.js"
  * pick a local model or rescue a turn.
  */
 import { Model } from "@opencode/schema/model"
+import { SessionError } from "@opencode/schema/session-error"
 
 /** Effort chosen by the user in the composer. `automatico` is the default. */
 export type Effort = "automatico" | "rapido" | "equilibrado" | "aprofundado"
@@ -76,6 +85,39 @@ const PREFERRED_FREE = [
 
 /** The single generic message shown when every model is exhausted. */
 export const EXHAUSTED_MESSAGE = "Tente novamente mais tarde."
+
+/**
+ * First output within this long or the model is frozen: hop. 30 seconds —
+ * the same per-request timeout the code-mode fetch already uses
+ * (`TIMEOUT_MS` in `codemode/fetch.ts`), and far below the 142.8s one
+ * model held the user in Gabriel's gate test (2026-11-10 08:50, "lento
+ * demais"). Normal first tokens arrive in seconds, and reasoning models
+ * stream reasoning as output, so a model that produced nothing in 30s is
+ * frozen for the user's purposes — the next model tries instead of the
+ * user waiting minutes.
+ */
+export const FIRST_OUTPUT_TIMEOUT_MS = 30_000
+
+/**
+ * Total silence a step tolerates before the turn gives up with the
+ * generic message. 90 seconds: three frozen attempts at the first-output
+ * deadline, and still 52.8s below the 142.8s a single model held the user
+ * in Gabriel's gate test — the whole cascade resolves before one frozen
+ * model used to. Fast failures (429s) hop in ~0s, so the budget never
+ * cuts a healthy cascade short; it only stops a dead one.
+ */
+export const CASCADE_BUDGET_MS = 90_000
+
+/** True when the step has produced no output and the cascade budget is spent. */
+export function cascadeBudgetSpent(startedAtMs: number, nowMs: number, outputStarted: boolean): boolean {
+  return !outputStarted && nowMs - startedAtMs >= CASCADE_BUDGET_MS
+}
+
+/** The step failure when the cascade budget is spent: nothing answered in time. */
+export const CASCADE_EXHAUSTED: SessionError.Error = {
+  type: "provider.exhausted",
+  message: EXHAUSTED_MESSAGE,
+}
 
 /** Session error type for a prompt the model cannot hold. A hop signal, never a stop. */
 export const CONTEXT_OVERFLOW_TYPE = "provider.context-too-long"

@@ -2,7 +2,7 @@ export * as SessionRunnerLLM from "./llm.js"
 
 import { Message } from "@opencode/ai/effect"
 import { and, desc, eq, inArray, sql } from "drizzle-orm"
-import { Cause, Effect, Exit, FiberMap, Layer } from "effect"
+import { Cause, Clock, Effect, Exit, FiberMap, Layer } from "effect"
 import { Database } from "../../database/database.js"
 import { Model } from "../../model.js"
 import { Bus } from "../../bus.js"
@@ -242,6 +242,12 @@ const layer = Layer.effect(
       let recoverOverflow = true
       let recoverContinuation = true
       let retryAttempt: number | undefined
+      // The cascade budget: a step that produced no output within it gives
+      // up with the generic message instead of hopping through frozen
+      // models forever. Output already started means the user is seeing
+      // progress, so the budget only bounds total silence.
+      const stepStartedAt = yield* Clock.currentTimeMillis
+      let outputStarted = false
       // ManosTech router: the hop chain for this step, from the providers
       // connected right now. Only models that actually fail in this step
       // count as tried: the session model just answered the previous step,
@@ -306,6 +312,9 @@ const layer = Layer.effect(
         }
       }
       while (true) {
+        const now = yield* Clock.currentTimeMillis
+        if (SessionRouter.cascadeBudgetSpent(stepStartedAt, now, outputStarted))
+          return yield* new StepFailedError({ error: SessionRouter.CASCADE_EXHAUSTED })
         // Reuse boundary preparation once; retries refresh context without delivering more input.
         const loaded = initial ?? (yield* prepareContext(sessionID).pipe(Effect.flatMap(context.load)))
         initial = undefined
@@ -367,6 +376,7 @@ const layer = Layer.effect(
             executeTool: (call) => plugins.awaitActivation.pipe(Effect.andThen(prepared.executeTool(call))),
           },
           retryAttempt,
+          firstOutputTimeoutMs: SessionRouter.FIRST_OUTPUT_TIMEOUT_MS,
           retry: (cause, error, proposed) =>
             Effect.gen(function* () {
               // ManosTech router: on exhausted credit, hop to the next
@@ -475,6 +485,11 @@ const layer = Layer.effect(
           }),
           Retry: Effect.fnUntraced(function* (outcome) {
             retryAttempt = outcome.decision.attempt
+            // A same-model retry that would wait past the budget fails now
+            // with the generic message instead of sleeping through it.
+            const now = yield* Clock.currentTimeMillis
+            if (SessionRouter.cascadeBudgetSpent(stepStartedAt, now + outcome.decision.delay, outputStarted))
+              return yield* new StepFailedError({ error: SessionRouter.CASCADE_EXHAUSTED })
             yield* retry.wait({
               decision: outcome.decision,
               error: outcome.error,
@@ -482,6 +497,7 @@ const layer = Layer.effect(
             })
           }),
           Continue: Effect.fnUntraced(function* (outcome) {
+            outputStarted = true
             retryAttempt = outcome.decision.attempt
             yield* retry.wait({
               decision: outcome.decision,
@@ -492,6 +508,7 @@ const layer = Layer.effect(
             assistantMessageID = SessionMessage.ID.create()
           }),
           OutputLimit: Effect.fn("SessionRunner.continueOutputLimit")(function* (outcome) {
+            outputStarted = true
             // The current response is included. User input or any other finish breaks the streak.
             const recent = yield* db
               .select({

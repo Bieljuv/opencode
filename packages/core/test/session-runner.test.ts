@@ -39,6 +39,7 @@ import { AbsolutePath } from "@opencode/core/schema"
 import { Session } from "@opencode/core/session"
 import { Snapshot } from "@opencode/core/snapshot"
 import { SessionEvent } from "@opencode/core/session/event"
+import { StepFailedError } from "@opencode/core/session/error"
 import { SessionCompaction } from "@opencode/core/session/compaction"
 import { SessionInbox } from "@opencode/core/session/inbox"
 import { SessionMessage } from "@opencode/core/session/message"
@@ -51,6 +52,7 @@ import { SessionRunCoordinator } from "@opencode/core/session/run-coordinator"
 import { SessionRunner } from "@opencode/core/session/runner/index"
 import { SessionRunnerLLM } from "@opencode/core/session/runner/llm"
 import { SessionRunnerModel } from "@opencode/core/session/runner/model"
+import { SessionRouter } from "@opencode/core/session/router"
 import { SessionUsage } from "@opencode/core/session/usage"
 import { PluginSupervisor } from "@opencode/core/plugin/supervisor"
 import { Plugin } from "@opencode/core/plugin"
@@ -78,10 +80,11 @@ import { SessionSystemPrompt } from "@opencode/core/session/system-prompt"
 import { ID, Model } from "@opencode/core/model"
 import { Location } from "@opencode/core/location"
 import { Provider } from "@opencode/core/provider"
-import { Cause, Context, DateTime, Deferred, Effect, Exit, Fiber, Layer, Queue, Schema, Scope, Stream, Tracer } from "effect"
+import { Cause, Clock, Context, DateTime, Deferred, Effect, Exit, Fiber, Layer, Queue, Schema, Scope, Stream, Tracer } from "effect"
 import { TestClock } from "effect/testing"
 import { and, asc, desc, eq, sql } from "drizzle-orm"
 import { testEffect } from "./lib/effect"
+import { advance } from "./lib/clock"
 import { promptLocationNode } from "./fixture/prompt-location"
 import { LocationServiceMap } from "@opencode/core/location-service-map"
 import { Expected } from "./lib/session-message"
@@ -3775,7 +3778,8 @@ describe("SessionRunnerLLM", () => {
       expect.objectContaining({
         type: "assistant",
         finish: "error",
-        error: expect.objectContaining({ message: "O pedido não pôde ser enviado. Tente reformular." }),
+        // PR #47 maps a context overflow to the generic message.
+        error: expect.objectContaining({ message: "Tente novamente mais tarde." }),
       }),
     )
     expect(yield* s.context).not.toContainEqual(expect.objectContaining({ type: "compaction" }))
@@ -3831,7 +3835,8 @@ describe("SessionRunnerLLM", () => {
     expect(s.requests).toHaveLength(3)
     expect(yield* s.context).toMatchObject([
       { type: "compaction" },
-      { type: "assistant", finish: "error", error: { message: "O pedido não pôde ser enviado. Tente reformular." } },
+      // PR #47 maps a context overflow to the generic message.
+      { type: "assistant", finish: "error", error: { message: "Tente novamente mais tarde." } },
     ])
   })
 
@@ -3940,7 +3945,10 @@ describe("SessionRunnerLLM", () => {
     expect(context.slice(-3)).toMatchObject([
       Expected.user("Continue"),
       { type: "compaction", status: "failed", reason: "auto" },
-      { type: "assistant", finish: "error", error: { message: "O pedido não pôde ser enviado. Tente reformular." } },
+      // The original overflow maps to the generic message (PR #47); the
+      // compaction failure above keeps the invalid-request message because
+      // the summary request itself failed as one.
+      { type: "assistant", finish: "error", error: { message: "Tente novamente mais tarde." } },
     ])
   })
 
@@ -5950,7 +5958,8 @@ describe("SessionRunnerLLM", () => {
     expect(s.requests).toHaveLength(1)
     expect(yield* s.context).toMatchObject([
       Expected.user("Fail after output"),
-      Expected.assistant({ finish: "error", error: { message: "O pedido não pôde ser enviado. Tente reformular." } }, [Expected.text("Partial")]),
+      // PR #47 maps a context overflow to the generic message.
+      Expected.assistant({ finish: "error", error: { message: "Tente novamente mais tarde." } }, [Expected.text("Partial")]),
     ])
   })
 
@@ -6136,15 +6145,30 @@ describe("SessionRunnerLLM", () => {
     expect(s.requests).toHaveLength(2)
   })
 
-  scenario("caps an excessive provider retry-after delay at fifteen minutes", function* (s) {
-    yield* s.admit("Retry capped rate limit")
+  scenario("fails fast instead of waiting out an excessive provider retry-after delay", function* (s) {
+    // The provider asks for an hour; the retry policy caps the wait at
+    // fifteen minutes — but the cascade budget is 90s, so the turn fails
+    // at once with the generic message instead of holding the user on a
+    // fifteen-minute wait. A short retry-after (next scenario) is still
+    // honored.
     yield* s.llm.push(Stream.fail(rateLimited(3_600_000)))
     yield* s.llm.push(TestLLM.text("Recovered", "retry-cap-success"))
+
+    const failure = yield* s.runPrompt("Retry capped rate limit").pipe(Effect.flip)
+    expect(failure).toBeInstanceOf(StepFailedError)
+    if (failure instanceof StepFailedError) expect(failure.error).toEqual(SessionRouter.CASCADE_EXHAUSTED)
+    expect(s.requests).toHaveLength(1)
+  })
+
+  scenario("honors a short provider retry-after delay within the cascade budget", function* (s) {
+    yield* s.admit("Retry short rate limit")
+    yield* s.llm.push(Stream.fail(rateLimited(30_000)))
+    yield* s.llm.push(TestLLM.text("Recovered", "retry-short-success"))
 
     const scheduled = yield* subscribeRetries(s)
     const run = yield* s.resume.pipe(Effect.forkChild)
     yield* Queue.take(scheduled)
-    yield* TestClock.adjust("899999 millis")
+    yield* TestClock.adjust("29999 millis")
     expect(s.requests).toHaveLength(1)
     yield* TestClock.adjust("1 millis")
     yield* Fiber.join(run)
@@ -6780,6 +6804,42 @@ describe("SessionRunnerLLM", () => {
     expect((yield* s.session.get(sessionID)).model?.id).toBe(Model.ID.make("model-b"))
     const assistant = requireAssistant(yield* s.context)
     expect(assistant.content).toMatchObject([{ type: "text", text: "Answered by the session model" }])
+  })
+
+  scenario("gives up with the generic message when every model freezes", function* (s) {
+    // One model held the user 142.8s in Gabriel's gate test (2026-11-10
+    // 08:50, "lento demais"). The whole cascade — several frozen models —
+    // must resolve before that: three attempts at the 30s first-output
+    // deadline is 90s, and the turn fails with the generic message.
+    const modelA = Model.Info.default(Provider.ID.make("fake-a"), Model.ID.make("model-a"))
+    const modelB = Model.Info.default(Provider.ID.make("fake-b"), Model.ID.make("model-b"))
+    const modelC = Model.Info.default(Provider.ID.make("fake-c"), Model.ID.make("model-c"))
+    const modelD = Model.Info.default(Provider.ID.make("fake-d"), Model.ID.make("model-d"))
+    s.availableModels.push(modelA, modelB, modelC, modelD)
+    yield* s.llm.always(TestLLM.hangAfter())
+    const startedAt = yield* Clock.currentTimeMillis
+    let outcome: Exit.Exit<unknown, unknown> | undefined
+    yield* s
+      .runPrompt("Answer me")
+      .pipe(
+        Effect.exit,
+        Effect.tap((exit) => Effect.sync(() => { outcome = exit })),
+        Effect.forkChild({ startImmediately: true }),
+      )
+    yield* advance(() => outcome !== undefined)
+    const endedAt = yield* Clock.currentTimeMillis
+    expect(endedAt - startedAt).toBeGreaterThanOrEqual(SessionRouter.CASCADE_BUDGET_MS)
+    expect(endedAt - startedAt).toBeLessThan(SessionRouter.CASCADE_BUDGET_MS + 5_000)
+    expect(endedAt - startedAt).toBeLessThan(142_800)
+    expect(s.requests).toHaveLength(3)
+    expect(outcome).toBeDefined()
+    if (outcome === undefined) return
+    expect(Exit.isFailure(outcome)).toBe(true)
+    if (Exit.isFailure(outcome)) {
+      const failure = Cause.squash(outcome.cause)
+      expect(failure).toBeInstanceOf(StepFailedError)
+      if (failure instanceof StepFailedError) expect(failure.error).toEqual(SessionRouter.CASCADE_EXHAUSTED)
+    }
   })
 
   scenario("settles malformed streamed tool input before the provider failure", function* (s) {
