@@ -4,7 +4,15 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import type { Context } from "@opencode/plugin/promise/plugin"
 import type { ToolContext } from "@opencode/plugin/promise/tool"
-import plugin, { buildArenaCommand, buildArenaSkill, buildArenaTool } from "../index.ts"
+import plugin, {
+  buildArenaCommand,
+  buildArenaSkill,
+  buildArenaTool,
+  buildPonytailCommand,
+  buildPonytailSkill,
+  ponytailCommandText,
+  ponytailLevel,
+} from "../index.ts"
 import { ArenaError } from "../src/bracket.ts"
 
 const tmpDirs: string[] = []
@@ -220,5 +228,149 @@ describe("arena command", () => {
       delivery: "steer",
     } as never)
     expect(String(prompts[0]?.["text"])).toContain("(nenhum")
+  })
+})
+
+describe("ponytail skill", () => {
+  test("skill ponytail is the upstream v5.3.3 content with pt-BR triggers", async () => {
+    const dir = await makeTmp()
+    const { ctx, skills, tools, commands } = makeCtx(dir)
+    await plugin.setup(ctx as unknown as Context)
+
+    const skill = skills.get("ponytail")
+    expect(skill).toBeDefined()
+    const info = buildPonytailSkill()
+    expect(String(info.id)).toBe("ponytail")
+    expect(String(info.name)).toBe("Ponytail")
+    expect(String(info.path)).toBe("skill://ponytail/SKILL.md")
+    for (const trigger of ["ponytail", "mais simples", "só o necessário", "sem exagero", "enxuto", "não complica", "yagni"]) {
+      expect(info.description ?? "").toContain(trigger)
+    }
+    expect(info.description ?? "").toContain("full (default)")
+    expect(info.description ?? "").toContain("any coding task")
+    expect(info.content).toContain("You are a lazy senior developer. The best code is the code never written.")
+    expect(info.content).toContain("## The smallest complete change")
+    expect(info.content).toContain("Never cut: validation at trust boundaries")
+    expect(info.content).toContain("shortcut: <the limit>, <when to upgrade>")
+    expect(info.content).toContain("Active for the whole session until the user says \"stop ponytail\"")
+    for (const word of ["Claude", "OpenCode", "python3", "Shift+Tab", "free", "paid", "model", "provider", "grátis", "pago", "cota"]) {
+      expect(info.content).not.toContain(word)
+      expect(info.description ?? "").not.toContain(word)
+    }
+
+    // Ponytail is a behavior instruction: no tool, only the skill and the command.
+    expect(tools.get("ponytail")).toBeUndefined()
+    expect(commands.get("ponytail")).toBeDefined()
+  })
+
+  test("setup twice does not duplicate the skill or the command", async () => {
+    const dir = await makeTmp()
+    const { ctx, skills, commands } = makeCtx(dir)
+    await plugin.setup(ctx as unknown as Context)
+    await plugin.setup(ctx as unknown as Context)
+    expect(skills.size).toBe(2)
+    expect(commands.size).toBe(2)
+  })
+
+  test("user-visible descriptions and command texts stay in pt-BR and name nothing internal", async () => {
+    const dir = await makeTmp()
+    const { ctx, commands } = makeCtx(dir)
+    await plugin.setup(ctx as unknown as Context)
+    const forbidden = ["Claude", "OpenCode", "Nexus", "grátis", "gratuito", "pago", "cota", "crédito", "roteamento", "US$"]
+    const command = buildPonytailCommand({ prompt: async () => undefined } as never)
+    expect(command.description).toMatch(/Ponytail/)
+    for (const word of forbidden) {
+      expect(command.description).not.toContain(word)
+      expect((commands.get("ponytail") as unknown as { description: string }).description).not.toContain(word)
+    }
+    for (const args of ["", "lite", "full", "ultra", "off", "banana"]) {
+      for (const word of forbidden) {
+        expect(ponytailCommandText(args)).not.toContain(word)
+      }
+    }
+  })
+})
+
+describe("ponytail level", () => {
+  test("blank or unknown falls back to full, the default", () => {
+    expect(ponytailLevel("")).toBe("full")
+    expect(ponytailLevel("   ")).toBe("full")
+    expect(ponytailLevel("banana")).toBe("full")
+    expect(ponytailLevel("FULL")).toBe("full")
+  })
+
+  test("lite, ultra and off parse case-insensitively", () => {
+    expect(ponytailLevel("lite")).toBe("lite")
+    expect(ponytailLevel("ULTRA")).toBe("ultra")
+    expect(ponytailLevel(" Off ")).toBe("off")
+  })
+})
+
+describe("ponytail command", () => {
+  test("blank arguments load the skill at the default full level", async () => {
+    const prompts: Array<Record<string, unknown>> = []
+    const session = {
+      prompt: async (input: Record<string, unknown>) => {
+        prompts.push(input)
+        return undefined
+      },
+    }
+    const command = buildPonytailCommand(session as never)
+    await command.execute({
+      sessionID: "ses_ponytail_command_test",
+      prompt: { text: "   " },
+      delivery: "steer",
+    } as never)
+    expect(prompts).toHaveLength(1)
+    const sent = prompts[0]
+    expect(sent["sessionID"]).toBe("ses_ponytail_command_test")
+    expect(sent["delivery"]).toBe("steer")
+    expect(sent["skills"]).toEqual([{ id: "ponytail" }])
+    expect(String(sent["text"])).toContain('skill "ponytail"')
+    expect(String(sent["text"])).toContain("full")
+  })
+
+  test("lite and ultra load the skill at the asked level", async () => {
+    const prompts: Array<Record<string, unknown>> = []
+    const session = {
+      prompt: async (input: Record<string, unknown>) => {
+        prompts.push(input)
+        return undefined
+      },
+    }
+    const command = buildPonytailCommand(session as never)
+    await command.execute({
+      sessionID: "ses_ponytail_lite",
+      prompt: { text: "lite" },
+      delivery: "steer",
+    } as never)
+    expect(prompts[0]?.["skills"]).toEqual([{ id: "ponytail" }])
+    expect(String(prompts[0]?.["text"])).toContain("lite")
+    await command.execute({
+      sessionID: "ses_ponytail_ultra",
+      prompt: { text: "ultra" },
+      delivery: "steer",
+    } as never)
+    expect(prompts[1]?.["skills"]).toEqual([{ id: "ponytail" }])
+    expect(String(prompts[1]?.["text"])).toContain("ultra")
+  })
+
+  test("off turns the mode off and does not load the skill", async () => {
+    const prompts: Array<Record<string, unknown>> = []
+    const session = {
+      prompt: async (input: Record<string, unknown>) => {
+        prompts.push(input)
+        return undefined
+      },
+    }
+    const command = buildPonytailCommand(session as never)
+    await command.execute({
+      sessionID: "ses_ponytail_off",
+      prompt: { text: "off" },
+      delivery: "steer",
+    } as never)
+    expect(prompts).toHaveLength(1)
+    expect(prompts[0]?.["skills"]).toEqual([])
+    expect(String(prompts[0]?.["text"])).toContain("Desligue o modo ponytail")
   })
 })
