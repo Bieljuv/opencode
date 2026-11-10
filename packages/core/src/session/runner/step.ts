@@ -72,6 +72,18 @@ const TOOLS_INTERRUPTED = { type: "aborted", message: "Tool execution interrupte
 const STEP_INTERRUPTED = { type: "aborted", message: "Step interrupted" } as const
 const RESULT_MISSING = { type: "tool.result-missing", message: "Provider did not return a tool result" } as const
 
+/**
+ * A snapshot capture that never returns (a hung git subprocess, a stuck
+ * filesystem walk) must not stick the turn: snapshots are best-effort
+ * diagnostics attached to the step's terminal event, so the step proceeds
+ * without them after this long and the session leaves "working" instead of
+ * hanging there until the server process is killed. The bound runs without
+ * restore(): this tail runs after an interruption, and restoring would let
+ * the already-pending interruption kill the capture before the terminal
+ * event is published, losing the step's error record.
+ */
+const SNAPSHOT_TIMEOUT = Duration.seconds(30)
+
 /** Captures Location-scoped dependencies without introducing another service or execution loop. */
 export const make = Effect.gen(function* () {
   const bus = yield* Bus.Service
@@ -287,14 +299,22 @@ export const make = Effect.gen(function* () {
         const record = publisher.record()
         if (record.finish || record.failure) {
           const startSnapshot = yield* Fiber.join(pendingStartSnapshot)
-          const snapshot = yield* snapshots.capture()
+          // Best-effort with a bound: a capture that never returns must not
+          // stick the turn. No restore() here: the pending interruption
+          // would kill a restored capture before the terminal event below.
+          const snapshot = yield* snapshots.capture().pipe(
+            Effect.timeoutOption(SNAPSHOT_TIMEOUT),
+            Effect.map((option) => Option.getOrUndefined(option)),
+          )
           const files =
             startSnapshot && snapshot
               ? startSnapshot === snapshot
                 ? []
-                : yield* snapshots
-                    .files({ from: startSnapshot, to: snapshot })
-                    .pipe(Effect.orElseSucceed(() => undefined))
+                : yield* snapshots.files({ from: startSnapshot, to: snapshot }).pipe(
+                    Effect.timeoutOption(SNAPSHOT_TIMEOUT),
+                    Effect.map((option) => Option.getOrUndefined(option)),
+                    Effect.orElseSucceed(() => undefined),
+                  )
               : undefined
           const usage = record.finish ? SessionUsage.record(record.finish.usage, input.model.cost) : undefined
           if (usage) yield* Effect.annotateCurrentSpan("opencode.usage.cost_usd", usage.cost)

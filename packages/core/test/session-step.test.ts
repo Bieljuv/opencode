@@ -22,7 +22,7 @@ import { ToolOutput } from "@opencode/core/tool-output"
 import { Money } from "@opencode/schema/money"
 import { LayerNode } from "@opencode/util/effect/layer-node"
 import { asc, eq } from "drizzle-orm"
-import { Cause, Clock, Effect, Exit, Fiber, Layer } from "effect"
+import { Cause, Clock, Deferred, Effect, Exit, Fiber, Layer, Scope } from "effect"
 import { TestClock } from "effect/testing"
 import { testEffect } from "./lib/effect"
 import { advance, drain } from "./lib/clock"
@@ -357,5 +357,128 @@ it.effect("a task that answers at once is not slowed by the deadline", () =>
     expect(Exit.isSuccess(result)).toBe(true)
     if (Exit.isSuccess(result))
       expect(result.value).toEqual(SessionStep.Outcome.Completed({ needsContinuation: false }))
+  }),
+)
+
+it.effect("ends the turn when the end snapshot never resolves after a tool interruption", () =>
+  Effect.gen(function* () {
+    const db = (yield* Database.Service).db
+    const llm = yield* TestLLM.Test
+    const sessionID = Session.ID.create()
+    const assistantMessageID = SessionMessage.ID.create()
+    const start = Snapshot.ID.make("before")
+    const toolStarted = yield* Deferred.make<void>()
+    const toolGate = yield* Deferred.make<void>()
+    const captureStarted = yield* Deferred.make<void>()
+    let captures = 0
+    const steps = yield* SessionStep.make.pipe(
+      Effect.provide(
+        Layer.mock(Snapshot.Service)({
+          capture: () =>
+            Effect.sync(() => captures++).pipe(
+              Effect.flatMap((count) =>
+                count === 0
+                  ? Effect.succeed(start)
+                  : Deferred.succeed(captureStarted, undefined).pipe(Effect.andThen(Effect.never)),
+              ),
+            ),
+          files: () => Effect.die("files must not run when the end snapshot times out"),
+        }),
+      ),
+    )
+    yield* db
+      .insert(ProjectTable)
+      .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
+      .run()
+    yield* db
+      .insert(SessionTable)
+      .values({ id: sessionID, project_id: Project.ID.global, slug: "step", directory: "/project", version: "test" })
+      .run()
+    const model = SessionRunnerModel.resolved(
+      LanguageModel.make({ id: "test-model", provider: "test", route: OpenAIChat.route }),
+      {
+        capabilities: { tools: true, input: ["text"], output: ["text"] },
+        limit: { context: 100_000, output: 1_000 },
+        cost: [
+          {
+            input: Money.USDPerMillionTokens.make(1),
+            output: Money.USDPerMillionTokens.make(2),
+            cache: { read: Money.USDPerMillionTokens.make(0.1), write: Money.USDPerMillionTokens.make(0.5) },
+          },
+        ],
+      },
+    )
+    yield* llm.push(TestLLM.hangAfter(LLMEvent.toolCall({ id: "call-test", name: "test", input: {} })))
+    // Detached scope: a stuck attempt must not hang the test's teardown.
+    // It is closed at the end of the test once the attempt settled; on the
+    // failure path (attempt never settles) it is deliberately left open.
+    const scope = yield* Scope.make()
+    const attempt = yield* steps
+      .attempt({
+        isLocationClosed: () => false,
+        sessionID,
+        assistantMessageID,
+        agent: Agent.defaultID,
+        model,
+        prepared: {
+          retry: () => Effect.void,
+          request: ai.request({ model: model.model, prompt: "Interrupt a running tool", toolChoice: undefined }),
+          options: {},
+          executeTool: () =>
+            Deferred.succeed(toolStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(toolGate)),
+              Effect.as({ content: [{ type: "text", text: "Completed tool" }] }),
+            ),
+        },
+        retry: (_cause, _error, retry) =>
+          Effect.succeed(retry ? { retry: true, attempt: 2, delay: 0 } : { retry: false }),
+        recoverContinuation: true,
+        recoverOverflow: Effect.succeed(false),
+      })
+      .pipe(Effect.exit, Effect.forkIn(scope))
+    yield* Deferred.await(toolStarted)
+    // Clock driver runs concurrently: once the step reaches the snapshot
+    // block, it advances the virtual clock so the snapshot bound can fire.
+    // Bounded to 100s virtual; the attempt must settle well before that.
+    yield* Effect.forkScoped(
+      Effect.gen(function* () {
+        yield* Deferred.await(captureStarted)
+        let ticks = 0
+        while (ticks < 10) {
+          yield* TestClock.adjust("10 seconds")
+          yield* Effect.yieldNow
+          ticks++
+        }
+      }),
+    )
+    yield* Fiber.interrupt(attempt)
+    expect(captures).toBe(2)
+    expect(yield* llm.requests()).toHaveLength(1)
+    const message = yield* db
+      .select()
+      .from(SessionMessageTable)
+      .where(eq(SessionMessageTable.id, assistantMessageID))
+      .get()
+    expect(message?.data).toMatchObject({
+      finish: "error",
+      error: { type: "aborted", message: "Step interrupted" },
+      content: [
+        {
+          type: "tool",
+          state: { status: "error", error: { type: "aborted", message: "Tool execution interrupted" } },
+        },
+      ],
+    })
+    const events = yield* db
+      .select({ type: EventTable.type })
+      .from(EventTable)
+      .where(eq(EventTable.aggregate_id, sessionID))
+      .orderBy(asc(EventTable.seq))
+      .all()
+    const types = events.map((event) => event.type)
+    expect(types).toContain("session.tool.failed.2")
+    expect(types).toContain("session.step.failed.1")
+    expect(types.indexOf("session.tool.failed.2")).toBeLessThan(types.indexOf("session.step.failed.1"))
+    yield* Scope.close(scope, Exit.void)
   }),
 )
