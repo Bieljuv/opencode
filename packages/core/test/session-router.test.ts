@@ -6,7 +6,11 @@ import { Provider } from "@opencode/core/provider"
 import { Token } from "@opencode/core/util/token"
 import { Money } from "@opencode/schema/money"
 import {
+  CASCADE_BUDGET_MS,
+  CASCADE_EXHAUSTED,
+  FIRST_OUTPUT_TIMEOUT_MS,
   buildChain,
+  cascadeBudgetSpent,
   classifyComplexity,
   effortFromMetadata,
   effortFromVariant,
@@ -457,6 +461,27 @@ describe("chain from the packaged catalog (Gabriel's providers)", () => {
     expect(current?.providerID).toBe(Provider.ID.make("manostech"))
     expect(tried.size).toBe(gatewayIndex)
     expect(tried.size).toBeLessThan(firstPaidIndex)
+  })
+})
+
+describe("cascade speed limits", () => {
+  test("a 30s first-output deadline and a 90s cascade budget, both below Gabriel's 142.8s gate", () => {
+    // One model held the user 142.8s in Gabriel's gate test (2026-11-10
+    // 08:50, "lento demais"). The whole cascade — several frozen models —
+    // must resolve before that: three attempts at the 30s deadline is
+    // 90s, still 52.8s below the ceiling a single model took. The failure
+    // is the generic message, never a detail about the models tried.
+    expect(FIRST_OUTPUT_TIMEOUT_MS).toBe(30_000)
+    expect(CASCADE_BUDGET_MS).toBe(90_000)
+    expect(CASCADE_BUDGET_MS).toBeLessThan(142_800)
+    expect(CASCADE_EXHAUSTED).toEqual({ type: "provider.exhausted", message: "Tente novamente mais tarde." })
+  })
+
+  test("the budget only bounds total silence: output started, or time left, means not spent", () => {
+    expect(cascadeBudgetSpent(1_000, 1_000 + CASCADE_BUDGET_MS - 1, false)).toBe(false)
+    expect(cascadeBudgetSpent(1_000, 1_000 + CASCADE_BUDGET_MS, false)).toBe(true)
+    expect(cascadeBudgetSpent(1_000, 1_000 + CASCADE_BUDGET_MS + 60_000, false)).toBe(true)
+    expect(cascadeBudgetSpent(1_000, 1_000 + CASCADE_BUDGET_MS + 60_000, true)).toBe(false)
   })
 })
 

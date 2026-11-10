@@ -4,11 +4,12 @@ import {
   AIError,
   InvalidProviderOutputError,
   LLMClient,
+  TimeoutError,
   isContextOverflowFailure,
   type ToolCall,
 } from "@opencode/ai/effect"
 import type { Agent } from "@opencode/schema/agent"
-import { Cause, Clock, Data, Effect, Exit, Fiber, Option, Stream } from "effect"
+import { Cause, Clock, Data, Duration, Effect, Exit, Fiber, Option, Stream } from "effect"
 import { SessionError } from "@opencode/schema/session-error"
 import { Bus } from "../../bus.js"
 import { Permission } from "../../permission.js"
@@ -58,6 +59,13 @@ interface Input {
   readonly recoverContinuation: boolean
   /** The runner owns compaction policy; the attempt invokes it only before durable output. */
   readonly recoverOverflow: Effect.Effect<boolean>
+  /**
+   * Milliseconds without any output before the attempt is abandoned as
+   * frozen. Absent: no first-output deadline (legacy behavior — the
+   * attempt waits out the transport timeouts, minutes). The runner
+   * always passes the router's deadline.
+   */
+  readonly firstOutputTimeoutMs?: number
 }
 
 const TOOLS_INTERRUPTED = { type: "aborted", message: "Tool execution interrupted" } as const
@@ -108,6 +116,27 @@ export const make = Effect.gen(function* () {
       })
     }
 
+    // A frozen model holds the step until the transport gives up (5 minutes
+    // for headers, 15 between chunks) — the user waits minutes for nothing.
+    // The watchdog fails the attempt when no output arrived within the
+    // first-output deadline, so the runner hops to the next model. Output
+    // already started means the model is answering: the watchdog stands
+    // down and the stream runs to its end.
+    const firstOutputWatchdog = Effect.gen(function* () {
+      const timeoutMs = input.firstOutputTimeoutMs
+      if (timeoutMs === undefined) return yield* Effect.never
+      yield* Effect.sleep(Duration.millis(timeoutMs))
+      if (publisher.record().outputStarted) return yield* Effect.never
+      return yield* Effect.fail(
+        new AIError({
+          reason: new TimeoutError({
+            message: "No output from the provider before the first-output deadline",
+            timeoutMs,
+          }),
+        }),
+      )
+    })
+
     // Provider and tool fibers retain per-source order without a shared writer queue.
     // A local execution starts only after its Tool.Called publication completes.
     // Read to the end, not just the finish event, so the next request can reuse this response.
@@ -141,7 +170,7 @@ export const make = Effect.gen(function* () {
     // Keep the final tool and Step events uninterruptible, even when the work itself is cancelled.
     return yield* Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
-        const stream = yield* restore(providerStream).pipe(Effect.exit)
+        const stream = yield* restore(Effect.raceFirst(providerStream, firstOutputWatchdog)).pipe(Effect.exit)
         const streamFailure = Option.getOrUndefined(Exit.findErrorOption(stream))
         const streamInterrupted = Exit.hasInterrupts(stream)
         // Cancelled before the start snapshot existed: record nothing, as when the capture preceded the request.
