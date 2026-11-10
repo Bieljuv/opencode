@@ -269,12 +269,12 @@ const layer = Layer.effect(
       // a model that answered a small probe can still freeze on the real
       // request, so the size used here is the packed turn, never a probe.
       const promptTokens = SessionCompaction.estimateContext(first)
-      // A new turn rotates the starting free model past the one that
-      // answered the previous turn, so consecutive turns spread across
-      // the free pool instead of draining a single model to its free
-      // limit. An explicit model never rotates; a continuation step
-      // keeps the turn's model (see stepHead below).
-      const rotateAfter = !explicit && step === 1 ? first.session.model : undefined
+      // Every step rotates the starting free model past the one that
+      // answered the previous step, so a long task spreads across the
+      // free pool instead of draining a single model to its free limit:
+      // the chain is rebuilt per step, and the free run starts after
+      // the session model. An explicit model never rotates.
+      const rotateAfter = !explicit ? first.session.model : undefined
       const chain = SessionRouter.buildChain(available, {
         complexity,
         effort,
@@ -302,9 +302,19 @@ const layer = Layer.effect(
         // model. The switch is published, so the loop below re-resolves the
         // new model; the user never sees the change. A head that is already
         // the session model needs no switch and no context reload. On a
-        // continuation step the head is the turn's model, so rotation never
-        // switches models mid-task.
-        const head = SessionRouter.stepHead(chain, tried, first.session.model, step === 1)
+        // continuation step the head is the next free model after the
+        // session model when the turn runs on a free model, so rotation
+        // keeps moving mid-task; a turn on a paid model keeps its model
+        // (see stepHead).
+        const sessionModel = first.session.model
+        const sessionModelFree =
+          sessionModel !== undefined &&
+          available.some(
+            (model) =>
+              SessionRouter.isFreeModel(model) &&
+              SessionRouter.refKey(model) === SessionRouter.refKey(sessionModel),
+          )
+        const head = SessionRouter.stepHead(chain, tried, first.session.model, step === 1, sessionModelFree)
         if (head !== undefined) {
           tried.add(SessionRouter.refKey(head))
           if (
