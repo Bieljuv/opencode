@@ -7,7 +7,8 @@ import { verifyBundles } from "./verify-bundles"
 
 // Prepares resources/ (icons, metainfo, the bundled CLI) for OPENCODE_CHANNEL and builds the app into out/.
 // The CLI comes from ../cli/dist when it holds the target; otherwise dev downloads the published dev CLI,
-// beta the beta CLI, and prod fails.
+// beta the beta CLI, and prod fails. A release build (OPENCODE_VERSION set) fails instead of downloading:
+// the published CLI is upstream code, not this commit's fork CLI.
 const dir = path.resolve(import.meta.dir, "..")
 
 const cli = path.resolve(dir, "../cli/dist")
@@ -24,6 +25,9 @@ const built = await exists(path.join(cli, getCurrentCli().package.replace("@open
 
 if (channel === "prod" && !built)
   throw new Error(`Production desktop builds bundle the CLI from ${cli}; build it first`)
+
+if (process.env.OPENCODE_VERSION && !built)
+  throw new Error(`Release desktop builds bundle the CLI from ${cli}; build it first`)
 
 if (built) await copyBuiltCliToResources(cli)
 
