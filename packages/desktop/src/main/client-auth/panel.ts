@@ -400,6 +400,24 @@ export async function fetchApiKey(baseUrl: string, token: string): Promise<strin
   return decoded.value.api_key ?? undefined
 }
 
+/**
+ * A chave API do cliente depois de uma autenticação: a guardada vale;
+ * sem ela — ou com o ciclo mensal vencido — busca uma no painel (o
+ * painel só devolve a chave em claro quando gera uma nova nesta chamada).
+ * Devolve a chave a guardar, ou undefined quando não há o que guardar
+ * (chave corrente válida sem cópia guardada, token revogado, painel fora
+ * do ar). Fail-open: sem a chave o app segue sem gateway até a próxima
+ * validação da sessão, que tenta de novo.
+ */
+export async function ensureApiKey(
+  baseUrl: string,
+  input: { token: string; storedApiKey: string | undefined; renewsDue?: boolean },
+): Promise<string | undefined> {
+  if (input.storedApiKey !== undefined && !input.renewsDue) return undefined
+
+  return fetchApiKey(baseUrl, input.token)
+}
+
 // contrato do painel (pendente): a frente do painel ainda não definiu o
 // endpoint de troca chave→sessão — caminho e campos abaixo são PLACEHOLDERS
 // e esta função NÃO é chamada. Quando o painel definir, `getStatus()`
