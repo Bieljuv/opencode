@@ -434,3 +434,22 @@ function isBrokenPipe(cause: unknown) {
 export function scoped(name: string, effect: Effect.Effect<void>) {
   return effect.pipe(Effect.annotateLogs("scope", name))
 }
+
+/**
+ * Log de código fora de Effect (main async puro) no main.log. O
+ * console.* do processo main NÃO chega ao arquivo: o electron-log só
+ * espia o console do renderer (log.initialize com spyRendererConsole)
+ * — por isso o log passa direto pela instância do electron-log, a mesma
+ * do transporte de arquivo. Nunca passar segredo (código, token,
+ * segredo) em message ou data: o arquivo vai para o zip de debug.
+ */
+export function logMain(level: "info" | "warn", message: string, data?: Record<string, unknown>): void {
+  try {
+    const args = data === undefined ? [message] : [message, data]
+
+    if (level === "warn") log.warn(...args)
+    else log.info(...args)
+  } catch {
+    // Logging must not interrupt application work.
+  }
+}
