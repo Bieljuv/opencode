@@ -174,6 +174,10 @@ const icons = {
     viewBox: "0 0 16 16",
     body: `<path d="M6.5 11L9.5 8L6.5 5" stroke="currentColor"/>`,
   },
+  "outline-clock": {
+    viewBox: "0 0 16 16",
+    body: `<circle cx="8" cy="8" r="6" stroke="currentColor"/><path d="M8 5v3l2.25 1.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>`,
+  },
   "outline-dots": {
     viewBox: "0 0 16 16",
     body: `<path d="M2.5 7.5H3.5V8.5H2.5V7.5Z" stroke="currentColor"/><path d="M7.5 7.5H8.5V8.5H7.5V7.5Z" stroke="currentColor"/><path d="M12.5 7.5H13.5V8.5H12.5V7.5Z" stroke="currentColor"/>`,

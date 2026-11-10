@@ -791,6 +791,7 @@ test.describe("Working", () => {
     const working = page.locator('[data-component="session-working"]')
     const elapsed = working.locator('[data-slot="session-working-elapsed"]')
     await expect(working).toBeVisible()
+    await expect(elapsed.locator('[data-slot="icon-svg"]')).toBeVisible()
 
     // assistantMessage defaults created to 1700000001000, so the pause lands 12s into the turn.
     await page.clock.install({ time: 1700000001000 })
@@ -858,7 +859,7 @@ test.describe("Working", () => {
   })
 
   for (const name of ["shell", "patch", "subagent"] as const) {
-    test(`hides Working during ${name} input and execution, then restores it on completion`, async ({ page }) => {
+    test(`keeps Working and its clock visible during ${name} input and execution`, async ({ page }) => {
       const timeline = await setupTimeline(page, {
         messages: [userMessage(), assistantMessage([], { completed: false })],
         settings: {
@@ -882,7 +883,8 @@ test.describe("Working", () => {
       await timeline.send(partUpdated(toolPart(id, name, "streaming", input)))
       const tool = page.locator(`[data-timeline-part-id="${id}"]`)
       await expect(tool).toBeVisible()
-      await expect(working).toHaveCount(0)
+      await expect(working).toBeVisible()
+      await expect(working.locator('[data-slot="session-working-elapsed"] [data-slot="icon-svg"]')).toBeVisible()
 
       const metadata =
         name === "patch"
@@ -893,7 +895,7 @@ test.describe("Working", () => {
       await expect(tool).toContainText(
         { shell: "printf ready", patch: "working.ts", subagent: "Inspect working indicator" }[name],
       )
-      await expect(working).toHaveCount(0)
+      await expect(working).toBeVisible()
 
       await timeline.send(partUpdated(toolPart(id, name, "completed", input, { metadata })))
       await expect(tool).toBeVisible()
@@ -980,7 +982,7 @@ test.describe("Working", () => {
 
       if (!grouped) {
         await expect(page.locator('[data-timeline-part-id="prt_background_active"]')).toBeVisible()
-        await expect(working).toHaveCount(0)
+        await expect(working).toBeVisible()
 
         return
       }
@@ -997,7 +999,7 @@ test.describe("Working", () => {
     })
   }
 
-  test("replaces Working with Retry and restores it on recovery", async ({ page }) => {
+  test("keeps Working and its clock visible during Retry", async ({ page }) => {
     const assistant = assistantMessage([], { completed: false })
     const timeline = await setupTimeline(page, { messages: [userMessage(), assistant] })
     const working = page.locator('[data-component="session-working"]')
@@ -1005,8 +1007,11 @@ test.describe("Working", () => {
 
     await timeline.send(status("retry"))
     const retry = page.locator('[data-timeline-row="Retry"]')
-    await expect(retry).toContainText("Rate limited")
-    await expect(working).toHaveCount(0)
+    // The retry card says only that it is retrying: the provider's error message never shows there
+    // (it can name the model or its limits), so "Rate limited" must not be asserted here.
+    await expect(retry).toContainText("retrying")
+    await expect(working).toBeVisible()
+    await expect(working.locator('[data-slot="session-working-elapsed"] [data-slot="icon-svg"]')).toBeVisible()
     await expect(page.locator('[data-timeline-row="Thinking"]')).toHaveCount(0)
 
     await timeline.send(stepStarted(assistant))

@@ -343,8 +343,6 @@ function MessageTimelineView(
     if (!active) return false
     const assistant = projection.assistantMessagesByParent().get(active)?.at(-1)
 
-    if (assistant?.retry) return false
-
     // Pending steers still project under the previous response until delivery.
     // Its error must not hide feedback for a newly submitted prompt.
     if (
@@ -361,8 +359,9 @@ function MessageTimelineView(
       content.text.trim()
     )
       return false
-    const background = new Set(props.background.tasks().map((task) => task.id))
-
+    // Working stays up for the whole turn, including while tools run in the background and during a retry, so
+    // the turn clock is always where the user left it. It only steps aside when another live element already
+    // carries the time: a Thinking group, a running compaction, or a live group of only thoughts.
     return !projection.rows().some((row) => {
       if (row.userMessageID !== active) return false
 
@@ -382,19 +381,7 @@ function MessageTimelineView(
           (ref) => Timeline.resolveContent(messageByID().get(ref.messageID), ref.partID)?.type === "reasoning",
         )
 
-      // Used and read groups keep the fallback, so each new read does not swap Working out for its short call.
-      if (row.group.type === "context" || row.group.type === "read") return false
-
-      return (row.group.type === "part" ? [row.group.ref] : row.group.refs).some((ref) => {
-        const content = Timeline.resolveContent(messageByID().get(ref.messageID), ref.partID)
-
-        if (content?.type !== "tool") return false
-
-        if (content.state.status === "streaming" || content.state.status === "running") return true
-        const taskID = content.state.metadata?.[content.name === "subagent" ? "sessionID" : "shellID"]
-
-        return background.has(content.id) || (Predicate.isString(taskID) && background.has(taskID))
-      })
+      return false
     })
   })
 
@@ -402,7 +389,7 @@ function MessageTimelineView(
   const activityRow = createMemo(() => projection.rows().some((row) => Predicate.isTagged(row, "Activity")))
 
   // The turn the Working lane reports on starts when its assistant message was created, so the clock keeps
-  // running across the lane hiding and returning several times in one step.
+  // running for the whole turn, including while tools run in the background and during a retry.
   const workingStarted = createMemo(() => {
     const active = projection.activeMessageID()
 
@@ -448,8 +435,9 @@ function MessageTimelineView(
                 <span
                   data-slot="session-working-elapsed"
                   dir="auto"
-                  class="text-[11px] tabular-nums whitespace-nowrap text-v2-text-text-muted"
+                  class="flex items-center gap-1 text-[11px] tabular-nums whitespace-nowrap text-v2-text-text-muted"
                 >
+                  <Icon name="outline-clock" size="small" class="shrink-0" />
                   {elapsed()}
                 </span>
               )}
@@ -491,7 +479,8 @@ function MessageTimelineView(
           {(_) => {
             // This row sits above input still waiting for delivery. Until live status first shows, it takes no room,
             // so the waiting input keeps the place delivery leaves it. Once shown, the lane stays for the life of the
-            // row: Working hides and returns several times in one step, and each change would move that input 36px.
+            // row: Working can still hide while text streams or a Thinking group stands in for it, and each change
+            // would move that input 36px.
             const shown = createMemo((was) => was || showWorking() || backgroundHintPresence.present(), false)
 
             return <Show when={shown()}>{activity(() => true)}</Show>
