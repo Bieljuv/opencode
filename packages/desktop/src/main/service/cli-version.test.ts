@@ -32,7 +32,8 @@ describe("cli-version", () => {
   })
 
   test.each([
-    { running: undefined, bundled: "2.0.32", expected: true },
+    { running: undefined, bundled: "2.0.32", expected: false },
+    { running: undefined, bundled: undefined, expected: true },
     { running: "2.0.32", bundled: undefined, expected: true },
     { running: "2.0.32", bundled: "2.0.32", expected: true },
     { running: "2.0.31", bundled: "2.0.32", expected: false },
