@@ -204,8 +204,14 @@ export const make = Effect.gen(function* () {
           !recorded.outputStarted
         )
           return Outcome.RecoverFull()
+        // A context overflow reaches the retry callback too: compaction
+        // already had its chance in the branch above, and the callback
+        // hops to a bigger model when the chain has one instead of
+        // failing the turn. When no bigger model remains, the callback
+        // falls through to the same-model retry policy, which fails with
+        // the generic message once its attempts run out.
         const retry =
-          llmFailure && llmError && !isContextOverflowFailure(llmFailure)
+          llmFailure && llmError
             ? yield* restore(
                 input.retry(
                   llmFailure,

@@ -3,19 +3,23 @@ import { Effect } from "effect"
 import { Model, supportsText } from "@opencode/core/model"
 import { decodeSnapshot } from "@opencode/core/models-dev"
 import { Provider } from "@opencode/core/provider"
+import { Token } from "@opencode/core/util/token"
 import { Money } from "@opencode/schema/money"
 import {
   buildChain,
   classifyComplexity,
   effortFromMetadata,
   effortFromVariant,
+  fitsPrompt,
   isExhaustionError,
   isFreeModel,
   isHopSignal,
   isRoutable,
   nextHop,
   nextHopFromProvider,
+  nextHopWithLargerWindow,
   refKey,
+  requestCeiling,
   variantForEffort,
 } from "@opencode/core/session/router"
 
@@ -233,8 +237,135 @@ describe("nextHop", () => {
   })
 })
 
+describe("requestCeiling", () => {
+  test("a window keeps 15% or 16k tokens for the reply, whichever is more", () => {
+    expect(requestCeiling({ context: 200_000, output: 32_000 })).toBe(170_000)
+    expect(requestCeiling({ context: 128_000, output: 32_000 })).toBe(108_800)
+    expect(requestCeiling({ context: 32_000, output: 8_000 })).toBe(16_000)
+    expect(requestCeiling({ context: 8_000, output: 2_000 })).toBe(6_800)
+  })
+  test("an unknown window never excludes", () => {
+    expect(requestCeiling({ context: 0, output: 32_000 })).toBe(Number.POSITIVE_INFINITY)
+  })
+  test("an input limit below the window caps the ceiling", () => {
+    expect(requestCeiling({ context: 200_000, input: 32_000, output: 32_000 })).toBe(16_000)
+  })
+})
+
+describe("fitsPrompt", () => {
+  test("a prompt at the ceiling fits, one token over does not", () => {
+    const model = free("openrouter", "x-free", { limit: { context: 32_000, output: 8_000 } })
+    expect(fitsPrompt(model, 16_000)).toBe(true)
+    expect(fitsPrompt(model, 16_001)).toBe(false)
+  })
+  test("an unknown window always fits", () => {
+    const model = free("openrouter", "x-free", { limit: { context: 0, output: 32_000 } })
+    expect(fitsPrompt(model, 1_000_000)).toBe(true)
+  })
+})
+
+describe("buildChain with promptTokens", () => {
+  const smallFree = free("openrouter", "small-free", { limit: { context: 32_000, output: 8_000 } })
+  const bigFree = free("openrouter", "big-free", { limit: { context: 200_000, output: 32_000 } })
+  const bigPaid = model("anthropic", "big-paid", {
+    cost: [priced(3, 15)],
+    limit: { context: 200_000, output: 32_000 },
+  })
+
+  test("a big prompt drops small-window free models", () => {
+    const chain = buildChain([smallFree, bigFree, bigPaid], {
+      complexity: "simple",
+      effort: "automatico",
+      promptTokens: 100_000,
+    })
+    expect(chain.map(refKey)).toEqual(["openrouter/big-free", "anthropic/big-paid"])
+  })
+
+  test("when no free model fits, the chain starts at the paid models that do", () => {
+    const chain = buildChain([smallFree, bigPaid], {
+      complexity: "simple",
+      effort: "automatico",
+      promptTokens: 100_000,
+    })
+    expect(chain.map(refKey)).toEqual(["anthropic/big-paid"])
+  })
+
+  test("a prompt bigger than every window keeps the unfiltered chain", () => {
+    const chain = buildChain([smallFree, bigFree], {
+      complexity: "simple",
+      effort: "automatico",
+      promptTokens: 1_000_000,
+    })
+    expect(chain.map(refKey)).toEqual(["openrouter/small-free", "openrouter/big-free"])
+  })
+
+  test("a small prompt keeps the usual order", () => {
+    const pool = [smallFree, bigFree, bigPaid]
+    const input = { complexity: "simple" as const, effort: "automatico" as const }
+    expect(buildChain(pool, { ...input, promptTokens: 1_000 }).map(refKey)).toEqual(
+      buildChain(pool, input).map(refKey),
+    )
+  })
+
+  test("the real 6,392-character prompt fits every model, so the filter changes nothing", () => {
+    // A real session prompt of 6,392 characters: three models answered a
+    // small probe in seconds and then froze on it. The window filter
+    // cannot explain that freeze — 1,598 tokens fits any window — so the
+    // chain must be identical with and without the filter, and the rescue
+    // for that case is the hop on the mid-task failure, not the filter.
+    const promptTokens = Token.estimate("x".repeat(6_392))
+    expect(promptTokens).toBe(1_598)
+    const pool = [smallFree, bigFree, bigPaid]
+    const input = { complexity: "simple" as const, effort: "automatico" as const }
+    expect(buildChain(pool, { ...input, promptTokens }).map(refKey)).toEqual(
+      buildChain(pool, input).map(refKey),
+    )
+  })
+})
+
+describe("nextHopWithLargerWindow", () => {
+  const small = free("openrouter", "small-free", { limit: { context: 32_000, output: 8_000 } })
+  const mid = free("openrouter", "mid-free", { limit: { context: 128_000, output: 32_000 } })
+  const big = free("nvidia", "big-free", { limit: { context: 200_000, output: 32_000 } })
+  const pool = [small, mid, big]
+
+  test("picks the next untried model with a strictly larger window", () => {
+    const chain = buildChain(pool, { complexity: "simple", effort: "automatico" })
+    expect(nextHopWithLargerWindow(pool, chain, new Set(["openrouter/small-free"]), small)?.id).toBe(
+      Model.ID.make("mid-free"),
+    )
+    expect(
+      nextHopWithLargerWindow(
+        pool,
+        chain,
+        new Set(["openrouter/small-free", "openrouter/mid-free"]),
+        small,
+      )?.id,
+    ).toBe(Model.ID.make("big-free"))
+  })
+
+  test("returns undefined when no untried model has a larger window", () => {
+    const chain = buildChain(pool, { complexity: "simple", effort: "automatico" })
+    expect(nextHopWithLargerWindow(pool, chain, new Set(), big)).toBeUndefined()
+    expect(
+      nextHopWithLargerWindow(
+        pool,
+        chain,
+        new Set(["openrouter/mid-free", "nvidia/big-free"]),
+        small,
+      ),
+    ).toBeUndefined()
+  })
+
+  test("a model with an unknown window never counts as larger", () => {
+    const unknown = free("openrouter", "unknown-free", { limit: { context: 0, output: 32_000 } })
+    const chain = buildChain([small, unknown], { complexity: "simple", effort: "automatico" })
+    expect(nextHopWithLargerWindow([small, unknown], chain, new Set(), small)).toBeUndefined()
+  })
+})
+
 describe("isHopSignal", () => {
-  test("every limit type and a plain throttle hop; auth, internal, and invalid-request do not", () => {
+  test("every limit type, a plain throttle, and mid-task failures hop; auth, content-filter, and invalid-request do not", () => {
     for (const type of [
       "provider.exhausted",
       "provider.free-limit",
@@ -244,14 +375,14 @@ describe("isHopSignal", () => {
       "provider.quota",
       "provider.chatgpt-limit",
       "provider.rate-limit",
+      // A model that freezes or fails mid-task is skipped, not retried until the turn dies.
+      "provider.timeout",
+      "provider.internal",
+      "provider.invalid-output",
+      "provider.context-too-long",
     ])
       expect(isHopSignal({ type })).toBe(true)
-    for (const type of [
-      "provider.auth",
-      "provider.internal",
-      "provider.invalid-request",
-      "provider.content-filter",
-    ])
+    for (const type of ["provider.auth", "provider.content-filter", "provider.invalid-request"])
       expect(isHopSignal({ type })).toBe(false)
   })
 })

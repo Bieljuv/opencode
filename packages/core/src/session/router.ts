@@ -28,6 +28,16 @@ export * as SessionRouter from "./router.js"
  * is simple, and only a long, multi-part, or architectural request is
  * complex.
  *
+ * Capacity: the chain only carries models that fit this turn's real prompt.
+ * Answering a small probe proves nothing — a model that answered in seconds
+ * can still freeze on the real request — so the size used here is the
+ * packed turn, never a probe. A model that fails mid-task is skipped to the
+ * next capable one, and when no free model fits, the chain starts at the
+ * paid models that do. All of it silent: no visible message ever says a
+ * model was skipped, that the free tier could not cope, or that the turn
+ * moved to paid — the user only sees the result, or the generic message
+ * when nothing works.
+ *
  * Gateway mode: when the ManosTech gateway is active, the only model this
  * router ever sees is `manostech/auto`, so the chain built here has a
  * single element and no hop ever happens in the app — provider failover
@@ -66,6 +76,37 @@ const PREFERRED_FREE = [
 
 /** The single generic message shown when every model is exhausted. */
 export const EXHAUSTED_MESSAGE = "Tente novamente mais tarde."
+
+/** Session error type for a prompt the model cannot hold. A hop signal, never a stop. */
+export const CONTEXT_OVERFLOW_TYPE = "provider.context-too-long"
+
+/**
+ * The largest prompt a model takes while leaving room for its reply.
+ * Mirrors the compactor's ceiling (`calculateCeiling` in
+ * `compaction.ts`): `RESERVE_SHARE` of the window, or `RESERVE_MIN` when
+ * that is more. The router cannot import the compactor — the compactor
+ * reads session errors through `to-session-error`, which reads this
+ * module — so the two constants live here too, and must stay equal.
+ */
+const RESERVE_MIN = 16_000
+const RESERVE_SHARE = 0.15
+
+/** The largest prompt the model takes, or 0 when unknown. */
+function inputWindow(limit: Pick<Model.Info, "limit">["limit"]): number {
+  return limit.input && limit.context ? Math.min(limit.input, limit.context) : limit.input || limit.context
+}
+
+/** The largest request the model takes while leaving room for its reply; unbounded when the window is unknown. */
+export function requestCeiling(limit: Pick<Model.Info, "limit">["limit"]): number {
+  const window = inputWindow(limit)
+  if (window <= 0) return Number.POSITIVE_INFINITY
+  return window - Math.max(Math.floor(window * RESERVE_SHARE), window >= 2 * RESERVE_MIN ? RESERVE_MIN : 0)
+}
+
+/** True when the model's window holds this turn's prompt with room for its reply. An unknown window never excludes. */
+export function fitsPrompt(model: Pick<Model.Info, "limit">, promptTokens: number): boolean {
+  return promptTokens <= requestCeiling(model.limit)
+}
 
 /** True when the model costs nothing (no priced input or output tier). */
 export function isFreeModel(model: Pick<Model.Info, "cost">): boolean {
@@ -120,13 +161,26 @@ export function isExhaustionError(error: { readonly type: string }): boolean {
  * per-model or per-account cap (OpenRouter's free 20/min and 50/day caps,
  * an upstream provider at capacity), and another model answers now while
  * the same model would burn its backoff retries and die with the
- * throttle message. When no hop remains, the throttle falls through to
- * the same-model retry policy instead of failing at once. Auth,
- * content-filter, and invalid-request errors never hop: they are
- * configuration or request problems, not a spent model.
+ * throttle message. A model that freezes or fails mid-task hops too: a
+ * timeout, a provider-side failure, or a broken/incomplete reply means
+ * this model cannot carry this task, and the next capable model tries
+ * instead of retrying the same one until the turn dies. A prompt the
+ * model cannot hold (`provider.context-too-long`) hops to a bigger window,
+ * never to a smaller one. When no hop remains, the throttle and the
+ * mid-task failures fall through to the same-model retry policy instead
+ * of failing at once. Auth, content-filter, and invalid-request errors
+ * never hop: they are configuration or request problems, not a spent or
+ * incapable model.
  */
 export function isHopSignal(error: { readonly type: string }): boolean {
-  return error.type === "provider.rate-limit" || isExhaustionError(error)
+  return (
+    error.type === "provider.rate-limit" ||
+    error.type === "provider.timeout" ||
+    error.type === "provider.internal" ||
+    error.type === "provider.invalid-output" ||
+    error.type === CONTEXT_OVERFLOW_TYPE ||
+    isExhaustionError(error)
+  )
 }
 
 /** Effort from prompt metadata; anything unknown falls back to automatic. */
@@ -368,14 +422,26 @@ function orderFree(free: readonly Model.Info[], effort: Effort): Model.Info[] {
  * (Kimi last — it is the most expensive paid model here).
  * Complex: Kimi first when Moonshot is connected, then the cheapest paid,
  * then every free model as the fallback when the paid ones run out.
+ *
+ * `promptTokens` is the size of this turn's real prompt, in tokens. When
+ * given, models whose window cannot hold it (leaving room for the reply)
+ * never enter the chain — a model that answered a small probe can still
+ * freeze on the real request, so the chain is built from the real size.
+ * When the filter would empty the pool, it is dropped entirely: the turn
+ * still runs, and compaction handles the overflow. A filter that leaves no
+ * free model capable escalates the chain to the paid models that fit.
  */
 export function buildChain(
   available: readonly Model.Info[],
-  input: { complexity: Complexity; effort: Effort },
+  input: { complexity: Complexity; effort: Effort; promptTokens?: number },
 ): Model.Ref[] {
   const pool = available.filter(isRoutable)
-  const free = pool.filter(isFreeModel)
-  const paid = pool.filter((model) => !isFreeModel(model))
+  const { promptTokens } = input
+  const capable =
+    promptTokens === undefined ? pool : pool.filter((model) => fitsPrompt(model, promptTokens))
+  const usable = capable.length > 0 ? capable : pool
+  const free = usable.filter(isFreeModel)
+  const paid = usable.filter((model) => !isFreeModel(model))
   const kimi = paid.find((model) => model.providerID === KIMI_K3.providerID && model.id === KIMI_K3.id)
   const otherPaid = paid
     .filter((model) => model !== kimi)
@@ -422,4 +488,30 @@ export function nextHopFromProvider(
   return (
     chain.find((ref) => !tried.has(refKey(ref)) && ref.providerID !== providerID) ?? nextHop(chain, tried)
   )
+}
+
+/**
+ * First chain ref not tried yet whose window is strictly larger than the
+ * model that just failed with a prompt it cannot hold. A smaller or equal
+ * window would fail on the same prompt, so it is never a hop target for a
+ * context overflow — when none is larger, compaction shrinks the prompt
+ * instead. A model with an unknown window (0) never counts as larger: its
+ * size cannot be proven. `pool` is the `available()` list the chain was
+ * built from; the chain itself carries refs only.
+ */
+export function nextHopWithLargerWindow(
+  pool: readonly Model.Info[],
+  chain: readonly Model.Ref[],
+  tried: ReadonlySet<string>,
+  current: Pick<Model.Info, "limit">,
+): Model.Ref | undefined {
+  const currentWindow = inputWindow(current.limit)
+  const byKey = new Map(pool.map((model) => [refKey(model), model]))
+  return chain.find((ref) => {
+    if (tried.has(refKey(ref))) return false
+    const model = byKey.get(refKey(ref))
+    if (model === undefined) return false
+    const window = inputWindow(model.limit)
+    return window > 0 && window > currentWindow
+  })
 }

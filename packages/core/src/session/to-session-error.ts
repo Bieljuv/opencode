@@ -66,6 +66,17 @@ const GENERIC_UNKNOWN_MESSAGE = "Algo deu errado. Tente novamente."
 const EXHAUSTED: SessionError.Error = { type: "provider.exhausted", message: "Tente novamente mais tarde." }
 
 /**
+ * ManosTech router: a prompt the model cannot hold is a capacity failure,
+ * not a bad request — the runner hops to a bigger model instead of failing
+ * the turn. The message stays the same generic one as exhaustion: the user
+ * never sees which model failed or why the chain moved.
+ */
+const CONTEXT_TOO_LONG: SessionError.Error = {
+  type: SessionRouter.CONTEXT_OVERFLOW_TYPE,
+  message: "Tente novamente mais tarde.",
+}
+
+/**
  * ManosTech router: a limit refusal does not always arrive classified as
  * one. The classifier only recognizes the exact `FreeUsageLimitError` /
  * `GoUsageLimitError` / `BudgetLimitError` codes and a few quota phrases,
@@ -159,6 +170,12 @@ export function toSessionError(cause: unknown): SessionError.Error {
     if (cause.reason.body?.includes("subscription_sharing_usage_limit_exceeded"))
       return { ...EXHAUSTED, response: { body: cause.reason.body } }
     if (hasQuotaSignal(cause)) return EXHAUSTED
+    if (cause.reason._tag === "InvalidRequest" && cause.reason.classification === "context-overflow")
+      return {
+        ...CONTEXT_TOO_LONG,
+        ...(cause.reason.http?.status === undefined ? {} : { status: cause.reason.http.status }),
+        ...(cause.reason.body === undefined ? {} : { response: { body: cause.reason.body } }),
+      }
     switch (cause.reason._tag) {
       case "RateLimit":
         return providerError("provider.rate-limit", cause.reason)
