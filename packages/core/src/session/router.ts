@@ -11,11 +11,11 @@ export * as SessionRouter from "./router.js"
  * The law, in order:
  * - Free models first, always. Simple chats and requests use the lightest
  *   free model, even among the free ones.
- * - Turns rotate the starting free model round-robin per session: each
- *   new turn starts at the next capable free model after the one that
- *   answered the previous turn, so one free model does not absorb every
- *   turn until its free limit breaks. The rest of the chain stays the
- *   fallback, and a complex turn never rotates down to a free model.
+ * - Steps rotate the starting free model round-robin: each step starts at
+ *   the next capable free model after the one that answered the previous
+ *   step, so one free model does not absorb a whole task until its free
+ *   limit breaks. The rest of the chain stays the fallback, and a complex
+ *   turn never rotates down to a free model.
  * - On error or exhausted credit, hop to the next free model. Never stop at
  *   a paywall: subscription models (OpenCode Go) are never in any chain.
  * - Complex requests use paid models with a configured key — Kimi K3.1 Pro
@@ -555,18 +555,25 @@ export function nextHop(
 
 /**
  * The model a step starts on. A new turn takes the chain head (already
- * rotated past the model that answered the previous turn); a continuation
- * step keeps the turn's model when it is still in the chain, so rotation
- * never switches models mid-task. Falls back to the chain head when the
- * session has no model or it left the chain.
+ * rotated past the model that answered the previous turn). A continuation
+ * step on a free model takes the chain head too: the free run is rotated
+ * past the session model on every step, so the head is the next free model
+ * after the one that answered the previous step, and a long task spreads
+ * across the free pool instead of draining one model to its free limit.
+ * A continuation step on a paid model keeps the turn's model when it is
+ * still in the chain — a complex turn never rotates down, and a turn that
+ * hopped to paid never re-tries the free models that already failed it.
+ * Falls back to the chain head when the session has no model or it left
+ * the chain.
  */
 export function stepHead(
   chain: readonly Model.Ref[],
   tried: ReadonlySet<string>,
   sessionModel: Model.Ref | undefined,
   isNewTurn: boolean,
+  sessionModelIsFree: boolean,
 ): Model.Ref | undefined {
-  if (!isNewTurn && sessionModel !== undefined) {
+  if (!isNewTurn && sessionModel !== undefined && !sessionModelIsFree) {
     const current = chain.find(
       (ref) => refKey(ref) === refKey(sessionModel) && !tried.has(refKey(ref)),
     )

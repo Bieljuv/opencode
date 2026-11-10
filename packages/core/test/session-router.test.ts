@@ -309,28 +309,106 @@ describe("stepHead", () => {
   )
 
   test("a new turn takes the chain head", () => {
-    expect(stepHead(chain, new Set(), undefined, true)).toEqual(ref("opencode", "big-pickle"))
-    expect(stepHead(chain, new Set(), ref("openrouter", "other-free"), true)).toEqual(
+    expect(stepHead(chain, new Set(), undefined, true, false)).toEqual(ref("opencode", "big-pickle"))
+    expect(stepHead(chain, new Set(), ref("openrouter", "other-free"), true, true)).toEqual(
       ref("opencode", "big-pickle"),
     )
   })
 
-  test("a continuation step keeps the turn's model", () => {
-    expect(stepHead(chain, new Set(), ref("openrouter", "other-free"), false)).toEqual(
+  test("a continuation step on a free model rotates to the next free model", () => {
+    const pool = [
+      model("anthropic", "pricey", { cost: [priced(3, 15)] }),
+      free("openrouter", "other-free"),
+      free("opencode", "big-pickle"),
+    ]
+    const input = { complexity: "simple" as const, effort: "automatico" as const }
+    const afterPickle = buildChain(pool, {
+      ...input,
+      rotateAfter: ref("opencode", "big-pickle"),
+    })
+    expect(stepHead(afterPickle, new Set(), ref("opencode", "big-pickle"), false, true)).toEqual(
       ref("openrouter", "other-free"),
+    )
+    // After the last free model it wraps to the first.
+    const afterOther = buildChain(pool, {
+      ...input,
+      rotateAfter: ref("openrouter", "other-free"),
+    })
+    expect(stepHead(afterOther, new Set(), ref("openrouter", "other-free"), false, true)).toEqual(
+      ref("opencode", "big-pickle"),
+    )
+  })
+
+  test("consecutive steps in one turn alternate free models", () => {
+    const pool = [
+      model("anthropic", "pricey", { cost: [priced(3, 15)] }),
+      free("openrouter", "other-free"),
+      free("opencode", "big-pickle"),
+    ]
+    const input = { complexity: "simple" as const, effort: "automatico" as const }
+    // Step 1, new turn: starts on the preferred free model.
+    const first = buildChain(pool, input)
+    expect(stepHead(first, new Set(), undefined, true, false)).toEqual(ref("opencode", "big-pickle"))
+    // Step 2, continuation: rotates to the next free model.
+    const second = buildChain(pool, { ...input, rotateAfter: ref("opencode", "big-pickle") })
+    expect(stepHead(second, new Set(), ref("opencode", "big-pickle"), false, true)).toEqual(
+      ref("openrouter", "other-free"),
+    )
+    // Step 3, continuation: wraps back to the first free model.
+    const third = buildChain(pool, { ...input, rotateAfter: ref("openrouter", "other-free") })
+    expect(stepHead(third, new Set(), ref("openrouter", "other-free"), false, true)).toEqual(
+      ref("opencode", "big-pickle"),
+    )
+  })
+
+  test("a continuation step keeps a paid session model", () => {
+    expect(stepHead(chain, new Set(), ref("anthropic", "pricey"), false, false)).toEqual(
+      ref("anthropic", "pricey"),
+    )
+  })
+
+  test("a continuation step on a complex turn keeps the paid head", () => {
+    const complexChain = buildChain(
+      [
+        model("moonshotai", "kimi-k3.1-pro", { cost: [priced(2, 10)] }),
+        model("openrouter", "cheap", { cost: [priced(0.1, 0.4)] }),
+        model("anthropic", "pricey", { cost: [priced(3, 15)] }),
+        free("openrouter", "other-free"),
+        free("opencode", "big-pickle"),
+      ],
+      { complexity: "complex", effort: "automatico" },
+    )
+    expect(stepHead(complexChain, new Set(), ref("moonshotai", "kimi-k3.1-pro"), false, false)).toEqual(
+      ref("moonshotai", "kimi-k3.1-pro"),
+    )
+  })
+
+  test("a continuation step on a complex turn that fell back to free retries the paid head", () => {
+    const complexChain = buildChain(
+      [
+        model("moonshotai", "kimi-k3.1-pro", { cost: [priced(2, 10)] }),
+        model("openrouter", "cheap", { cost: [priced(0.1, 0.4)] }),
+        model("anthropic", "pricey", { cost: [priced(3, 15)] }),
+        free("openrouter", "other-free"),
+        free("opencode", "big-pickle"),
+      ],
+      { complexity: "complex", effort: "automatico" },
+    )
+    expect(stepHead(complexChain, new Set(), ref("openrouter", "other-free"), false, true)).toEqual(
+      ref("moonshotai", "kimi-k3.1-pro"),
     )
   })
 
   test("a continuation step falls back to the head when the session model left the chain", () => {
-    expect(stepHead(chain, new Set(), ref("moonshotai", "kimi-k3.1-pro"), false)).toEqual(
+    expect(stepHead(chain, new Set(), ref("moonshotai", "kimi-k3.1-pro"), false, false)).toEqual(
       ref("opencode", "big-pickle"),
     )
-    expect(stepHead(chain, new Set(), undefined, false)).toEqual(ref("opencode", "big-pickle"))
+    expect(stepHead(chain, new Set(), undefined, false, false)).toEqual(ref("opencode", "big-pickle"))
   })
 
   test("a continuation step skips a session model already tried", () => {
     expect(
-      stepHead(chain, new Set(["openrouter/other-free"]), ref("openrouter", "other-free"), false),
+      stepHead(chain, new Set(["openrouter/other-free"]), ref("openrouter", "other-free"), false, true),
     ).toEqual(ref("opencode", "big-pickle"))
   })
 })
