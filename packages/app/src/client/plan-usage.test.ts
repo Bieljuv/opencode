@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test"
-import { planUsageBlocks, planUsageResetInMs, planUsageTone, planUsageToneClass } from "./plan-usage"
+import {
+  planUsageBlocks,
+  planUsageResetInMs,
+  planUsageTone,
+  planUsageToneClass,
+  shouldShowUsageWarning,
+  type PlanUsage,
+} from "./plan-usage"
+import { dict as dictBr } from "../runtime/i18n/br"
+import { dict as dictEn } from "../runtime/i18n/en"
 
 describe("plan usage tone class", () => {
   test("maps each tone to a v2 state background class that Tailwind generates", () => {
@@ -37,6 +46,68 @@ describe("plan usage bar blocks", () => {
     expect(planUsageBlocks(100)).toBe(10)
     expect(planUsageBlocks(150)).toBe(10)
     expect(planUsageBlocks(-5)).toBe(0)
+  })
+})
+
+describe("usage warning trigger", () => {
+  test("fires at 85% on the strip, once a day, and never below it or after being warned", () => {
+    const usage = (percent: number, warnedToday: boolean): PlanUsage => ({
+      percent,
+      resetsAt: "2026-11-11T03:00:00Z",
+      warnedToday,
+    })
+
+    expect(shouldShowUsageWarning(usage(84, false), true)).toBe(false)
+    expect(shouldShowUsageWarning(usage(85, false), true)).toBe(true)
+    expect(shouldShowUsageWarning(usage(100, false), true)).toBe(true)
+    expect(shouldShowUsageWarning(usage(150, false), true)).toBe(true)
+    // Warned today: the line and the push stay off until tomorrow.
+    expect(shouldShowUsageWarning(usage(85, true), true)).toBe(false)
+    expect(shouldShowUsageWarning(usage(100, true), true)).toBe(false)
+    // Off the strip (e.g. the Settings usage screen) there is no warning.
+    expect(shouldShowUsageWarning(usage(100, false))).toBe(false)
+    expect(shouldShowUsageWarning(usage(100, false), false)).toBe(false)
+  })
+})
+
+describe("usage warning push copy", () => {
+  test("never names a model, provider, free/paid tier, quota, limit, credits or routing", () => {
+    // The push is the client's own plan warning: the mask is absolute,
+    // so the copy must not leak what runs behind the plan.
+    const forbidden = [
+      "opencode",
+      "model",
+      "modelo",
+      "provider",
+      "provedor",
+      "free",
+      "grátis",
+      "gratis",
+      "paid",
+      "pago",
+      "quota",
+      "cota",
+      "limit",
+      "limite",
+      "credit",
+      "crédito",
+      "credito",
+      "routing",
+      "roteamento",
+      "us$",
+    ]
+
+    for (const dict of [dictEn, dictBr]) {
+      for (const key of ["client.usage.warningPush.title", "client.usage.warningPush.body"] as const) {
+        const text = dict[key]
+
+        expect(text).toBeDefined()
+
+        for (const word of forbidden) {
+          expect(text.toLowerCase()).not.toContain(word)
+        }
+      }
+    }
   })
 })
 
