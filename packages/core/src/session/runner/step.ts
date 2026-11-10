@@ -51,11 +51,18 @@ interface Input {
   readonly prepared: Omit<SessionModelRequest.Prepared, "event">
   /** Set when this attempt runs because an earlier one in the step scheduled a retry. */
   readonly retryAttempt?: number
+  /**
+   * Decides the next attempt after a model failure. It may fail the step
+   * outright with a `StepFailedError` — the router does that when the
+   * chain is exhausted for an error no same-model retry can fix (a dead
+   * key), so the turn ends with the generic message instead of the
+   * per-model error.
+   */
   readonly retry: (
     cause: AIError,
     error: SessionError.Error,
     retry: boolean,
-  ) => Effect.Effect<{ readonly retry: false } | SessionRunnerRetry.Decision>
+  ) => Effect.Effect<{ readonly retry: false } | SessionRunnerRetry.Decision, StepFailedError>
   readonly recoverContinuation: boolean
   /** The runner owns compaction policy; the attempt invokes it only before durable output. */
   readonly recoverOverflow: Effect.Effect<boolean>

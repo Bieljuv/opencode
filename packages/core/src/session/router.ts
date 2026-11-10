@@ -208,15 +208,20 @@ export function isExhaustionError(error: { readonly type: string }): boolean {
  * this model cannot carry this task, and the next capable model tries
  * instead of retrying the same one until the turn dies. A prompt the
  * model cannot hold (`provider.context-too-long`) hops to a bigger window,
- * never to a smaller one. When no hop remains, the throttle and the
- * mid-task failures fall through to the same-model retry policy instead
- * of failing at once. Auth, content-filter, and invalid-request errors
- * never hop: they are configuration or request problems, not a spent or
- * incapable model.
+ * never to a smaller one. An authentication failure hops too: the
+ * credential is per provider, so a dead key on one provider must not
+ * condemn the models of the others — each model is tried at most once
+ * per turn, and the hop prefers a different provider. When no hop remains,
+ * the throttle and the mid-task failures fall through to the same-model
+ * retry policy instead of failing at once; auth is the exception and
+ * fails at once with the generic message, because a dead key never heals
+ * with backoff. Content-filter and invalid-request errors never hop:
+ * they are request problems, not a spent or incapable model.
  */
 export function isHopSignal(error: { readonly type: string }): boolean {
   return (
     error.type === "provider.rate-limit" ||
+    error.type === "provider.auth" ||
     error.type === "provider.timeout" ||
     error.type === "provider.internal" ||
     error.type === "provider.invalid-output" ||
