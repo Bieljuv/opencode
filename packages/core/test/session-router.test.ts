@@ -24,6 +24,7 @@ import {
   nextHopWithLargerWindow,
   refKey,
   requestCeiling,
+  stepHead,
   variantForEffort,
 } from "@opencode/core/session/router"
 
@@ -183,6 +184,154 @@ describe("buildChain", () => {
 
   test("empty pool builds an empty chain", () => {
     expect(buildChain([], { complexity: "simple", effort: "automatico" })).toEqual([])
+  })
+
+  test("rotation: consecutive turns start on different free models", () => {
+    const pool = [priceyPaid, kimi, otherFree, cheapPaid, deepseekFree, pickle]
+    const input = { complexity: "simple" as const, effort: "automatico" as const }
+    const first = buildChain(pool, input)
+    const second = buildChain(pool, { ...input, rotateAfter: first[0] })
+    const third = buildChain(pool, { ...input, rotateAfter: second[0] })
+    expect(first.map(refKey)[0]).toBe("opencode/big-pickle")
+    expect(second.map(refKey)[0]).toBe("openrouter/deepseek-v4.1-flash-free")
+    expect(third.map(refKey)[0]).toBe("openrouter/other-free")
+    // The whole chain is still there, just rotated: the fallback follows the new head.
+    expect(second.map(refKey)).toEqual([
+      "openrouter/deepseek-v4.1-flash-free",
+      "openrouter/other-free",
+      "opencode/big-pickle",
+      "openrouter/cheap",
+      "anthropic/pricey",
+      "moonshotai/kimi-k3.1-pro",
+    ])
+  })
+
+  test("rotation: after the last free model it wraps to the first", () => {
+    const pool = [otherFree, deepseekFree, pickle]
+    const chain = buildChain(pool, {
+      complexity: "simple",
+      effort: "automatico",
+      rotateAfter: Model.Ref.make({
+        providerID: Provider.ID.make("openrouter"),
+        id: Model.ID.make("other-free"),
+      }),
+    })
+    expect(chain.map(refKey)).toEqual([
+      "opencode/big-pickle",
+      "openrouter/deepseek-v4.1-flash-free",
+      "openrouter/other-free",
+    ])
+  })
+
+  test("rotation: a model outside the free run leaves the order untouched", () => {
+    const pool = [priceyPaid, kimi, otherFree, cheapPaid, deepseekFree, pickle]
+    const afterPaid = buildChain(pool, {
+      complexity: "simple",
+      effort: "automatico",
+      rotateAfter: Model.Ref.make({
+        providerID: Provider.ID.make("moonshotai"),
+        id: Model.ID.make("kimi-k3.1-pro"),
+      }),
+    })
+    expect(afterPaid.map(refKey)[0]).toBe("opencode/big-pickle")
+    const afterUnknown = buildChain(pool, {
+      complexity: "simple",
+      effort: "automatico",
+      rotateAfter: Model.Ref.make({ providerID: Provider.ID.make("nope"), id: Model.ID.make("nope") }),
+    })
+    expect(afterUnknown.map(refKey)).toEqual(
+      buildChain(pool, { complexity: "simple", effort: "automatico" }).map(refKey),
+    )
+  })
+
+  test("rotation: a single free model never changes", () => {
+    const chain = buildChain([otherFree, cheapPaid], {
+      complexity: "simple",
+      effort: "automatico",
+      rotateAfter: Model.Ref.make({
+        providerID: Provider.ID.make("openrouter"),
+        id: Model.ID.make("other-free"),
+      }),
+    })
+    expect(chain.map(refKey)[0]).toBe("openrouter/other-free")
+  })
+
+  test("rotation: a complex turn never rotates down to a free model", () => {
+    const pool = [otherFree, priceyPaid, kimi, cheapPaid, pickle]
+    const chain = buildChain(pool, {
+      complexity: "complex",
+      effort: "automatico",
+      rotateAfter: Model.Ref.make({ providerID: Provider.ID.make("opencode"), id: Model.ID.make("big-pickle") }),
+    })
+    expect(chain.map(refKey)).toEqual([
+      "moonshotai/kimi-k3.1-pro",
+      "openrouter/cheap",
+      "anthropic/pricey",
+      "openrouter/other-free",
+      "opencode/big-pickle",
+    ])
+  })
+
+  test("rotation: only models that fit the prompt can lead", () => {
+    const small = free("opencode", "big-pickle", { limit: { context: 32_000, output: 8_000 } })
+    const big = free("openrouter", "deepseek-v4.1-flash-free", { limit: { context: 200_000, output: 32_000 } })
+    const mid = free("openrouter", "other-free", { limit: { context: 200_000, output: 32_000 } })
+    const input = { complexity: "simple" as const, effort: "automatico" as const, promptTokens: 40_000 }
+    const chain = buildChain([small, big, mid], input)
+    expect(chain.map(refKey)).toEqual(["openrouter/deepseek-v4.1-flash-free", "openrouter/other-free"])
+    const rotated = buildChain([small, big, mid], {
+      ...input,
+      rotateAfter: Model.Ref.make({
+        providerID: Provider.ID.make("openrouter"),
+        id: Model.ID.make("deepseek-v4.1-flash-free"),
+      }),
+    })
+    expect(rotated.map(refKey)[0]).toBe("openrouter/other-free")
+    // The too-small model is out of the chain, so rotating after it changes nothing.
+    const afterSmall = buildChain([small, big, mid], {
+      ...input,
+      rotateAfter: Model.Ref.make({ providerID: Provider.ID.make("opencode"), id: Model.ID.make("big-pickle") }),
+    })
+    expect(afterSmall.map(refKey)).toEqual(chain.map(refKey))
+  })
+})
+
+describe("stepHead", () => {
+  const ref = (providerID: string, id: string) =>
+    Model.Ref.make({ providerID: Provider.ID.make(providerID), id: Model.ID.make(id) })
+  const chain = buildChain(
+    [
+      model("anthropic", "pricey", { cost: [priced(3, 15)] }),
+      free("openrouter", "other-free"),
+      free("opencode", "big-pickle"),
+    ],
+    { complexity: "simple", effort: "automatico" },
+  )
+
+  test("a new turn takes the chain head", () => {
+    expect(stepHead(chain, new Set(), undefined, true)).toEqual(ref("opencode", "big-pickle"))
+    expect(stepHead(chain, new Set(), ref("openrouter", "other-free"), true)).toEqual(
+      ref("opencode", "big-pickle"),
+    )
+  })
+
+  test("a continuation step keeps the turn's model", () => {
+    expect(stepHead(chain, new Set(), ref("openrouter", "other-free"), false)).toEqual(
+      ref("openrouter", "other-free"),
+    )
+  })
+
+  test("a continuation step falls back to the head when the session model left the chain", () => {
+    expect(stepHead(chain, new Set(), ref("moonshotai", "kimi-k3.1-pro"), false)).toEqual(
+      ref("opencode", "big-pickle"),
+    )
+    expect(stepHead(chain, new Set(), undefined, false)).toEqual(ref("opencode", "big-pickle"))
+  })
+
+  test("a continuation step skips a session model already tried", () => {
+    expect(
+      stepHead(chain, new Set(["openrouter/other-free"]), ref("openrouter", "other-free"), false),
+    ).toEqual(ref("opencode", "big-pickle"))
   })
 })
 
