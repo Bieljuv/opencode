@@ -6,6 +6,7 @@ import { Arch, type Configuration } from "electron-builder"
 import { NativeArch } from "../../script/native-arch"
 import { DESKTOP_NATIVE_ENGLISH } from "@opencode/app/i18n/desktop-native"
 import { CLI_BINARIES, getCurrentCli, nodePtyPackage } from "./script/utils"
+import { isWindowsSigningConfigured, createWindowsSignHook } from "./script/sign-windows"
 
 const packageDir = path.dirname(fileURLToPath(import.meta.url))
 
@@ -179,7 +180,14 @@ const getBase = (appId: string): Configuration => {
     win: {
       icon: `resources/icons/icon.ico`,
       target: ["nsis"],
-      verifyUpdateCodeSignature: false,
+      // Optional Windows code signing (audit item I13): the hook in
+      // script/sign-windows.ts only runs when MANOSTECH_SIGN_CMD is set.
+      // Without it the installer ships unsigned exactly as today, and the
+      // updater must not start demanding a signature it never had.
+      verifyUpdateCodeSignature: isWindowsSigningConfigured(),
+      signtoolOptions: isWindowsSigningConfigured()
+        ? { sign: createWindowsSignHook(), signingHashAlgorithms: ["sha256"] }
+        : undefined,
     },
     nsis: {
       include: path.join(packageDir, "resources", "windows", "installer.nsh"),
