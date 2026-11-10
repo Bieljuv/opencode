@@ -378,6 +378,29 @@ function sanitizeSessionExportMessage(message: SessionMessageInfo): SessionExpor
 }
 
 /**
+ * A message as the Context tab's raw view shows it: the export's strip (no model, no cost, no
+ * model switch) plus the export's text scrub, so a model or provider named inside the
+ * conversation text (reasoning, tool results) never reaches the screen either. Returns
+ * undefined for a model switch, which the raw list omits — the same as the export.
+ */
+export function sanitizeMessageForDisplay(
+  message: SessionMessageInfo,
+): SessionExportMessageInfo | undefined {
+  const [stripped] = sanitizeSessionExportMessage(message)
+
+  if (!stripped) return undefined
+
+  // SAFETY: the scrub only rewrites string leaves and keys in place; it never adds or removes a
+  // key and never changes a non-string value, and no declared SessionExportMessageInfo field name
+  // matches a scrub pattern, so the scrubbed data keeps the SessionExportMessageInfo shape.
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- see SAFETY above
+  const json = stripped as unknown as JsonValue
+
+  // SAFETY: see the comment above — the walker returns the same shape it received.
+  return scrubExportValue(json) as SessionExportMessageInfo
+}
+
+/**
  * User messages remember which model answered in their metadata; drop that key, keep the rest. Returns the
  * same dict when there is nothing to drop, so untouched messages keep their identity.
  */

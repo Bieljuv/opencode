@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { OpenCodeClient, SessionInfo, SessionMessageInfo } from "@opencode/client/promise"
-import { fetchSessionExport, sanitizeSessionExport, sessionExportFilename } from "./export"
+import { fetchSessionExport, sanitizeMessageForDisplay, sanitizeSessionExport, sessionExportFilename } from "./export"
 
 /* oxlint-disable anti-slop/require-safety-comment-for-type-assertion, anti-slop/no-chained-type-assertions -- partial fixtures stand in for the client methods the export calls */
 
@@ -584,6 +584,78 @@ describe("sanitizeSessionExport", () => {
         { type: "text", text: "o modelo Automático respondeu" },
       ],
     })
+  })
+})
+
+describe("sanitizeMessageForDisplay", () => {
+  const tokens = { input: 120, output: 45, reasoning: 0, cache: { read: 10, write: 0 } }
+
+  test("shows the conversation without the model, provider or cost", () => {
+    const assistant = {
+      id: "msg_raw",
+      type: "assistant",
+      agent: "build",
+      model: { id: "mimo-v2.6-flash-free", providerID: "opencode", variant: "default" },
+      cost: 0.005,
+      tokens,
+      time: { created: 1794319025363 },
+      content: [
+        { type: "reasoning", text: "The company is NOT on Google Maps." },
+        { type: "text", text: "A empresa não existe no Google Maps." },
+      ],
+    } as unknown as SessionMessageInfo
+
+    const result = sanitizeMessageForDisplay(assistant)
+
+    expect(result).toEqual({
+      id: "msg_raw",
+      type: "assistant",
+      agent: "build",
+      tokens,
+      time: { created: 1794319025363 },
+      content: [
+        { type: "reasoning", text: "The company is NOT on Google Maps." },
+        { type: "text", text: "A empresa não existe no Google Maps." },
+      ],
+    })
+
+    const json = JSON.stringify(result)
+
+    for (const leaked of ["mimo-v2.6-flash-free", "providerID", "opencode", "OpenCode", "0.005"]) {
+      expect(json).not.toContain(leaked)
+    }
+  })
+
+  test("scrubs a provider named inside the message text", () => {
+    const assistant = {
+      id: "msg_raw_text",
+      type: "assistant",
+      agent: "build",
+      tokens,
+      time: { created: 1100 },
+      content: [{ type: "text", text: "Rodei no opencode com o mimo-v2.6-flash-free e o providerID era opencode." }],
+    } as unknown as SessionMessageInfo
+
+    const result = sanitizeMessageForDisplay(assistant)
+    const json = JSON.stringify(result)
+
+    expect(json).toContain("Rodei no ManosTech.AI com o Automático e o Automático era ManosTech.AI.")
+
+    for (const leaked of ["mimo-v2.6-flash-free", "providerID", "opencode", "OpenCode"]) {
+      expect(json).not.toContain(leaked)
+    }
+  })
+
+  test("omits a model switch from the raw view", () => {
+    const switched = {
+      id: "msg_raw_switch",
+      type: "model-switched",
+      time: { created: 1200 },
+      model: { id: "hy4", providerID: "opencode-go" },
+      previous: { id: "deepseek-flash", providerID: "deepseek" },
+    } as unknown as SessionMessageInfo
+
+    expect(sanitizeMessageForDisplay(switched)).toBeUndefined()
   })
 })
 
