@@ -395,6 +395,132 @@ describe("sanitizeSessionExport", () => {
     })
   })
 
+  test("scrubs tier and quota words from the conversation text", () => {
+    const assistant = {
+      id: "msg_assistant_tier",
+      type: "assistant",
+      agent: "build",
+      tokens,
+      time: { created: 1100 },
+      content: [
+        { type: "text", text: "Cota do OpenCode estourada (volta em ~13h)." },
+        { type: "text", text: "Testar grátis por 7 dias e ver os modelos pagos." },
+        { type: "text", text: "Sem gastar cota da API e sem limite diário." },
+        { type: "text", text: "Créditos quase esgotados, adicione créditos." },
+        { type: "text", text: "Fiz uma prévia gratuita do site." },
+        { type: "text", text: "COTA GRÁTIS ATINGIDA" },
+        { type: "text", text: "O limite de créditos estourou." },
+        // A path segment cannot be told apart from prose, so it is masked like prose.
+        { type: "text", text: "Veja src/limite.js e o total de cotas." },
+      ],
+      metadata: {
+        toolResult: '{"total": 464, "gratis": []}',
+      },
+    }
+
+    const info = { id: "ses_1" } as SessionInfo
+    const messages = [assistant] as unknown as SessionMessageInfo[]
+
+    const result = sanitizeSessionExport({ info, messages })
+    const json = JSON.stringify(result)
+
+    for (const leaked of [
+      "grátis",
+      "GRÁTIS",
+      "gratuita",
+      "pagos",
+      "cota",
+      "Cota",
+      "COTA",
+      "créditos",
+      "Créditos",
+      "limite",
+      "gratis",
+    ]) {
+      expect(json).not.toContain(leaked)
+    }
+
+    expect(result.messages[0]).toEqual({
+      id: "msg_assistant_tier",
+      type: "assistant",
+      agent: "build",
+      tokens,
+      time: { created: 1100 },
+      content: [
+        { type: "text", text: "uso do Editor estourada (volta em ~13h)." },
+        { type: "text", text: "Testar Automático por 7 dias e ver os modelos Automático." },
+        { type: "text", text: "Sem gastar uso da API e sem uso diário." },
+        { type: "text", text: "saldo quase esgotados, adicione saldo." },
+        { type: "text", text: "Fiz uma prévia Automático do site." },
+        { type: "text", text: "uso Automático ATINGIDA" },
+        { type: "text", text: "O uso de saldo estourou." },
+        { type: "text", text: "Veja src/uso.js e o total de uso." },
+      ],
+      metadata: {
+        toolResult: '{"total": 464, "Automático": []}',
+      },
+    })
+  })
+
+  test("keeps code identifiers that contain a tier or quota word", () => {
+    const assistant = {
+      id: "msg_assistant_identifiers",
+      type: "assistant",
+      agent: "build",
+      tokens,
+      time: { created: 1100 },
+      content: [
+        { type: "text", text: "const limiteTokens = 10; const cota_maxima = 5; const creditoBaixo = 2;" },
+        { type: "text", text: "O limite é 10 e a cota é 5." },
+      ],
+    }
+
+    const info = { id: "ses_1" } as SessionInfo
+    const messages = [assistant] as unknown as SessionMessageInfo[]
+
+    const json = JSON.stringify(sanitizeSessionExport({ info, messages }))
+
+    for (const kept of [
+      "const limiteTokens = 10; const cota_maxima = 5; const creditoBaixo = 2;",
+      "O uso é 10 e a uso é 5.",
+    ]) {
+      expect(json).toContain(kept)
+    }
+  })
+
+  test("keeps tier and quota words inside image data", () => {
+    const blob = `${"A".repeat(100)}cota${"B".repeat(100)}`
+
+    const assistant = {
+      id: "msg_assistant_blob_tier",
+      type: "assistant",
+      agent: "build",
+      tokens,
+      time: { created: 1100 },
+      content: [
+        { type: "text", text: blob },
+        { type: "text", text: "a cota estourou" },
+      ],
+    }
+
+    const info = { id: "ses_1" } as SessionInfo
+    const messages = [assistant] as unknown as SessionMessageInfo[]
+
+    const result = sanitizeSessionExport({ info, messages })
+
+    expect(result.messages[0]).toEqual({
+      id: "msg_assistant_blob_tier",
+      type: "assistant",
+      agent: "build",
+      tokens,
+      time: { created: 1100 },
+      content: [
+        { type: "text", text: blob },
+        { type: "text", text: "a uso estourou" },
+      ],
+    })
+  })
+
   test("keeps a web search and file paths that only look like a model reference", () => {
     const assistant = {
       id: "msg_assistant_keep",

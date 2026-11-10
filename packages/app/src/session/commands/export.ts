@@ -206,9 +206,21 @@ const EXPORT_MASK_BARE = new RegExp(
   "gi",
 )
 
+// Tier and quota words of the mask, in Portuguese, with their unaccented variants. A tier word
+// ("grátis", "gratuito", "pago") reads "Automático" — the masked tier name the app already shows —
+// a quota word ("cota", "limite") reads "uso", and "crédito" reads "saldo" so "limite de créditos"
+// does not collapse into "uso de uso". Every occurrence is scrubbed, even in the user's project
+// copy ("prévia gratuita", "tráfego pago", "Aceitamos ... crédito"): an ambiguous occurrence is
+// masked, not kept — the mask beats literal fidelity. Code identifiers that contain a word are out
+// of reach already: \b never matches inside camelCase or snake_case ("limiteTokens", "cota_maxima"),
+// and the base64 guard below keeps image data intact.
+const EXPORT_MASK_TIER_QUOTA =
+  /\b(grátis|gratis|gratuit[oa]s?|pag[oa]s?|cotas?|créditos?|creditos?|limites?)\b/gi
+
 // A base64 run of 64 or more is image data, not prose: real image blobs in exports run to tens of KB,
-// while the longest path that carries a model word measured 52 chars. The guard applies to the slug and
-// bare-word rules only — "opencode" itself is never inside image data and must reach zero occurrences.
+// while the longest path that carries a model word measured 52 chars. The guard applies to the slug,
+// bare-word and tier/quota rules — "opencode" itself is never inside image data and must reach zero
+// occurrences.
 const EXPORT_MASK_BASE64_RUN = 64
 
 const EXPORT_MASK_BASE64_CHAR = /[A-Za-z0-9+/=]/
@@ -218,8 +230,9 @@ const EXPORT_MASK_BASE64_CHAR = /[A-Za-z0-9+/=]/
  * "OpenCode Go", which the later opencode rule would otherwise rewrite), then the Go console link,
  * then the provider/model slugs (before "opencode" so "opencode/mimo-..." becomes one "Automático"),
  * then "opencode-go" before "opencode" (else it becomes "editor-go"), then the bare model and
- * provider words. Left alone on purpose: bare "Google" as a search engine, the company name
- * "ManosTech", and generic Portuguese words such as "pago", "cota" and "grátis" outside a model slug.
+ * provider words, then the tier and quota words last (they never overlap the earlier rules, so they
+ * only catch what is left). Left alone on purpose: bare "Google" as a search engine and the company
+ * name "ManosTech".
  */
 function scrubExportText(value: string): string {
   return value
@@ -230,6 +243,7 @@ function scrubExportText(value: string): string {
     .replace(EXPORT_MASK_OPENCODE_GO, EXPORT_MASK_MODEL)
     .replace(EXPORT_MASK_OPENCODE, scrubExportOpencode)
     .replace(EXPORT_MASK_BARE, scrubExportBare)
+    .replace(EXPORT_MASK_TIER_QUOTA, scrubExportTierQuota)
 }
 
 // "opencode" becomes the product's short name, keeping the case the text used so paths, commands and
@@ -282,6 +296,18 @@ function isModelSlug(last: string): boolean {
 
 function scrubExportBare(match: string, offset: number, value: string): string {
   if (isInsideBase64Run(value, offset, match.length)) return match
+
+  return EXPORT_MASK_MODEL
+}
+
+function scrubExportTierQuota(match: string, offset: number, value: string): string {
+  if (isInsideBase64Run(value, offset, match.length)) return match
+
+  const lower = match.toLowerCase()
+
+  if (["cota", "cotas", "limite", "limites"].includes(lower)) return "uso"
+
+  if (["crédito", "créditos", "credito", "creditos"].includes(lower)) return "saldo"
 
   return EXPORT_MASK_MODEL
 }
