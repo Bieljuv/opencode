@@ -778,6 +778,40 @@ test.describe("Working", () => {
     await expect(working).toHaveCount(0)
   })
 
+  test("shows elapsed time next to Working while the turn runs", async ({ page }) => {
+    const timeline = await setupTimeline(page, {
+      // The assistant message lives in the initial history so it survives the reload below; a live
+      // stepStarted would not.
+      messages: [userMessage(), assistantMessage([], { completed: false })],
+      sessionStatus: { [sessionID]: { type: "busy" } },
+      viewport: { width: 390, height: 900 },
+      settings: { timelineDetail: { ...detailed, thinking: { placement: "separate", details: "collapsed" } } },
+    })
+
+    const working = page.locator('[data-component="session-working"]')
+    const elapsed = working.locator('[data-slot="session-working-elapsed"]')
+    await expect(working).toBeVisible()
+
+    // assistantMessage defaults created to 1700000001000, so the pause lands 12s into the turn.
+    await page.clock.install({ time: 1700000001000 })
+    await page.reload()
+    await timeline.transport.waitForConnection()
+
+    await expect(working).toBeVisible()
+    await page.clock.pauseAt(1700000001000 + 12_000)
+    await expect(elapsed).toHaveText("12s")
+
+    await page.clock.fastForward(5_000)
+    await expect(elapsed).toHaveText("17s")
+
+    // Event delivery schedules timers, so let time run again before finishing the turn.
+    await page.clock.resume()
+
+    await timeline.send(status("idle"))
+    await expect(working).toHaveCount(0)
+    await expect(elapsed).toHaveCount(0)
+  })
+
   test("shows an expandable live Thinking in place of Working while reasoning is the only activity", async ({
     page,
   }) => {

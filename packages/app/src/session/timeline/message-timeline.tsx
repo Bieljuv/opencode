@@ -1,4 +1,4 @@
-import { createMemo, createSignal, onCleanup, Show, type Accessor, type JSX } from "solid-js"
+import { createEffect, createMemo, createSignal, onCleanup, Show, type Accessor, type JSX } from "solid-js"
 import { Predicate } from "effect"
 import { abort } from "@opencode/util/abort"
 import { createAnimatedPresence } from "@/runtime/animated-presence"
@@ -38,6 +38,7 @@ import {
 import { SessionHeaderSpacer } from "@/session/header/session-header"
 import { SessionHeaderGap } from "@/session/header/drag-area"
 import { SessionWorkingIndicator } from "@/session/header/session-working-indicator"
+import { formatElapsed } from "../duration"
 
 type BlockingTask = { type: "shell" | "subagent"; partID: string; id?: string; label?: string }
 
@@ -400,6 +401,34 @@ function MessageTimelineView(
   // Undelivered input waits below the work the model has seen, so live status moves into the row above it.
   const activityRow = createMemo(() => projection.rows().some((row) => Predicate.isTagged(row, "Activity")))
 
+  // The turn the Working lane reports on starts when its assistant message was created, so the clock keeps
+  // running across the lane hiding and returning several times in one step.
+  const workingStarted = createMemo(() => {
+    const active = projection.activeMessageID()
+
+    if (!active) return undefined
+
+    return projection.assistantMessagesByParent().get(active)?.at(-1)?.time.created
+  })
+
+  // One clock for the Working lane, ticking only while it shows.
+  const [now, setNow] = createSignal(Date.now())
+  createEffect(() => {
+    if (!showWorking()) return
+
+    setNow(Date.now())
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    onCleanup(() => clearInterval(timer))
+  })
+
+  const workingElapsed = createMemo(() => {
+    const started = workingStarted()
+
+    if (started === undefined) return undefined
+
+    return formatElapsed(now() - started, language.t)
+  })
+
   // The lane keeps its height while empty, so Working and the hint come and go without moving the rows around it.
   // The bottom lane also keeps its height while live status moves into the Activity row, so the tail the activity pill
   // floats in never closes and a pinned timeline does not shift when input waits.
@@ -412,8 +441,19 @@ function MessageTimelineView(
     >
       <div class={`flex h-9 items-center gap-2 pt-3 text-[13px] font-[530] leading-text-compact ${turnPadding()}`}>
         <Show when={live() && showWorking()}>
-          <div data-component="session-working" role="status">
+          <div data-component="session-working" role="status" class="flex items-center gap-2">
             <TextShimmer text={language.t("session.timeline.working")} active />
+            <Show when={workingElapsed()}>
+              {(elapsed) => (
+                <span
+                  data-slot="session-working-elapsed"
+                  dir="auto"
+                  class="text-[11px] tabular-nums whitespace-nowrap text-v2-text-text-muted"
+                >
+                  {elapsed()}
+                </span>
+              )}
+            </Show>
           </div>
         </Show>
         <Show when={live() && backgroundHintPresence.present()}>
