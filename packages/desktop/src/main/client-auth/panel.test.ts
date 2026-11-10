@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test"
 import {
   changePassword,
+  ensureApiKey,
   fetchApiKey,
   fetchDailyUsage,
   googleLogin,
@@ -386,6 +387,102 @@ describe("fetchApiKey", () => {
     }
 
     expect(await fetchApiKey("http://127.0.0.1:1", "tok-1")).toBeUndefined()
+  })
+})
+
+describe("ensureApiKey", () => {
+  // Um painel que conta quantas vezes a rota da chave foi chamada: o
+  // contrato aqui é QUANDO o app busca — sem chave guardada (o caso do
+  // login num aparelho novo) ou com o ciclo mensal vencido — e não só o
+  // que a rota devolve (isso o `fetchApiKey` acima já prova).
+  function keyServer(mode: "fresh" | "null" | "unauthorized") {
+    let hits = 0
+    const server = Bun.serve({
+      port: 0,
+      fetch: (request) => {
+        if (new URL(request.url).pathname !== "/api/auth/cliente/api-key")
+          return Response.json({ erro: "não encontrado" }, { status: 404 })
+
+        hits += 1
+
+        if (mode === "unauthorized") return Response.json({ erro: "não autorizado" }, { status: 401 })
+        if (request.headers.get("authorization") !== "Bearer tok-1")
+          return Response.json({ erro: "não autorizado" }, { status: 401 })
+
+        return Response.json(
+          {
+            api_key: mode === "fresh" ? "key-2" : null,
+            key_prefix: "mk_key-2",
+            plan: "desktop",
+            cycle_start_at: "2026-11-09T03:00:00Z",
+            renews_at: "2026-12-09T03:00:00Z",
+            gerada_agora: mode === "fresh",
+          },
+          { status: 200 },
+        )
+      },
+    })
+
+    return { base: `http://127.0.0.1:${server.port}`, hits: () => hits, stop: () => server.stop() }
+  }
+
+  test("a stored key that is not due is never fetched", async () => {
+    const server = keyServer("fresh")
+
+    try {
+      expect(await ensureApiKey(server.base, { token: "tok-1", storedApiKey: "key-1" })).toBeUndefined()
+      expect(server.hits()).toBe(0)
+    } finally {
+      server.stop()
+    }
+  })
+
+  test("a stored key whose cycle ended is fetched again", async () => {
+    const server = keyServer("fresh")
+
+    try {
+      expect(
+        await ensureApiKey(server.base, { token: "tok-1", storedApiKey: "key-1", renewsDue: true }),
+      ).toBe("key-2")
+      expect(server.hits()).toBe(1)
+    } finally {
+      server.stop()
+    }
+  })
+
+  test("no stored key fetches the key right away", async () => {
+    const server = keyServer("fresh")
+
+    try {
+      expect(await ensureApiKey(server.base, { token: "tok-1", storedApiKey: undefined })).toBe("key-2")
+      expect(server.hits()).toBe(1)
+    } finally {
+      server.stop()
+    }
+  })
+
+  test("no stored key and no new key from the panel means nothing to save", async () => {
+    const server = keyServer("null")
+
+    try {
+      expect(await ensureApiKey(server.base, { token: "tok-1", storedApiKey: undefined })).toBeUndefined()
+      expect(server.hits()).toBe(1)
+    } finally {
+      server.stop()
+    }
+  })
+
+  test("a revoked token and an unreachable panel mean no key (fail-open)", async () => {
+    const server = keyServer("unauthorized")
+
+    try {
+      expect(await ensureApiKey(server.base, { token: "tok-1", storedApiKey: undefined })).toBeUndefined()
+      expect(server.hits()).toBe(1)
+    } finally {
+      server.stop()
+    }
+
+    expect(await ensureApiKey("http://127.0.0.1:1", { token: "tok-1", storedApiKey: undefined })).toBeUndefined()
   })
 })
 

@@ -257,11 +257,13 @@ export async function getStatus(): Promise<ClientStatus> {
     // guardada, ou com o ciclo mensal vencido, busca uma em
     // /api/auth/cliente/api-key; com a chave corrente ainda válida o painel
     // devolve null e a guardada continua valendo.
-    if (!loadApiKey() || (info.apiKeyRenewsAt !== null && Date.parse(info.apiKeyRenewsAt) <= Date.now())) {
-      const fresh = await Panel.fetchApiKey(Panel.panelBaseUrl(process.env), stored.token)
+    const fresh = await Panel.ensureApiKey(Panel.panelBaseUrl(process.env), {
+      token: stored.token,
+      storedApiKey: loadApiKey(),
+      renewsDue: info.apiKeyRenewsAt !== null && Date.parse(info.apiKeyRenewsAt) <= Date.now(),
+    })
 
-      if (fresh) saveApiKey(fresh)
-    }
+    if (fresh) saveApiKey(fresh)
     await refreshGatewayCredential()
 
     return statusFromSession({
@@ -305,6 +307,15 @@ export async function login(email: string, password: string): Promise<LoginResul
   saveSession(result.value)
   storeGatewayCredentials(result.value.apiKey, result.value.gatewayUrl)
   writeClientIdentity({ id: result.value.client.id, email: result.value.client.email })
+  // O login só devolve a chave em claro quando gera uma nova: num aparelho
+  // novo, sem chave guardada, buscá-la agora conecta o gateway já neste
+  // login — sem esperar a próxima validação da sessão.
+  const fresh = await Panel.ensureApiKey(Panel.panelBaseUrl(process.env), {
+    token: result.value.token,
+    storedApiKey: loadApiKey(),
+  })
+
+  if (fresh) saveApiKey(fresh)
   await refreshGatewayCredential()
   notifyClientChanged()
 
@@ -439,6 +450,14 @@ async function finishGoogleLoopback(code: Promise<AuthReturn>): Promise<void> {
     saveSession(loginResult.value)
     storeGatewayCredentials(loginResult.value.apiKey, loginResult.value.gatewayUrl)
     writeClientIdentity({ id: loginResult.value.client.id, email: loginResult.value.client.email })
+    // Como no login por e-mail: sem chave guardada, buscá-la agora
+    // conecta o gateway já neste login.
+    const fresh = await Panel.ensureApiKey(Panel.panelBaseUrl(process.env), {
+      token: loginResult.value.token,
+      storedApiKey: loadApiKey(),
+    })
+
+    if (fresh) saveApiKey(fresh)
     await refreshGatewayCredential()
   }
 
