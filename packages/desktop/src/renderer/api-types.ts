@@ -53,7 +53,8 @@ export type ElectronAPI = {
   changeClientPassword(current: string, next: string): Promise<ManosTechClientChangePasswordValue>
   logoutClient(): Promise<void>
   getClientGoogleAvailable(): Promise<boolean>
-  startClientGoogle(): Promise<{ available: boolean }>
+  startClientGoogle(): Promise<{ available: boolean; authorizeUrl?: string }>
+  cancelClientGoogle(): Promise<void>
   getClientUsage(): Promise<ManosTechClientUsageValue | null>
   markClientUsageWarned(): Promise<void>
   transcribeClientAudio(audio: string): Promise<ManosTechClientTranscribeValue>

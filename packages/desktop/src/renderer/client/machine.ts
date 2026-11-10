@@ -12,14 +12,14 @@ import type {
 export type ClientGateError = ManosTechClientErrorValue["tag"]
 
 export type ClientGateState =
-  | { readonly status: "checking" }
+  | { readonly status: "checking"; readonly googlePending?: boolean }
   | {
       readonly status: "login"
       readonly googleAvailable: boolean | undefined
       readonly error: ClientGateError | undefined
       readonly busy: boolean
     }
-  | { readonly status: "waiting-google"; readonly googleAvailable: boolean }
+  | { readonly status: "waiting-google"; readonly googleAvailable: boolean; readonly authorizeUrl: string | undefined }
   | { readonly status: "change-password"; readonly error: ClientGateError | undefined; readonly busy: boolean }
   | { readonly status: "trial-expired"; readonly trialEndsAt: string | null }
   | { readonly status: "ready"; readonly trialEndsAt: string | null }
@@ -32,7 +32,7 @@ export type ClientGateEvent =
   | { readonly type: "login.failed"; readonly error: ManosTechClientErrorValue }
   | { readonly type: "google.availability.settled"; readonly available: boolean }
   | { readonly type: "google.submitted" }
-  | { readonly type: "google.started" }
+  | { readonly type: "google.started"; readonly authorizeUrl: string | undefined }
   | { readonly type: "google.unavailable" }
   | { readonly type: "google.cancelled" }
   | { readonly type: "change.submitted"; readonly current: string; readonly next: string }
@@ -48,6 +48,7 @@ export type ClientGateEffect =
   | { readonly type: "do-login"; readonly email: string; readonly password: string }
   | { readonly type: "do-change"; readonly current: string; readonly next: string }
   | { readonly type: "do-google-start" }
+  | { readonly type: "do-google-cancel" }
   | { readonly type: "schedule-revalidation" }
   | { readonly type: "cancel-revalidation" }
 
@@ -90,6 +91,12 @@ export function transitionClientGate(state: ClientGateState, event: ClientGateEv
   if (event.type === "client.changed") {
     if (state.status === "checking") return unchanged(state)
 
+    // A mudança chegou enquanto o login Google esperava (o loopback
+    // expirou ou o fluxo terminou): a checagem lembra que era o Google,
+    // para voltar ao login com erro se o usuário seguiu deslogado.
+    if (state.status === "waiting-google")
+      return to({ status: "checking", googlePending: true }, [{ type: "check-status" }])
+
     return to({ status: "checking" }, [{ type: "check-status" }])
   }
 
@@ -99,7 +106,17 @@ export function transitionClientGate(state: ClientGateState, event: ClientGateEv
     return to({ status: "checking" }, [{ type: "check-status" }])
   }
 
-  if (event.type === "status.settled") return fromStatus(event.status)
+  if (event.type === "status.settled") {
+    // O login Google expirou sem retorno e o usuário seguiu deslogado:
+    // volta ao login com erro visível em vez de ficar no spinner.
+    if (state.status === "checking" && state.googlePending && event.status.state === "logged-out")
+      return to(
+        { status: "login", googleAvailable: undefined, error: "unknown", busy: false },
+        [{ type: "check-google" }],
+      )
+
+    return fromStatus(event.status)
+  }
 
   if (event.type === "status.failed") {
     if (state.status !== "checking") return unchanged(state)
@@ -139,7 +156,11 @@ export function transitionClientGate(state: ClientGateState, event: ClientGateEv
   if (event.type === "google.started") {
     if (state.status !== "login") return unchanged(state)
 
-    return to({ status: "waiting-google", googleAvailable: state.googleAvailable ?? false })
+    return to({
+      status: "waiting-google",
+      googleAvailable: state.googleAvailable ?? false,
+      authorizeUrl: event.authorizeUrl,
+    })
   }
 
   if (event.type === "google.unavailable") {
@@ -151,7 +172,10 @@ export function transitionClientGate(state: ClientGateState, event: ClientGateEv
   if (event.type === "google.cancelled") {
     if (state.status !== "waiting-google") return unchanged(state)
 
-    return to({ status: "login", googleAvailable: state.googleAvailable, error: undefined, busy: false })
+    return to(
+      { status: "login", googleAvailable: state.googleAvailable, error: undefined, busy: false },
+      [{ type: "do-google-cancel" }],
+    )
   }
 
   if (event.type === "change.submitted") {

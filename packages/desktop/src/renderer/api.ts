@@ -51,6 +51,7 @@ export const api: ElectronAPI = {
   logoutClient: () => invoke("ManosTechClientLogout"),
   getClientGoogleAvailable: () => invoke("ManosTechClientGoogleAvailable"),
   startClientGoogle: () => invoke("ManosTechClientGoogleStart"),
+  cancelClientGoogle: () => invoke("ManosTechClientGoogleCancel"),
   getClientUsage: () => invoke("ManosTechClientUsage"),
   markClientUsageWarned: () => invoke("ManosTechClientUsageWarned"),
   transcribeClientAudio: (audio) => invoke("ManosTechClientTranscribe", { audio }),

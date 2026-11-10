@@ -38,9 +38,11 @@ export function ManosTechClientGate(props: { api: ElectronAPI }) {
   const [nextPassword, setNextPassword] = createSignal("")
   const [confirmPassword, setConfirmPassword] = createSignal("")
   const [mismatch, setMismatch] = createSignal(false)
+  const [copied, setCopied] = createSignal(false)
 
   const queue: ClientGateEvent[] = []
   let revalidateTimer: ReturnType<typeof setTimeout> | undefined
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined
 
   const dispatch = (event: ClientGateEvent) => {
     queue.push(event)
@@ -103,9 +105,14 @@ export function ManosTechClientGate(props: { api: ElectronAPI }) {
       case "do-google-start":
         return void props.api.startClientGoogle().then(
           (result) =>
-            result.available ? dispatch({ type: "google.started" }) : dispatch({ type: "google.unavailable" }),
+            result.available
+              ? dispatch({ type: "google.started", authorizeUrl: result.authorizeUrl })
+              : dispatch({ type: "google.unavailable" }),
           () => dispatch({ type: "google.unavailable" }),
         )
+
+      case "do-google-cancel":
+        return void props.api.cancelClientGoogle().catch(() => undefined)
 
       case "schedule-revalidation": {
         if (revalidateTimer !== undefined) clearTimeout(revalidateTimer)
@@ -134,6 +141,7 @@ export function ManosTechClientGate(props: { api: ElectronAPI }) {
   onCleanup(() => {
     stopClientChanged()
     if (revalidateTimer !== undefined) clearTimeout(revalidateTimer)
+    if (copiedTimer !== undefined) clearTimeout(copiedTimer)
     dispatch({ type: "disposed" })
   })
 
@@ -169,6 +177,27 @@ export function ManosTechClientGate(props: { api: ElectronAPI }) {
     const current = state()
 
     return current.status === "change-password" ? current.error : undefined
+  }
+
+  const waitingUrl = (): string | undefined => {
+    const current = state()
+
+    return current.status === "waiting-google" ? current.authorizeUrl : undefined
+  }
+
+  const retryGoogle = (url: string) => {
+    void platform.openBrowser?.(url)
+  }
+
+  const copyGoogleLink = async (url: string) => {
+    try {
+      await (platform.writeClipboardText?.(url) ?? navigator.clipboard.writeText(url))
+      setCopied(true)
+      if (copiedTimer !== undefined) clearTimeout(copiedTimer)
+      copiedTimer = setTimeout(() => setCopied(false), 2_000)
+    } catch {
+      // Sem feedback de erro: o botão continua "Copiar link".
+    }
   }
 
   const submitLogin = (event: Event) => {
@@ -269,6 +298,22 @@ export function ManosTechClientGate(props: { api: ElectronAPI }) {
         <GateShell>
           <Loader width={24} height={24} />
           <p role="status">{language.t("client.google.waiting")}</p>
+          <Show when={waitingUrl()}>
+            {(url) => (
+              <>
+                <Button variant="submit" onClick={() => retryGoogle(url())}>
+                  {language.t("client.google.retry")}
+                </Button>
+                <p>{language.t("client.google.copyHint")}</p>
+                <div class="client-gate-link" dir="ltr">
+                  {url()}
+                </div>
+                <Button variant="outline" onClick={() => void copyGoogleLink(url())}>
+                  {language.t(copied() ? "common.copied" : "client.google.copyLink")}
+                </Button>
+              </>
+            )}
+          </Show>
           <Button variant="ghost" onClick={() => dispatch({ type: "google.cancelled" })}>
             {language.t("client.google.back")}
           </Button>

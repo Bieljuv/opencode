@@ -90,24 +90,60 @@ describe("login", () => {
 describe("google", () => {
   const login: ClientGateState = { status: "login", googleAvailable: true, error: undefined, busy: false }
 
-  test("starting Google waits for the browser return", () => {
+  test("starting Google waits for the browser return and keeps the authorize URL", () => {
     const submitted = transitionClientGate(login, { type: "google.submitted" })
 
     expect(submitted.state).toEqual({ ...login, busy: true })
     expect(submitted.effects).toEqual([{ type: "do-google-start" }])
 
-    const started = transitionClientGate(submitted.state, { type: "google.started" })
+    const started = transitionClientGate(submitted.state, {
+      type: "google.started",
+      authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth?client_id=cid",
+    })
 
-    expect(started.state).toEqual({ status: "waiting-google", googleAvailable: true })
+    expect(started.state).toEqual({
+      status: "waiting-google",
+      googleAvailable: true,
+      authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth?client_id=cid",
+    })
   })
 
-  test("cancelling the wait returns to the login", () => {
+  test("cancelling the wait returns to the login and closes the flow", () => {
     const next = transitionClientGate(
-      { status: "waiting-google", googleAvailable: true },
+      { status: "waiting-google", googleAvailable: true, authorizeUrl: undefined },
       { type: "google.cancelled" },
     )
 
     expect(next.state).toEqual({ status: "login", googleAvailable: true, error: undefined, busy: false })
+    expect(next.effects).toEqual([{ type: "do-google-cancel" }])
+  })
+
+  test("a change while waiting for Google re-checks and remembers the Google wait", () => {
+    const waiting: ClientGateState = { status: "waiting-google", googleAvailable: true, authorizeUrl: undefined }
+    const next = transitionClientGate(waiting, { type: "client.changed" })
+
+    expect(next.state).toEqual({ status: "checking", googlePending: true })
+    expect(next.effects).toEqual([{ type: "check-status" }])
+  })
+
+  test("an expired Google wait returns to the login with an error", () => {
+    const next = transitionClientGate(
+      { status: "checking", googlePending: true },
+      { type: "status.settled", status: loggedOut },
+    )
+
+    expect(next.state).toEqual({ status: "login", googleAvailable: undefined, error: "unknown", busy: false })
+    expect(next.effects).toEqual([{ type: "check-google" }])
+  })
+
+  test("a Google return that completes the login is ready", () => {
+    const next = transitionClientGate(
+      { status: "checking", googlePending: true },
+      { type: "status.settled", status: ready },
+    )
+
+    expect(next.state).toEqual({ status: "ready", trialEndsAt: null })
+    expect(next.effects).toEqual([{ type: "schedule-revalidation" }])
   })
 
   test("Google unavailable shows the error on the login", () => {
