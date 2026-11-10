@@ -180,6 +180,66 @@ describe("change-password", () => {
   })
 })
 
+describe("forgot-password", () => {
+  const login: ClientGateState = { status: "login", googleAvailable: true, error: undefined, busy: false }
+  const forgot: ClientGateState = { status: "forgot", googleAvailable: true, error: undefined, busy: false }
+
+  test("requesting recovery opens the form, keeping the Google availability", () => {
+    const next = transitionClientGate(login, { type: "forgot.requested" })
+
+    expect(next.state).toEqual(forgot)
+    expect(next.effects).toEqual([])
+  })
+
+  test("a busy login ignores the recovery request", () => {
+    const busy = { ...login, busy: true }
+
+    expect(transitionClientGate(busy, { type: "forgot.requested" }).state).toBe(busy)
+  })
+
+  test("submitting locks the form and calls the recovery", () => {
+    const next = transitionClientGate(forgot, { type: "forgot.submitted", email: "ana@exemplo.com" })
+
+    expect(next.state).toEqual({ ...forgot, busy: true })
+    expect(next.effects).toEqual([{ type: "do-forgot", email: "ana@exemplo.com" }])
+  })
+
+  test("a second submit while busy is ignored", () => {
+    const busy = { ...forgot, busy: true }
+
+    expect(transitionClientGate(busy, { type: "forgot.submitted", email: "ana@exemplo.com" }).state).toBe(busy)
+  })
+
+  test("success shows the generic confirmation", () => {
+    const busy = { ...forgot, busy: true }
+    const next = transitionClientGate(busy, { type: "forgot.succeeded" })
+
+    expect(next.state).toEqual({ status: "forgot-sent", googleAvailable: true })
+    expect(next.effects).toEqual([])
+  })
+
+  test("a network failure keeps the form with the error", () => {
+    const busy = { ...forgot, busy: true }
+    const next = transitionClientGate(busy, { type: "forgot.failed", error: { tag: "network" } })
+
+    expect(next.state).toEqual({ ...forgot, error: "network" })
+  })
+
+  test("cancelling from the form or the confirmation returns to the login", () => {
+    const sent: ClientGateState = { status: "forgot-sent", googleAvailable: true }
+
+    expect(transitionClientGate(forgot, { type: "forgot.cancelled" }).state).toEqual(login)
+    expect(transitionClientGate(sent, { type: "forgot.cancelled" }).state).toEqual(login)
+  })
+
+  test("Google availability settling during recovery is kept for the login", () => {
+    const unsettled: ClientGateState = { status: "forgot", googleAvailable: undefined, error: undefined, busy: false }
+    const next = transitionClientGate(unsettled, { type: "google.availability.settled", available: true })
+
+    expect(next.state).toEqual({ ...unsettled, googleAvailable: true })
+  })
+})
+
 describe("client.changed and revalidate", () => {
   test("a change in another window re-checks, unless already checking", () => {
     const readyState: ClientGateState = { status: "ready", trialEndsAt: null }

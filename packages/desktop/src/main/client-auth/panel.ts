@@ -32,6 +32,12 @@ import { Option, Schema } from "effect"
  * - a troca chave→sessão (`exchangeApiKey`) ainda não tem endpoint
  *   definido no painel: a função existe com o caminho marcado como
  *   pendente e NÃO é chamada — a sessão de 30 dias cobre o offline.
+ * - esqueci-senha: POST /api/auth/cliente/esqueci-senha { email } →
+ *   200 { ok: true, mensagem } — SEMPRE genérica, exista o e-mail ou
+ *   não; 429 quando o rate limit de recuperação dispara. O painel
+ *   gera a senha temporária (12 alfanuméricos), grava o hash dela
+ *   como senha do cliente com must_change_password=1 e a envia por
+ *   Gmail; e-mail não cadastrado não faz nada e responde igual.
  */
 
 export const PANEL_BASE_URL = "https://painel-manostech.manostech.workers.dev"
@@ -253,6 +259,29 @@ export async function changePassword(
   // A troca com o token devolve só { ok: true }; a sessão continua válida
   // e o mustChange já vem zerado na próxima validação.
   if (response.status === 200) return { ok: true, value: { mustChange: false } }
+
+  return { ok: false, error: errorFromResponse(response.status, response.json) }
+}
+
+/**
+ * Recuperação de senha. O painel responde 200 com a mensagem genérica
+ * exista o e-mail ou não, então o 200 é sucesso e qualquer outra coisa
+ * é erro — a interface mostra a mensagem genérica existente, nunca o
+ * texto do servidor e nunca se o e-mail existe.
+ */
+export async function forgotPassword(baseUrl: string, email: string): Promise<Result<{ sent: boolean }>> {
+  let response: { status: number; json: unknown }
+
+  try {
+    response = await call(baseUrl, "/api/auth/cliente/esqueci-senha", {
+      method: "POST",
+      body: { email },
+    })
+  } catch {
+    return { ok: false, error: { tag: "network" } }
+  }
+
+  if (response.status === 200) return { ok: true, value: { sent: true } }
 
   return { ok: false, error: errorFromResponse(response.status, response.json) }
 }

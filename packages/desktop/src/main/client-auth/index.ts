@@ -344,6 +344,15 @@ export async function changePassword(next: string): Promise<{ ok: true } | { ok:
   return { ok: true }
 }
 
+/** Recuperação de senha: pede a temporária ao painel, sem sessão. */
+export async function forgotPassword(email: string): Promise<{ ok: true } | { ok: false; error: Panel.ClientError }> {
+  const result = await Panel.forgotPassword(Panel.panelBaseUrl(process.env), email)
+
+  if (!result.ok) return { ok: false, error: result.error }
+
+  return { ok: true }
+}
+
 export async function logout(): Promise<void> {
   const stored = loadSession()
 

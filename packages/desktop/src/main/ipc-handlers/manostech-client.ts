@@ -10,6 +10,8 @@ export const manosTechClientHandlers = ManosTechClientRpcs.toLayer(
         promise(() => ManosTechClientAuth.login(email, password)),
       ManosTechClientChangePassword: ({ next }) =>
         promise(() => ManosTechClientAuth.changePassword(next)),
+      ManosTechClientForgotPassword: ({ email }) =>
+        promise(() => ManosTechClientAuth.forgotPassword(email)),
       ManosTechClientLogout: () => promise(() => ManosTechClientAuth.logout()),
       ManosTechClientGoogleAvailable: () => promise(() => ManosTechClientAuth.googleAvailable()),
       ManosTechClientGoogleStart: () => promise(() => ManosTechClientAuth.googleStart()),
