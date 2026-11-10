@@ -50,7 +50,7 @@ describe("plan usage bar blocks", () => {
 })
 
 describe("usage warning trigger", () => {
-  test("fires at 85% on the strip, once a day, and never below it or after being warned", () => {
+  test("fires at 85% in the app-root watcher, once a day, and never below it or after being warned", () => {
     const usage = (percent: number, warnedToday: boolean): PlanUsage => ({
       percent,
       resetsAt: "2026-11-11T03:00:00Z",
@@ -61,10 +61,10 @@ describe("usage warning trigger", () => {
     expect(shouldShowUsageWarning(usage(85, false), true)).toBe(true)
     expect(shouldShowUsageWarning(usage(100, false), true)).toBe(true)
     expect(shouldShowUsageWarning(usage(150, false), true)).toBe(true)
-    // Warned today: the line and the push stay off until tomorrow.
+    // Warned today: the push stays off until tomorrow.
     expect(shouldShowUsageWarning(usage(85, true), true)).toBe(false)
     expect(shouldShowUsageWarning(usage(100, true), true)).toBe(false)
-    // Off the strip (e.g. the Settings usage screen) there is no warning.
+    // Without the watcher (e.g. the Settings usage screen) there is no warning.
     expect(shouldShowUsageWarning(usage(100, false))).toBe(false)
     expect(shouldShowUsageWarning(usage(100, false), false)).toBe(false)
   })

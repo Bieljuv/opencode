@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { SessionMessageInfo } from "../src/promise"
-import { cumulativeSessionUsage, lastAssistantWithUsage } from "../src/solid/usage"
+import { cumulativeSessionUsage, dayUsageTotal, lastAssistantWithUsage, saoPauloDayKey } from "../src/solid/usage"
 
 const assistant = (id: string, input: number): SessionMessageInfo => ({
   id,
@@ -52,6 +52,85 @@ describe("lastAssistantWithUsage", () => {
 
     messages.push(assistant("msg_after", 5))
     expect(lastAssistantWithUsage(messages)?.tokens.input).toBe(5)
+  })
+})
+
+describe("saoPauloDayKey", () => {
+  test("cuts the day at midnight in São Paulo, not UTC", () => {
+    // 23:59:59 in São Paulo is still the previous day; 00:00 is the next.
+    expect(saoPauloDayKey(Date.parse("2026-11-10T02:59:59Z"))).toBe("2026-11-09")
+    expect(saoPauloDayKey(Date.parse("2026-11-10T03:00:00Z"))).toBe("2026-11-10")
+    expect(saoPauloDayKey(Date.parse("2026-11-11T02:59:59Z"))).toBe("2026-11-10")
+    expect(saoPauloDayKey(Date.parse("2026-11-10T15:00:00Z"))).toBe("2026-11-10")
+  })
+})
+
+describe("dayUsageTotal", () => {
+  const on = (id: string, created: string, input: number): SessionMessageInfo => ({
+    ...spent(id, { id: "model", providerID: "provider" }, { input, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }),
+    time: { created: Date.parse(created) },
+  })
+
+  test("sums only the day's assistant messages, across models", () => {
+    const messages = [
+      spent(
+        "msg_a",
+        { id: "model-a", providerID: "provider-a" },
+        { input: 10_000, output: 500, reasoning: 100, cache: { read: 200, write: 50 } },
+      ),
+      spent(
+        "msg_b",
+        { id: "model-b", providerID: "provider-b" },
+        { input: 12_000, output: 600, reasoning: 200, cache: { read: 300, write: 100 } },
+      ),
+    ].map((message) => ({ ...message, time: { created: Date.parse("2026-11-10T15:00:00Z") } }))
+
+    expect(dayUsageTotal(messages, "2026-11-10")).toBe(24_050)
+  })
+
+  test("ignores messages from another São Paulo day", () => {
+    const messages = [
+      on("msg_yesterday", "2026-11-10T02:59:59Z", 100_000),
+      on("msg_today", "2026-11-10T03:00:00Z", 40),
+    ]
+
+    expect(dayUsageTotal(messages, "2026-11-10")).toBe(40)
+  })
+
+  test("ignores assistant messages without tokens and user messages", () => {
+    const withoutTokens: SessionMessageInfo = { ...on("msg_empty", "2026-11-10T15:00:00Z", 0), tokens: undefined }
+    const user: SessionMessageInfo = {
+      id: "msg_user",
+      type: "user",
+      time: { created: Date.parse("2026-11-10T15:00:00Z") },
+    }
+    const messages = [withoutTokens, user, on("msg_spent", "2026-11-10T15:00:00Z", 40)]
+
+    expect(dayUsageTotal(messages, "2026-11-10")).toBe(40)
+  })
+
+  test("keeps spend from before a completed compaction", () => {
+    const compaction: SessionMessageInfo = {
+      id: "msg_compaction",
+      type: "compaction",
+      status: "completed",
+      reason: "manual",
+      summary: "Current state",
+      time: { created: Date.parse("2026-11-10T15:00:00Z") },
+    }
+    const messages = [
+      on("msg_before", "2026-11-10T14:00:00Z", 30),
+      compaction,
+      on("msg_after", "2026-11-10T16:00:00Z", 5),
+    ]
+
+    // Compaction frees the context window; it does not refund the tokens already spent.
+    expect(dayUsageTotal(messages, "2026-11-10")).toBe(35)
+  })
+
+  test("returns zero for an empty list or a day with no messages", () => {
+    expect(dayUsageTotal([], "2026-11-10")).toBe(0)
+    expect(dayUsageTotal([on("msg_a", "2026-11-10T15:00:00Z", 40)], "2026-11-11")).toBe(0)
   })
 })
 

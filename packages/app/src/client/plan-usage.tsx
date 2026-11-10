@@ -11,11 +11,14 @@ import { usePlatform } from "@/runtime/platform/platform"
  * limite, cota ou roteamento. Sem dados (gateway inativo ou painel fora
  * do ar), nada renderiza — sem estado vazio, sem erro.
  *
- * Dois lugares, um componente: a tira persistente no rodapé da sessão
- * (acima do composer, com a linha de aviso) e a tela de uso sob demanda
- * na seção Conta das Configurações (só a barra). O aviso dos 85% é uma
- * linha no chat mais um push do sistema, uma vez por dia — o main guarda
- * o dia avisado e o push só sai enquanto ele não foi marcado.
+ * A barra vive só na tela de uso sob demanda, na seção Conta das
+ * Configurações. A tira persistente do rodapé da sessão saiu: ela media
+ * só o uso do gateway contra o limite diário, e marcava 0% com milhões
+ * de tokens gastos nos modelos diretos — o número certo é o total do
+ * dia, que a aba Contexto mostra. O aviso dos 85% continua: um
+ * observador sem interface na raiz do app (PlanUsageWatcher) dispara o
+ * push do sistema uma vez por dia, no mesmo gatilho de antes — o main
+ * guarda o dia avisado e o push só sai enquanto ele não foi marcado.
  */
 
 export type PlanUsage = {
@@ -31,7 +34,9 @@ export type PlanUsageTone = "ok" | "warn" | "danger"
 /** Verde <70%, amarelo 70–89%, vermelho 90%+. */
 export function planUsageTone(percent: number): PlanUsageTone {
   if (percent >= 90) return "danger"
+
   if (percent >= 70) return "warn"
+
   return "ok"
 }
 
@@ -49,7 +54,7 @@ export function planUsageResetInMs(resetsAt: string, nowMs: number): number | un
   return Math.max(0, at - nowMs)
 }
 
-function resetParts(ms: number): { hours: number; minutes: number } {
+function resetParts(ms: number) {
   return { hours: Math.floor(ms / 3_600_000), minutes: Math.floor((ms % 3_600_000) / 60_000) }
 }
 
@@ -65,27 +70,24 @@ function resetParts(ms: number): { hours: number; minutes: number } {
  */
 export function planUsageToneClass(tone: PlanUsageTone): string {
   if (tone === "danger") return "bg-v2-state-fg-danger"
+
   if (tone === "warn") return "bg-v2-state-fg-warning"
+
   return "bg-v2-state-fg-success"
 }
 
 const WARNING_PERCENT = 85
 
-/** O aviso dos 85% dispara: na tira (showWarning), com uso >= 85% e sem aviso hoje. */
+/** O aviso dos 85% dispara: no observador (showWarning), com uso >= 85% e sem aviso hoje. */
 export function shouldShowUsageWarning(usage: PlanUsage, showWarning?: boolean): boolean {
   return showWarning === true && usage.percent >= WARNING_PERCENT && !usage.warnedToday
 }
 
-export function PlanUsageBar(props: { usage: PlanUsage; showWarning?: boolean; onWarned?: () => void }) {
+export function PlanUsageBar(props: { usage: PlanUsage }) {
   const language = useLanguage()
   const tone = () => planUsageTone(props.usage.percent)
   const filled = () => planUsageBlocks(props.usage.percent)
   const percent = () => Math.round(props.usage.percent)
-  const showWarning = () => shouldShowUsageWarning(props.usage, props.showWarning)
-
-  createEffect(() => {
-    if (showWarning()) props.onWarned?.()
-  })
 
   const resetLabel = () => {
     const remaining = planUsageResetInMs(props.usage.resetsAt, Date.now())
@@ -101,11 +103,6 @@ export function PlanUsageBar(props: { usage: PlanUsage; showWarning?: boolean; o
 
   return (
     <div class="flex flex-col gap-1 py-1" data-slot="plan-usage">
-      <Show when={showWarning()}>
-        <p class="text-[13px] leading-[var(--line-height-compact)]">
-          {language.t("client.usage.warning", { percent: String(percent()) })}
-        </p>
-      </Show>
       <div
         class="flex items-center gap-2 text-[13px] leading-[var(--line-height-compact)]"
         role="meter"
@@ -157,34 +154,31 @@ export function useClientUsage() {
   return usage
 }
 
-/** A tira persistente no rodapé da sessão: barra + linha de aviso dos 85% + push do sistema. */
-export function PlanUsageStrip() {
+/**
+ * O aviso dos 85% sem interface: montado uma vez na raiz do app, observa
+ * o uso do plano (a mesma consulta de 60s da tira antiga) e dispara o
+ * push do sistema uma vez por dia, quando o uso cruza os 85%. O push só
+ * aparece com a janela desfocada; focada, nada mostra — a barra da
+ * seção Conta segue como o lugar onde o % pode ser conferido. Uma vez
+ * por dia: o push só sai enquanto warnedToday é falso, e a marcação
+ * abaixo desliga o aviso no próximo carregamento.
+ */
+export function PlanUsageWatcher() {
   const platform = usePlatform()
   const language = useLanguage()
   const usage = useClientUsage()
 
-  return (
-    <Show when={usage()}>
-      {(value) => (
-        <div class="shrink-0">
-          <PlanUsageBar
-            usage={value()}
-            showWarning
-            onWarned={() => {
-              void platform.markClientUsageWarned?.()
-              // Push do sistema junto com a linha: cobre o cliente que não
-              // está olhando a barra (a notificação só aparece com a janela
-              // desfocada; focada, a linha no rodapé é o aviso visível).
-              // Uma vez por dia: o push só sai enquanto warnedToday é falso,
-              // e a marcação acima desliga o aviso no próximo carregamento.
-              void platform.notify(
-                language.t("client.usage.warningPush.title"),
-                language.t("client.usage.warningPush.body", { percent: String(Math.round(value().percent)) }),
-              )
-            }}
-          />
-        </div>
-      )}
-    </Show>
-  )
+  createEffect(() => {
+    const value = usage()
+
+    if (!value || !shouldShowUsageWarning(value, true)) return
+
+    void platform.markClientUsageWarned?.()
+    void platform.notify(
+      language.t("client.usage.warningPush.title"),
+      language.t("client.usage.warningPush.body", { percent: String(Math.round(value.percent)) }),
+    )
+  })
+
+  return null
 }

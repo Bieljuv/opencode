@@ -11,6 +11,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query"
 import { type Component, createRenderEffect, ErrorBoundary, type JSX, type ParentProps } from "solid-js"
 import { Dynamic } from "solid-js/web"
 import { CommandProvider } from "@/shell/commands/command"
+import { PlanUsageWatcher } from "@/client/plan-usage"
 import { DesktopCommands } from "@/shell/commands/desktop"
 import { ProjectIconsProvider } from "@/shell/layout/project-icons"
 import { GlobalProvider } from "@/runtime/server/runtime"
@@ -101,6 +102,7 @@ export function AppInterface(props: {
             <VoiceProvider>
               {props.children}
               {rootProps.children}
+              <PlanUsageWatcher />
               <VoiceOverlay />
             </VoiceProvider>
           </CommandProvider>
