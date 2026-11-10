@@ -13,7 +13,8 @@ import { usePlatform } from "@/runtime/platform/platform"
  * Dois lugares, um componente: a tira persistente no rodapé da sessão
  * (acima do composer, com a linha de aviso) e a tela de uso sob demanda
  * na seção Conta das Configurações (só a barra). O aviso dos 85% é uma
- * linha no chat, uma vez por dia — o main guarda o dia avisado.
+ * linha no chat mais um push do sistema, uma vez por dia — o main guarda
+ * o dia avisado e o push só sai enquanto ele não foi marcado.
  */
 
 export type PlanUsage = {
@@ -67,12 +68,17 @@ export function planUsageToneClass(tone: PlanUsageTone): string {
 
 const WARNING_PERCENT = 85
 
+/** O aviso dos 85% dispara: na tira (showWarning), com uso >= 85% e sem aviso hoje. */
+export function shouldShowUsageWarning(usage: PlanUsage, showWarning?: boolean): boolean {
+  return showWarning === true && usage.percent >= WARNING_PERCENT && !usage.warnedToday
+}
+
 export function PlanUsageBar(props: { usage: PlanUsage; showWarning?: boolean; onWarned?: () => void }) {
   const language = useLanguage()
   const tone = () => planUsageTone(props.usage.percent)
   const filled = () => planUsageBlocks(props.usage.percent)
   const percent = () => Math.round(props.usage.percent)
-  const showWarning = () => props.showWarning === true && props.usage.percent >= WARNING_PERCENT && !props.usage.warnedToday
+  const showWarning = () => shouldShowUsageWarning(props.usage, props.showWarning)
 
   createEffect(() => {
     if (showWarning()) props.onWarned?.()
@@ -148,9 +154,10 @@ export function useClientUsage() {
   return usage
 }
 
-/** A tira persistente no rodapé da sessão: barra + linha de aviso dos 85%. */
+/** A tira persistente no rodapé da sessão: barra + linha de aviso dos 85% + push do sistema. */
 export function PlanUsageStrip() {
   const platform = usePlatform()
+  const language = useLanguage()
   const usage = useClientUsage()
 
   return (
@@ -160,7 +167,18 @@ export function PlanUsageStrip() {
           <PlanUsageBar
             usage={value()}
             showWarning
-            onWarned={() => void platform.markClientUsageWarned?.()}
+            onWarned={() => {
+              void platform.markClientUsageWarned?.()
+              // Push do sistema junto com a linha: cobre o cliente que não
+              // está olhando a barra (a notificação só aparece com a janela
+              // desfocada; focada, a linha no rodapé é o aviso visível).
+              // Uma vez por dia: o push só sai enquanto warnedToday é falso,
+              // e a marcação acima desliga o aviso no próximo carregamento.
+              void platform.notify(
+                language.t("client.usage.warningPush.title"),
+                language.t("client.usage.warningPush.body", { percent: String(Math.round(value().percent)) }),
+              )
+            }}
           />
         </div>
       )}

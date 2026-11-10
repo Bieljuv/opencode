@@ -68,6 +68,8 @@ export const dict = {
   "client.account.signOut": "Sair da conta",
   "client.usage.today": "Uso de hoje",
   "client.usage.warning": "Você usou {{percent}}% do seu uso de hoje · reseta à meia-noite",
+  "client.usage.warningPush.title": "Seu uso de hoje está quase acabando",
+  "client.usage.warningPush.body": "Você já usou {{percent}}% do seu uso de hoje. Ao chegar a 100%, o acesso pausa até meia-noite.",
   "client.usage.resetsInHours": "reseta em {{hours}}h {{minutes}}min",
   "client.usage.resetsInMinutes": "reseta em {{minutes}}min",
   "server.connect.button": "Conectar",
