@@ -20,9 +20,6 @@ function useLanguageMock() {
     "error.chain.unknown": "Erro desconhecido",
     "error.chain.configInvalid": "Arquivo de config em {{path}} invalido",
     "error.chain.configInvalidWithMessage": "Arquivo de config em {{path}} invalido: {{message}}",
-    "error.chain.modelNotFound": "Modelo nao encontrado: {{provider}}/{{model}}",
-    "error.chain.didYouMean": "Voce quis dizer: {{suggestions}}",
-    "error.chain.checkConfig": "Revise provider/model no config",
   }
 
   return {
@@ -101,7 +98,7 @@ describe("formatServerError", () => {
         name: "ProviderModelNotFoundError",
         data: { providerID: "openai", modelID: "gpt-4.1" },
       } satisfies ProviderModelNotFoundError,
-      expected: ["Modelo nao encontrado: openai/gpt-4.1", "Revise provider/model no config"].join("\n"),
+      expected: "Erro desconhecido",
     },
     {
       name: "provider model error with suggestions",
@@ -109,9 +106,7 @@ describe("formatServerError", () => {
         name: "ProviderModelNotFoundError",
         data: { providerID: "x", modelID: "y", suggestions: ["x/y2", "x/y3"] },
       } satisfies ProviderModelNotFoundError,
-      expected: ["Modelo nao encontrado: x/y", "Voce quis dizer: x/y2, x/y3", "Revise provider/model no config"].join(
-        "\n",
-      ),
+      expected: "Erro desconhecido",
     },
     {
       name: "SDK-wrapped error from cause.body",

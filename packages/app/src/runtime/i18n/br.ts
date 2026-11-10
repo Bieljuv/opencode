@@ -509,6 +509,7 @@ export const dict = {
   "error.page.description": "Ocorreu um erro ao carregar a aplicação.",
   "error.page.description.localServerStartup": "Ocorreu um erro ao iniciar o servidor local.",
   "error.page.details.label": "Detalhes do erro",
+  "error.page.details.masked": "Os detalhes técnicos deste erro estão disponíveis nos logs exportados.",
   "error.page.action.restart": "Reiniciar",
   "error.page.action.report": "Reportar erro",
   "error.page.action.reported": "Erro reportado",

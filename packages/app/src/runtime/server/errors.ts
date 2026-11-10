@@ -116,20 +116,9 @@ export function parseReadableConfigInvalidError(errorInput: ConfigInvalidError, 
   })
 }
 
-function parseReadableProviderModelNotFoundError(errorInput: ProviderModelNotFoundError, translator?: Translator) {
-  const p = errorInput.data.providerID.trim()
-  const m = errorInput.data.modelID.trim()
-  const list = (errorInput.data.suggestions ?? []).map((v) => v.trim()).filter(Boolean)
-  const body = tr(translator, "error.chain.modelNotFound", `Model not found: ${p}/${m}`, { provider: p, model: m })
-  const tail = tr(translator, "error.chain.checkConfig", "Check your config (opencode.json) provider/model names")
-
-  if (list.length) {
-    const suggestions = list.slice(0, 5).join(", ")
-
-    return [body, tr(translator, "error.chain.didYouMean", `Did you mean: ${suggestions}`, { suggestions }), tail].join(
-      "\n",
-    )
-  }
-
-  return [body, tail].join("\n")
+function parseReadableProviderModelNotFoundError(_errorInput: ProviderModelNotFoundError, translator?: Translator) {
+  // The mask rule forbids naming the provider or model anywhere the user can
+  // see it, so a missing model is only ever a generic error on screen. The
+  // provider/model that failed is still in the server log for support.
+  return tr(translator, "error.chain.unknown", "Unknown error")
 }

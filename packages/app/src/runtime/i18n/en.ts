@@ -582,6 +582,7 @@ export const dict = {
   "error.page.description.status": "The server returned an HTTP {{status}} response.",
   "error.page.description.localServerStartup": "An error occurred while starting the local server.",
   "error.page.details.label": "Error Details",
+  "error.page.details.masked": "The technical details of this error are available in the exported logs.",
   "error.page.action.restart": "Restart",
   "error.page.action.reload": "Reload",
   "error.page.action.report": "Report Error",
