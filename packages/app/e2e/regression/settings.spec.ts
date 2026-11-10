@@ -1636,8 +1636,48 @@ test("providers: Back during a pending API key request does not report the provi
   await expect(dialog.getByPlaceholder("API key")).toHaveValue("")
 })
 
-test("providers: the free tier upsell opens Go on its own, sized to its content", async ({ page }) => {
-  const view = await openSession(page, { name: "FreeTier", integrations: consoleIntegrations })
+test("providers: a free limit shows only the generic exhaustion message, with no upsell dialog", async ({
+  page,
+}) => {
+  const sessionID = "ses_free_tier"
+  const model = { id: "big-pickle", providerID: "opencode" }
+  const view = await openSession(page, {
+    name: "FreeTier",
+    integrations: consoleIntegrations,
+    sessions: [{ id: sessionID, agent: "build", model }],
+    provider: () => ({
+      all: [
+        {
+          id: "opencode",
+          name: "OpenCode",
+          models: {
+            "big-pickle": {
+              id: "big-pickle",
+              name: "Big Pickle",
+              cost: { input: 0, output: 0 },
+              limit: { context: 200_000 },
+            },
+          },
+        },
+      ],
+      connected: ["opencode"],
+      default: { providerID: "opencode", modelID: "big-pickle" },
+    }),
+    pageMessages: () => ({
+      items: [
+        { id: "msg_free_tier_user", type: "user", text: "Refactor the parser", time: { created: 1700000000000 } },
+        {
+          id: "msg_free_tier_assistant",
+          type: "assistant",
+          agent: "build",
+          model,
+          content: [],
+          time: { created: 1700000000001 },
+        },
+      ],
+    }),
+  })
+  await expect(page.getByText("Refactor the parser", { exact: true })).toBeVisible()
   await view.push([
     {
       id: "evt_free_tier_limit",
@@ -1652,17 +1692,10 @@ test("providers: the free tier upsell opens Go on its own, sized to its content"
       },
     },
   ])
-  await page
-    .getByRole("dialog", { name: "Free limit reached" })
-    .getByRole("button", { name: "Subscribe", exact: true })
-    .click()
-
-  const dialog = page.getByRole("dialog", { name: "Connect OpenCode Go", exact: true })
-  const container = page.locator('[data-slot="dialog-container"]')
-  await expect(dialog.getByPlaceholder("API key")).toBeVisible()
-  // Nothing to go back to: the upsell opened the dialog straight on Go.
-  await expect(dialog.getByRole("button", { name: "Navigate back", exact: true })).toHaveCount(0)
-  await expect.poll(async () => (await container.boundingBox())?.height).toBeLessThan(512)
+  await expect(page.getByRole("status").filter({ hasText: "Try again later." })).toBeVisible()
+  await expect(page.getByText("Free usage limit reached.")).toHaveCount(0)
+  await expect(page.getByRole("dialog", { name: "Free limit reached" })).toHaveCount(0)
+  await expect(page.getByRole("dialog")).toHaveCount(0)
 })
 
 test("providers: the connect dialog lists connected providers and manages their accounts", async ({ page }) => {
