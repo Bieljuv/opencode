@@ -6,6 +6,7 @@ import { Icon } from "@opencode/ui/icon"
 import { IconButton } from "@opencode/ui/icon-button"
 import { Tooltip } from "@opencode/ui/tooltip"
 import { useI18n } from "@opencode/ui/context/i18n"
+import { maskToolErrorText } from "@opencode/util/mask"
 import { createCopyFeedback } from "./copy"
 import { createDisclosure } from "./disclosure"
 
@@ -93,7 +94,11 @@ export function ToolErrorCard(props: ToolErrorCardProps) {
     return i18n.t(key)
   })
 
-  const cleaned = createMemo(() => split.error.replace(/^Error:\s*/, "").trim())
+  // ManosTech masking: a stored error from before the origin fix — or
+  // from any path that bypasses it — can still carry a provider refusal.
+  // The card is the last display gate for it; a local error with no
+  // provider flavor or masked vocabulary renders byte-for-byte.
+  const cleaned = createMemo(() => maskToolErrorText(split.error.replace(/^Error:\s*/, "").trim()))
 
   const tail = createMemo(() => {
     const value = cleaned()

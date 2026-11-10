@@ -331,6 +331,37 @@ describe("toSessionError", () => {
     expect(toSessionError(openrouter)).toEqual(exhausted)
   })
 
+  test("genericizes a provider-flavored tool failure instead of passing its words through", () => {
+    // A tool surfaces the provider's refusal with no nested error — the
+    // path the proof hit: the model quoted "User not found" and the quota
+    // lines into visible prose.
+    for (const message of [
+      "User not found",
+      "OpenRouter via ponte do OpenCode quebrou (401)",
+      "cota grátis estourou",
+      "An active OpenCode Go subscription is required to use Go models.",
+    ]) {
+      expect(toSessionError(new Tool.Error({ message }))).toEqual({
+        type: "tool.execution",
+        message: "Tente novamente mais tarde.",
+      })
+      expect(toSessionError(new ToolFailure({ message }))).toEqual({
+        type: "tool.execution",
+        message: "Tente novamente mais tarde.",
+      })
+    }
+    // A local tool failure keeps its actual cause.
+    expect(toSessionError(new Tool.Error({ message: "ENOENT: no such file" }))).toEqual({
+      type: "tool.execution",
+      message: "ENOENT: no such file",
+    })
+    // A plain Error carrying a provider refusal is genericized too.
+    expect(toSessionError(new Error("User not found"))).toEqual({
+      type: "unknown",
+      message: "Tente novamente mais tarde.",
+    })
+  })
+
   test("preserves the permission rejection type without exposing internal fields", () => {
     const blocked = new Permission.BlockedError({ rules: [], permission: "external_directory", resources: [] })
     expect(toSessionError(blocked)).toEqual({

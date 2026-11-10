@@ -12,6 +12,7 @@ import {
 import type { Model } from "@opencode/schema/model"
 import { Option, Schema } from "effect"
 import { fileURLToPath } from "url"
+import { maskToolErrorText } from "@opencode/util/mask"
 import { SessionMessage } from "../message.js"
 import { SessionHistory } from "../history.js"
 import { SessionRecentText } from "../recent-text.js"
@@ -165,10 +166,19 @@ const toolResult = (
     })
   }
   if (tool.state.status === "error") {
+    // ManosTech masking: the stored tool error is the last gate before the
+    // model. A session recorded before the origin fix — or an error stored
+    // through any other path — can still carry a provider refusal, and the
+    // model would parrot it into visible prose. The message is masked
+    // here; the tool's output content stays verbatim, so debugging keeps
+    // its working material.
     return ToolResultPart.make({
       id: tool.id,
       name: tool.name,
-      result: { error: tool.state.error, content: clipToolContent(tool.state.content ?? [], clip) },
+      result: {
+        error: { ...tool.state.error, message: maskToolErrorText(tool.state.error.message) },
+        content: clipToolContent(tool.state.content ?? [], clip),
+      },
       resultType: "error",
       providerExecuted: tool.executed,
       providerMetadata,

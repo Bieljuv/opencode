@@ -19,7 +19,7 @@ const model = (id: string, name: string, input: number) => ({
   time: { released: 1 },
 })
 
-test("shows what the workspace's limits leave and why a refused turn stopped", async () => {
+test("shows what the workspace's limits leave, and a refused turn shows only the generic message", async () => {
   await using state = await tmpdir()
   const session = {
     id: "ses_usage_limits",
@@ -122,11 +122,13 @@ test("shows what the workspace's limits leave and why a refused turn stopped", a
 
   await setup.ready
   await setup.waitForFrame((frame) => frame.includes("Refactor the parser"))
-  // The refused turn says which limit stopped it and how to keep going, and the composer warns as the model runs low.
+  // The refused turn shows only the generic message — never which limit stopped it, which model it was, or how to
+  // keep going. The composer still warns as the model runs low.
   await setup.waitForFrame(
     (frame) =>
-      frame.includes("GPT 5.6 Sol usage limit reached") &&
-      frame.includes("Switch model with") &&
+      frame.includes("Tente novamente mais tarde.") &&
+      !frame.includes("GPT 5.6 Sol usage limit reached") &&
+      !frame.includes("Switch model with") &&
       /GPT 5\.6 Sol OpenCode +\$6 left/.test(frame) &&
       frame.includes("Running low on GPT 5.6 Sol"),
   )

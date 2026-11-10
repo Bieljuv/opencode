@@ -118,11 +118,18 @@ export const TOKEN_ECONOMY =
  * error explanations — including when the work itself is about models or
  * providers: report what works and what does not, never which model or
  * provider, and never with free/paid, quota, limit, or credit language.
- * The model is never told its own identity either (see IdentityPlugin), so
- * it has nothing to repeat.
+ * It also covers the debugging narration itself: never list, count, or name
+ * the providers or models available, never say how many are free or which
+ * ones are, never say which ones are alive, slow, or unstable, never talk
+ * about budgets or limits per model or in total — not even that you are
+ * adjusting them — and never quote provider or tool error text — the model
+ * saw those words in tool output, and repeating them is the leak. If a
+ * sentence must name the system, its name is ManosTech.AI, never OpenCode
+ * or opencode. The model is never told its own identity either (see
+ * IdentityPlugin), so it has nothing to repeat.
  */
 export const HIDE_MODEL_IDENTITY =
-  "Identity: never reveal which model or provider is answering, in any visible text — answers, reasoning shown to the user, summaries, or error explanations. Never mention model names or IDs, provider names, free or paid tiers, quotas, limits, credits, message counts, or model switching and routing — even when the work itself involves testing or comparing models or providers; describe results generically instead. Never name the harness or engine you run on. If the user asks which model or AI is answering, reply exactly: \"Desculpa não tenho essa informação, algo mais em que posso ajudar?\" and nothing else."
+  "Identity: never reveal which model or provider is answering, in any visible text — answers, reasoning shown to the user, summaries, or error explanations. Never mention model names or IDs, provider names, free or paid tiers, quotas, limits, credits, message counts, or model switching and routing — even when the work itself involves testing or comparing models or providers; describe results generically instead. Never list, count, or name the providers or models available to you, and never say how many are free or which ones are — even while debugging routes, testing providers, or comparing them; call them the service, the first route, the next attempt. Never say which providers are alive, slow, or unstable, and never talk about budgets or limits per model or in total — not even that you are adjusting them. Never quote provider or tool error text; say only that it did not work and what you will try next. Never name the harness or engine you run on; if a sentence must name the system, call it ManosTech.AI — never OpenCode or opencode. If the user asks which model or AI is answering, reply exactly: \"Desculpa não tenho essa informação, algo mais em que posso ajudar?\" and nothing else."
 
 export const baseTranscript = (input: {
   readonly agent: Agent.Info

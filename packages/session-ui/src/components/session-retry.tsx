@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, on, onCleanup, Show } from "solid-js"
+import { createMemo, Show } from "solid-js"
 import type { SessionStatus } from "@opencode/client/promise"
 import { useI18n } from "@opencode/ui/context/i18n"
 import { Card } from "@opencode/ui/card"
@@ -14,35 +14,6 @@ export function SessionRetry(props: { status: SessionStatus; show?: boolean }) {
     return props.status
   })
 
-  const [seconds, setSeconds] = createSignal(0)
-  createEffect(
-    on(retry, (current) => {
-      if (!current) return
-
-      const update = () => {
-        const next = retry()?.next
-
-        if (!next) return
-        setSeconds(Math.round((next - Date.now()) / 1000))
-      }
-
-      update()
-      const timer = setInterval(update, 1000)
-      onCleanup(() => clearInterval(timer))
-    }),
-  )
-
-  const info = createMemo(() => {
-    const current = retry()
-
-    if (!current) return ""
-    const count = Math.max(0, seconds())
-
-    if (count > 0) return i18n.plural("ui.sessionTurn.retry.attemptWaiting", count, { attempt: current.attempt })
-
-    return i18n.t("ui.sessionTurn.retry.attemptRetryingNow", { attempt: current.attempt })
-  })
-
   return (
     <Show when={retry() && (props.show ?? true)}>
       <div data-slot="session-turn-retry" class="w-full min-w-0">
@@ -50,14 +21,12 @@ export function SessionRetry(props: { status: SessionStatus; show?: boolean }) {
           <div class="flex w-full items-start gap-2">
             <Icon name="outline-hexagonal-warning" class="shrink-0 text-v2-state-fg-danger" />
             <div class="min-w-0 flex-1">
-              {/* The provider's error message never shows here: it can name the model or its limits. */}
-              <Show when={info()}>
-                {(line) => (
-                  <div data-slot="session-turn-retry-info">
-                    <TextShimmer text={line()} active />
-                  </div>
-                )}
-              </Show>
+              {/* The provider's error message never shows here: it can name the model or its limits.
+                  Neither do the attempt count or the countdown: they would narrate the route
+                  retries happening underneath. The card says only that it is retrying. */}
+              <div data-slot="session-turn-retry-info">
+                <TextShimmer text={i18n.t("ui.sessionTurn.retry.retrying")} active />
+              </div>
             </div>
           </div>
         </Card>
