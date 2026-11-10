@@ -1908,8 +1908,8 @@ test("free usage limit offers OpenCode Go once per 24h, transitions Subscribe to
   setup.mockInput.pressEnter()
   await setup.waitForFrame((frame) => !frame.includes("Free limit reached"))
   const frame = setup.captureCharFrame()
-  expect(frame).toContain("You've used today's free messages. They reset at")
-  expect(frame).toContain("Upgrade to OpenCode Go → /connect · Switch model → /models")
+  expect(frame).toContain("Tente novamente mais tarde.")
+  expect(frame).not.toContain("Upgrade to OpenCode Go")
   expect(frame).not.toContain("Error:")
   expect(frame).not.toContain("Session failed")
   // The delivered prompt (not the queued one) shows once in the transcript and once more back in the composer.
@@ -1931,7 +1931,7 @@ test("free usage limit offers OpenCode Go once per 24h, transitions Subscribe to
       error: { ...error, retryAfterMs: undefined },
     },
   })
-  await setup.waitForFrame((frame) => !frame.includes("They reset at"))
+  await setup.waitForFrame((frame) => frame.includes("Tente novamente mais tarde."))
   expect(setup.captureCharFrame().split("Refactor the parser").length).toBe(2)
 
   // Just before 24h (86_400_000 - 1 ms) with an empty composer: recalls the next turn's prompt without reopening Free limit reached.
@@ -1959,7 +1959,7 @@ test("free usage limit offers OpenCode Go once per 24h, transitions Subscribe to
   })
   await setup.waitForFrame(
     (frame) =>
-      frame.split("You've used today's free messages").length === 3 && frame.split("Queued follow-up").length === 3,
+      frame.split("Tente novamente mais tarde.").length === 3 && frame.split("Queued follow-up").length === 3,
   )
   expect(setup.captureCharFrame()).not.toContain("Free limit reached")
   expect(setup.captureCharFrame()).not.toContain("Connect OpenCode Go")
@@ -2423,7 +2423,7 @@ test("free usage limit Subscribe handles mid-auth/mid-sync Escape, sync failure,
     durable: { aggregateID: session.id, seq: 1, version: 1 },
     data: { sessionID: session.id, assistantMessageID: "msg_free_assistant_3", error },
   })
-  await restarted.waitForFrame((frame) => frame.includes("You've used today's free messages. They reset at"))
+  await restarted.waitForFrame((frame) => frame.includes("Tente novamente mais tarde."))
   await Bun.sleep(30)
   await restarted.renderOnce()
   expect(restarted.captureCharFrame()).not.toContain("Free limit reached")
@@ -2511,8 +2511,8 @@ test("free usage limit claims suppression atomically across two TUI instances an
   first.events.emit(event)
   second.events.emit(event)
   await Promise.all([
-    first.waitForFrame((frame) => frame.includes("You've used today's free messages. They reset at")),
-    second.waitForFrame((frame) => frame.includes("You've used today's free messages. They reset at")),
+    first.waitForFrame((frame) => frame.includes("Tente novamente mais tarde.")),
+    second.waitForFrame((frame) => frame.includes("Tente novamente mais tarde.")),
   ])
   await first.waitForFrame(
     () =>
@@ -2540,7 +2540,7 @@ test("free usage limit claims suppression atomically across two TUI instances an
   await typing.mockInput.typeText("Draft in progress")
   await typing.waitForFrame((frame) => frame.includes("Draft in progress"))
   typing.events.emit(event)
-  await typing.waitForFrame((frame) => frame.includes("You've used today's free messages. They reset at"))
+  await typing.waitForFrame((frame) => frame.includes("Tente novamente mais tarde."))
   const frame = typing.captureCharFrame()
   expect(frame).toContain("Draft in progress")
   expect(frame.split("Refactor the parser").length).toBe(2)
