@@ -17,6 +17,7 @@ import { createKeyed, usePlugin, type MountedSession } from "@opencode/plugin/gu
 import { catalogModel, syncCatalog } from "./catalog"
 import { fetchSessionExport, sanitizeMessageForDisplay, sessionExportFilename } from "./export"
 import { createSessionContextFormatter } from "./format"
+import { WeeklyUsageSection } from "./weekly-usage-bar"
 import {
   createContextScrollState,
   createSessionExportState,
@@ -394,6 +395,8 @@ export default function SessionContextTab(props: { session: MountedSession }) {
         <div class="grid grid-cols-1 @[32rem]:grid-cols-2 gap-4">
           <For each={stats}>{(stat) => <Stat label={ctx.t(stat.label)} value={stat.value()} />}</For>
         </div>
+
+        <WeeklyUsageSection time={formatter().time} />
 
         <Show when={systemPrompt()}>
           {(prompt) => (

@@ -343,6 +343,21 @@ export function createHostApis() {
             },
           }
         : undefined,
+    // ManosTech: the signed-in client's plan usage, from the panel through
+    // the main process. Undefined on the web and without a client account;
+    // the plugin hides its weekly bar then. `warnedToday` stays in the
+    // app — the plugin only needs the percents and the instants.
+    clientUsage: () => {
+      const getClientUsage = platform.getClientUsage
+      if (!getClientUsage) return undefined
+
+      return async () => {
+        const usage = await getClientUsage()
+        if (!usage) return undefined
+
+        return { percent: usage.percent, resetsAt: usage.resetsAt, weekly: usage.weekly }
+      }
+    },
     app: () => ({
       name: "opencode",
       version: platform.version ?? "",

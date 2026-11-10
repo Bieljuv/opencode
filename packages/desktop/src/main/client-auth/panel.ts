@@ -28,7 +28,9 @@ import { Option, Schema } from "effect"
  *   devolve a chave em claro só quando gera uma nova naquela chamada.
  *   Nada devolve `gateway_url` — o app usa o default (/v1 ao vivo).
  *   `GET /api/uso` devolve o uso diário `{ usado_percentual, reseta_em }`
- *   com a chave API como Bearer.
+ *   com a chave API como Bearer, e o uso semanal em `semanal`
+ *   (`{ limite_tokens, usado_tokens, usado_percentual, bloqueado,
+ *   liberacao_em, reseta_em }`) quando o cliente tem limite semanal.
  * - a troca chave→sessão (`exchangeApiKey`) ainda não tem endpoint
  *   definido no painel: a função existe com o caminho marcado como
  *   pendente e NÃO é chamada — a sessão de 30 dias cobre o offline.
@@ -82,6 +84,20 @@ export type SessionInfo = {
 export type DailyUsage = {
   readonly percent: number
   readonly resetsAt: string
+  /** O uso semanal, quando o painel o reporta; undefined = sem limite semanal, a barra some. */
+  readonly weekly: WeeklyUsage | undefined
+}
+
+/**
+ * Uso semanal do plano, como o painel expõe em `semanal` em GET /api/uso.
+ * Só a % e os instantes chegam à interface — nunca a contagem de tokens
+ * nem o tamanho do limite.
+ */
+export type WeeklyUsage = {
+  readonly percent: number
+  readonly resetsAt: string
+  readonly blocked: boolean
+  readonly releasesAt: string | undefined
 }
 
 export type ClientErrorTag =
@@ -151,6 +167,15 @@ const ApiKeyResponse = Schema.Struct({
 
 const UsageResponse = Schema.Struct({
   usado_percentual: Schema.Number,
+  reseta_em: Schema.String,
+})
+
+const WeeklyUsageResponse = Schema.Struct({
+  limite_tokens: Schema.NullOr(Schema.Number),
+  usado_tokens: Schema.Number,
+  usado_percentual: Schema.Number,
+  bloqueado: Schema.Boolean,
+  liberacao_em: Schema.NullOr(Schema.String),
   reseta_em: Schema.String,
 })
 
@@ -377,6 +402,8 @@ export async function googleLogin(
  * undefined e a barra simplesmente não renderiza — nada de erro visível.
  * `usado_percentual` é 0–100; `reseta_em` é o instante do reset (meia-noite,
  * America/Sao_Paulo). Nunca há contagem de tokens nem tamanho da cota aqui.
+ * O objeto `semanal` vem na mesma resposta; um `semanal` malformado ou
+ * sem limite esconde só a barra semanal, nunca a diária.
  */
 export async function fetchDailyUsage(baseUrl: string, apiKey: string): Promise<DailyUsage | undefined> {
   let response: { status: number; json: unknown }
@@ -398,7 +425,30 @@ export async function fetchDailyUsage(baseUrl: string, apiKey: string): Promise<
   if (!Number.isFinite(value.usado_percentual) || value.usado_percentual < 0 || value.usado_percentual > 100)
     return undefined
 
-  return { percent: value.usado_percentual, resetsAt: value.reseta_em }
+  return { percent: value.usado_percentual, resetsAt: value.reseta_em, weekly: weeklyUsage(response.json) }
+}
+
+/** O uso semanal do plano (`semanal` em GET /api/uso), ou undefined. */
+function weeklyUsage(json: unknown): WeeklyUsage | undefined {
+  const record = (typeof json === "object" && json !== null ? json : {}) as Record<string, unknown>
+  const decoded = Schema.decodeUnknownOption(WeeklyUsageResponse)(record.semanal)
+
+  if (Option.isNone(decoded)) return undefined
+
+  const value = decoded.value
+
+  if (!Number.isFinite(value.usado_percentual) || value.usado_percentual < 0 || value.usado_percentual > 100)
+    return undefined
+
+  if (value.limite_tokens === null || !Number.isFinite(value.limite_tokens) || value.limite_tokens <= 0)
+    return undefined
+
+  return {
+    percent: value.usado_percentual,
+    resetsAt: value.reseta_em,
+    blocked: value.bloqueado,
+    releasesAt: value.liberacao_em ?? undefined,
+  }
 }
 
 /**

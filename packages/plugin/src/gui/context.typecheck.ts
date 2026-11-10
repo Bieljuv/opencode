@@ -9,6 +9,7 @@ import {
   Plugin,
   Store,
   type Cleanup,
+  type ClientUsage,
   type Desktop,
   type IconName,
   type IpcClient,
@@ -53,6 +54,8 @@ export const setup: Plugin.Setup<typeof Consumer> = (ctx) => {
   equal<ReturnType<typeof ctx.stores.draft>["value"], { readonly open: boolean } | undefined>(true)
   // The desktop API is undefined on the web.
   equal<typeof ctx.desktop, Desktop | undefined>(true)
+  // The client's plan usage is undefined on the web and without a client.
+  equal<typeof ctx.clientUsage, (() => Promise<ClientUsage | undefined>) | undefined>(true)
   // @ts-expect-error no store named missing
   void ctx.stores.missing
   // A session carries its identity and data only; the route-following models belong to the session screen.

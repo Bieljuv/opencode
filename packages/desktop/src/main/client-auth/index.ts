@@ -61,6 +61,7 @@ export type ClientUsage = {
   readonly percent: number
   readonly resetsAt: string
   readonly warnedToday: boolean
+  readonly weekly: Panel.WeeklyUsage | undefined
 }
 
 export type LoginResult =
@@ -206,7 +207,12 @@ export async function getClientUsage(): Promise<ClientUsage | null> {
 
   if (!usage) return null
 
-  return { percent: usage.percent, resetsAt: usage.resetsAt, warnedToday: wasUsageWarnedToday() }
+  return {
+    percent: usage.percent,
+    resetsAt: usage.resetsAt,
+    warnedToday: wasUsageWarnedToday(),
+    weekly: usage.weekly,
+  }
 }
 
 /** Transcreve uma fatia de áudio do microfone no gateway, com a chave guardada. */
