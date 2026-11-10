@@ -99,6 +99,7 @@ export type IconName =
   | "outline-browser-annotate"
   | "outline-chevron-down"
   | "outline-chevron-right"
+  | "outline-clock"
   | "outline-code-brackets"
   | "outline-console"
   | "outline-cookie"
