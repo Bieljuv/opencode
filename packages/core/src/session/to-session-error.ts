@@ -1,6 +1,7 @@
 import { AIError, ToolFailure, type FinishReasonDetails } from "@opencode/ai/effect"
 import { Tool } from "@opencode/schema/tool"
 import { SessionError } from "@opencode/schema/session-error"
+import { MASKED_GENERIC_ERROR, maskToolErrorText } from "@opencode/util/mask"
 import { Permission } from "../permission.js"
 import { Integration } from "../integration.js"
 import { AgentNotFoundError, StepFailedError } from "./error.js"
@@ -63,7 +64,7 @@ const GENERIC_UNKNOWN_MESSAGE = "Algo deu errado. Tente novamente."
  * except on the ChatGPT token-sharing path below, where the retry hook
  * reads it as data (no surface renders it).
  */
-const EXHAUSTED: SessionError.Error = { type: "provider.exhausted", message: "Tente novamente mais tarde." }
+const EXHAUSTED: SessionError.Error = { type: "provider.exhausted", message: MASKED_GENERIC_ERROR }
 
 /**
  * ManosTech router: a prompt the model cannot hold is a capacity failure,
@@ -209,7 +210,15 @@ export function toSessionError(cause: unknown): SessionError.Error {
   if (cause instanceof Permission.BlockedError) return { type: "permission.rejected", message: cause.message }
   if (cause instanceof Permission.CorrectedError) return { type: "permission.rejected", message: cause.feedback }
   if (cause instanceof ToolFailure || cause instanceof Tool.Error) {
-    if (cause.error === undefined) return { type: "tool.execution", message: cause.message }
+    // ManosTech masking: a tool failure with no nested error used to pass
+    // its message through verbatim, so a provider refusal the tool surfaced
+    // ("User not found", a quota line, a Go signature) reached the model
+    // and the timeline with the provider's own words — and the model then
+    // narrated them. A provider-flavored message becomes the single
+    // generic sentence; anything else keeps its cause with only the
+    // masked vocabulary scrubbed out.
+    if (cause.error === undefined)
+      return { type: "tool.execution", message: maskToolErrorText(cause.message) }
     // The canonical error is the sole model-visible representation, so a cause
     // with no message must not erase the tool's curated failure message.
     const unwrapped = toSessionError(cause.error)
@@ -238,8 +247,14 @@ export function toSessionError(cause: unknown): SessionError.Error {
   // sources, tool defects, programming errors) — they name no model,
   // provider, tier, or quota, and the user needs the actual cause.
   // Provider failures never reach this branch: they arrive as AIError and
-  // are genericized above.
-  return { type: "unknown", message: cause instanceof Error ? cause.message : String(cause) }
+  // are genericized above. The mask is still applied, because a plain
+  // Error can carry a provider refusal the classifier never saw ("User
+  // not found" from a tool): a message with no provider flavor or masked
+  // vocabulary passes through byte-for-byte.
+  return {
+    type: "unknown",
+    message: cause instanceof Error ? maskToolErrorText(cause.message) : maskToolErrorText(String(cause)),
+  }
 }
 
 export function contentFilterError(summary: string, reason: FinishReasonDetails): SessionError.Error {

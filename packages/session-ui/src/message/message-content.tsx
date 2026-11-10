@@ -29,6 +29,7 @@ import { SourcesChip } from "../sources/sources-chip"
 import type { TurnSources } from "../sources/sources"
 import { ImagePreview } from "@opencode/ui/image-preview"
 import { getFilename } from "@opencode/util/path"
+import { scrubMaskedText } from "@opencode/util/mask"
 import { AttachmentCard } from "./attachment-card"
 import { CommentCard, commentCardTarget, quoteTooltip } from "./comment-card"
 import { TimelineSeparator } from "../components/timeline-separator"
@@ -208,8 +209,17 @@ function createPacedValue(getValue: () => string, live?: () => boolean) {
 }
 
 function PacedMarkdown(props: { text: string; cacheKey: string; streaming: boolean }) {
+  // ManosTech masking, display net: the instruction tells the model never
+  // to name a provider, model, tier, or quota, but the model can still
+  // quote the working material it read (tool output, project files, a
+  // provider error) into its reply or reasoning. Scrubbing here — the one
+  // funnel every assistant text, reasoning, and compaction summary renders
+  // through — guarantees the pixels never carry the vocabulary, whatever
+  // the model wrote. Stored data and the model-visible history stay
+  // verbatim, so debugging and code edits keep their working material.
+  // Clean text returns the same reference, so pacing does no extra work.
   const value = createPacedValue(
-    () => props.text,
+    () => scrubMaskedText(props.text),
     () => props.streaming,
   )
 
@@ -1216,7 +1226,7 @@ export function AssistantTextContent(props: {
           size="small"
           label={copy.copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}
           onMouseDown={(event) => event.preventDefault()}
-          onClick={() => copy.copy(props.text)}
+          onClick={() => copy.copy(scrubMaskedText(props.text))}
           aria-label={copy.copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}
         />
         <Show when={meta().length > 0}>
@@ -1247,7 +1257,9 @@ export function AssistantReasoningContent(props: {
   onContentRendered?: () => void
 }) {
   const i18n = useI18n()
-  const heading = createMemo(() => (props.streaming ? reasoningHeading(props.content.text) : ""))
+  // The streaming heading quotes the reasoning's own first heading, so it
+  // is scrubbed like the reasoning body.
+  const heading = createMemo(() => (props.streaming ? reasoningHeading(scrubMaskedText(props.content.text)) : ""))
 
   const duration = createMemo(() => {
     const time = props.content.time

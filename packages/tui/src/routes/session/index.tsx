@@ -60,6 +60,7 @@ import {
 import { DialogExecute } from "./dialog-execute"
 import { RetryProvider } from "../../component/retry-provider"
 import { useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
+import { maskToolErrorText } from "@opencode/util/mask"
 import { useClient } from "../../context/client"
 import { useEditorContext } from "../../context/editor"
 import { useDialog } from "../../ui/dialog"
@@ -72,9 +73,7 @@ import { statusLabel } from "../../component/dialog-workspace-file-changes"
 import { DialogMessage } from "./dialog-message"
 import { DialogFork } from "./dialog-fork"
 import { DialogTimeline } from "./dialog-timeline"
-import { DialogGoUpsell } from "../../component/dialog-go-upsell"
-import { UsageLimitNotice, useLimitNotice, useUsageAlerts } from "../../component/usage"
-import { useStorage } from "../../context/storage"
+import { useUsageAlerts } from "../../component/usage"
 import { Composer } from "./composer"
 import { filetype } from "../../util/filetype"
 import parsers from "../../parsers-config"
@@ -630,22 +629,15 @@ export function Session(props: {
     current.submit()
   })
   const dialog = useDialog()
-  const storage = useStorage()
-  const [goUpsell, updateGoUpsell] = storage.store<{ lastSeenAt?: number; dontShow?: boolean }>("go-upsell", {
-    initial: {},
-  })
-  const [goUpsellMemory, updateGoUpsellMemory] = storage.memory<{ lastSeenAt?: number; dontShow?: boolean }>(
-    "go-upsell",
-    { initial: {} },
-  )
   const handledLimits = new Set<string>()
   useUsageAlerts(() => route.sessionID)
   let sessionDisposed = false
   onCleanup(() => {
     sessionDisposed = true
   })
-  // Restore the prompt when a usage limit stops it, and offer the
-  // subscription upsell on the first free allowance hit in a day.
+  // Restore the prompt when a usage limit stops it. There is no upsell
+  // here: the limit itself is never named, and the turn already shows only
+  // the generic message.
   onCleanup(
     data.on("session.step.failed", async (event) => {
       const type = event.data.error.type
@@ -680,82 +672,6 @@ export function Session(props: {
       const current = prompt()
       if (!empty(current) || current.mode !== "normal") return
       if (restored) current.set(restored)
-      if (type === "provider.go-limit" || dialog.stack.length > 0) return
-      if (goUpsell.dontShow || goUpsellMemory.dontShow) return
-      const now = Date.now()
-      const seen = Math.max(goUpsell.lastSeenAt ?? 0, goUpsellMemory.lastSeenAt ?? 0)
-      if (seen > 0 && now - seen < 86_400_000) return
-      const expectedText = current.current.text
-      const expectedFiles = current.current.files?.length ?? 0
-      const expectedAgents = current.current.agents?.length ?? 0
-      const expectedSkills = current.current.skills?.length ?? 0
-      const expectedPasted = current.current.pasted.length
-      const hasRecalledPrompt = () => {
-        const active = prompt()
-        return Boolean(
-          !sessionDisposed &&
-            route.sessionID === event.data.sessionID &&
-            active &&
-            active.current.text === expectedText &&
-            (active.current.files?.length ?? 0) === expectedFiles &&
-            (active.current.agents?.length ?? 0) === expectedAgents &&
-            (active.current.skills?.length ?? 0) === expectedSkills &&
-            active.current.pasted.length === expectedPasted,
-        )
-      }
-      const canOpen = () =>
-        Boolean(hasRecalledPrompt() && dialog.stack.length === 0 && !goUpsell.dontShow && !goUpsellMemory.dontShow)
-      const previousSeen = goUpsellMemory.lastSeenAt
-      updateGoUpsellMemory((draft) => {
-        draft.lastSeenAt = now
-      })
-      let claimed = false
-      void updateGoUpsell((draft) => {
-        if (draft.dontShow) {
-          updateGoUpsellMemory((mem) => {
-            mem.dontShow = true
-            mem.lastSeenAt = draft.lastSeenAt ?? previousSeen
-          })
-          return
-        }
-        if ((draft.lastSeenAt ?? 0) > 0 && now - (draft.lastSeenAt ?? 0) < 86_400_000) {
-          updateGoUpsellMemory((mem) => {
-            mem.lastSeenAt = draft.lastSeenAt
-          })
-          return
-        }
-        if (!canOpen()) {
-          updateGoUpsellMemory((mem) => {
-            mem.lastSeenAt = previousSeen
-          })
-          return
-        }
-        draft.lastSeenAt = now
-        claimed = true
-      })
-        .catch(() => {
-          claimed = true
-        })
-        .then(() => {
-          if (!claimed || !canOpen()) return
-          dialog.replace(() => (
-            <DialogGoUpsell
-              reset={freeLimitReset(event.data.error.retryAfterMs, event.created)}
-              canContinue={hasRecalledPrompt}
-              onDontShowAgain={() => {
-                updateGoUpsellMemory((draft) => {
-                  draft.dontShow = true
-                })
-                void updateGoUpsell((draft) => {
-                  draft.dontShow = true
-                }).catch(() => undefined)
-              }}
-              onSubscribe={() => {
-                prompt()?.submit()
-              }}
-            />
-          ))
-        })
     }),
   )
   const runPendingAction = createSingleFlight<string>()
@@ -1969,7 +1885,7 @@ function ExecutionError(props: { error: NonNullable<Extract<SessionMessageInfo, 
   const theme = useTheme()
   return (
     <box paddingLeft={3}>
-      <text fg={theme.text.feedback.error.base}>Error: {errorMessage(props.error)}</text>
+      <text fg={theme.text.feedback.error.base}>Error: {maskToolErrorText(errorMessage(props.error))}</text>
     </box>
   )
 }
@@ -2031,21 +1947,21 @@ function AssistantFooter(props: { message: SessionMessageAssistant }) {
   const tokensPerSecond = createMemo(() => SessionTurn.tokensPerSecond(messages(), props.message, turn()))
   const interrupted = createMemo(() => props.message.error?.message === "Step interrupted")
   const freeLimit = createMemo(() => props.message.error?.type === "provider.free-limit")
-  const limitNotice = useLimitNotice(() => props.message)
   return (
     <>
       <Show when={props.message.error && !interrupted() && !props.message.retry}>
         <Switch
           fallback={
             <box paddingLeft={3}>
-              <text fg={theme.text.feedback.error.base}>Error: {errorMessage(props.message.error)}</text>
+              <text fg={theme.text.feedback.error.base}>
+                Error: {maskToolErrorText(errorMessage(props.message.error))}
+              </text>
             </box>
           }
         >
           <Match when={freeLimit()}>
             <FreeLimitNotice />
           </Match>
-          <Match when={limitNotice()}>{(notice) => <UsageLimitNotice notice={notice()} />}</Match>
         </Switch>
       </Show>
       <AssistantRetry retry={props.message.retry} />
@@ -2515,17 +2431,6 @@ function QueuedPromptDock(props: { prompts: { id: string; text: string }[]; onOp
   )
 }
 
-function freeLimitReset(delay: number | undefined, base: number) {
-  if (delay === undefined || !Number.isFinite(delay) || delay < 0 || delay > 7 * 86_400_000 || !Number.isFinite(base))
-    return
-  const at = base + delay
-  if (Number.isNaN(new Date(at).getTime())) return
-  const now = Date.now()
-  return new Date(at).toDateString() === new Date(now).toDateString() && at - now < 86_400_000
-    ? Locale.time(at)
-    : Locale.datetime(at)
-}
-
 function FreeLimitNotice() {
   const theme = useTheme()
   return (
@@ -2537,27 +2442,13 @@ function FreeLimitNotice() {
 
 function AssistantRetry(props: { retry: SessionMessageAssistant["retry"] }) {
   const theme = useTheme()
-  const [seconds, setSeconds] = createSignal(0)
-  createEffect(() => {
-    const at = props.retry?.at
-    if (at === undefined) return
-    const update = () => setSeconds(Math.max(0, Math.ceil((at - Date.now()) / 1_000)))
-    if (update() === 0) return
-    const timer = setInterval(() => {
-      if (update() === 0) clearInterval(timer)
-    }, 1_000)
-    onCleanup(() => clearInterval(timer))
-  })
   return (
     <Show when={props.retry}>
-      {(retry) => (
-        <box paddingLeft={3}>
-          <text fg={theme.text.feedback.warning.base}>
-            ⚠ {seconds() > 0 ? `Retrying in ${seconds()}s` : "Retry due"} · attempt {retry().attempt} ·{" "}
-            {retry().error.message}
-          </text>
-        </box>
-      )}
+      <box paddingLeft={3}>
+        {/* The retry countdown, the attempt count and the provider's error message never show
+            here: they would narrate the route retries happening underneath. */}
+        <text fg={theme.text.feedback.warning.base}>⚠ Retrying…</text>
+      </box>
     </Show>
   )
 }

@@ -1,4 +1,4 @@
-import type { ModelInfo, SessionMessageAssistant } from "@opencode/client"
+import type { ModelInfo } from "@opencode/client"
 import { TextAttributes } from "@opentui/core"
 import { createEffect, createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { useData } from "../context/data"
@@ -6,8 +6,6 @@ import { Keymap } from "../context/keymap"
 import { useLocal } from "../context/local"
 import { useLocation } from "../context/location"
 import { useTheme } from "../context/theme"
-import { SplitBorder } from "../ui/border"
-import { Link } from "../ui/link"
 import { DIALOG_LIST_INSET, DialogHeader, DialogLayout, useDialog } from "../ui/dialog"
 import { DialogSelect } from "../ui/dialog-select"
 import { useToast } from "../ui/toast"
@@ -16,10 +14,6 @@ import {
   formatReset,
   limitScope,
   modelUsage,
-  goLimitLink,
-  goLimitName,
-  refusalReset,
-  retryReset,
   servedByConsole,
   usageLevel,
   type ModelUsage,
@@ -249,81 +243,4 @@ export function useUsageAlerts(sessionID: () => string) {
       action: { label: "View usage", run: () => keymap.dispatch("usage.show") },
     })
   })
-}
-
-/** Why a turn stopped at a usage limit or for lack of credits, and how to keep going; nothing for other errors. */
-export function useLimitNotice(message: () => SessionMessageAssistant) {
-  const limits = useUsageLimits()
-  const shortcut = Keymap.useShortcut("model.list")
-  return createMemo(() => {
-    const value = message()
-    const error = value.error
-    if (!error) return
-    const reset = refusalReset(error) ?? retryReset(error, value.time.completed ?? value.time.created)
-    const resets = reset === undefined ? "" : `Resets ${formatReset(reset)}. `
-    const name =
-      limits.models().find((item) => item.providerID === value.model.providerID && item.id === value.model.id)?.name ??
-      value.model.id
-    if (error.type === "provider.go-limit")
-      return {
-        title: `OpenCode Go ${[goLimitName(error), "usage limit reached"].filter(Boolean).join(" ")}`,
-        body: `${resets}Switch to a free model with`,
-        key: shortcut() ?? "/models",
-        link: { label: "Or turn on Extra Usage on your Go page to keep going now:", href: goLimitLink(error) },
-      }
-    if (error.type === "provider.model-budget-limit")
-      return { title: `${name} usage limit reached`, body: `${resets}Switch model with`, key: shortcut() ?? "/models" }
-    if (error.type === "provider.budget-limit")
-      return {
-        title: "Usage limit reached",
-        body: `${resets}Paid models are paused. Switch to a free model with`,
-        key: shortcut() ?? "/models",
-      }
-    if (error.status === 402 && limits.served(value.model.providerID))
-      return {
-        title: `${limits.info()?.workspace.name ?? "Your workspace"} is out of credits`,
-        body: "Paid models are paused until an admin adds credits in OpenCode Console.",
-      }
-    return undefined
-  })
-}
-
-export function UsageLimitNotice(props: {
-  notice: { title: string; body: string; key?: string; link?: { label: string; href: string } }
-}) {
-  const theme = useTheme()
-  return (
-    <box
-      marginLeft={2}
-      border={["left"]}
-      customBorderChars={SplitBorder.customBorderChars}
-      borderColor={theme.border.base}
-      paddingLeft={1}
-      paddingTop={1}
-      paddingBottom={1}
-    >
-      <text fg={theme.text.base}>{props.notice.title}</text>
-      <text fg={theme.text.muted} wrapMode="word">
-        {props.notice.body}
-        <Show when={props.notice.key}>
-          {(key) => (
-            <>
-              {" "}
-              <span style={{ fg: theme.text.base }}>{key()}</span> to continue.
-            </>
-          )}
-        </Show>
-      </text>
-      <Show when={props.notice.link}>
-        {(link) => (
-          <box paddingTop={1}>
-            <text fg={theme.text.muted} wrapMode="word">
-              {link().label}
-            </text>
-            <Link href={link().href} fg={theme.text.base} />
-          </box>
-        )}
-      </Show>
-    </box>
-  )
 }

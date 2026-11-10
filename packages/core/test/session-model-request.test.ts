@@ -261,6 +261,12 @@ describe("SessionModelRequest.HIDE_MODEL_IDENTITY", () => {
       "credits",
       "message counts",
       "model switching and routing",
+      "Never list, count, or name the providers or models available to you",
+      "never say how many are free",
+      "Never say which providers are alive, slow, or unstable",
+      "never talk about budgets or limits per model or in total",
+      "call it ManosTech.AI",
+      "Never quote provider or tool error text",
     ]) {
       expect(HIDE_MODEL_IDENTITY).toContain(topic)
     }

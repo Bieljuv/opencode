@@ -19,6 +19,7 @@ import {
 } from "effect"
 import { homedir } from "node:os"
 import { VERSION } from "../constants"
+import { scrubLogFile } from "./log-scrub"
 import { marks } from "../lifecycle/marks"
 import {
   EXPORT_ARCHIVE_TIMEOUT_MS,
@@ -390,14 +391,16 @@ function writeZip(fs: FileSystem.FileSystem, output: string, entries: Entry[]) {
       entries,
       (entry) =>
         Effect.gen(function* () {
-          const data =
+          const raw =
             "data" in entry
               ? entry.data
               : entry.offset === 0
                 ? yield* fs.readFile(entry.path)
                 : Buffer.concat(yield* Stream.runCollect(fs.stream(entry.path, { offset: entry.offset })))
 
-          yield* Effect.tryPromise(() => writer.add(entry.name, new BlobReader(new Blob([new Uint8Array(data)]))))
+          yield* Effect.tryPromise(() =>
+            writer.add(entry.name, new BlobReader(new Blob([new Uint8Array(scrubLogFile(entry.name, raw))]))),
+          )
         }),
       { concurrency: 1, discard: true },
     )

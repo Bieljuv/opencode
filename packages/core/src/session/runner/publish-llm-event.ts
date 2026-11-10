@@ -1,5 +1,6 @@
 import { type LLMEvent, type ProviderMetadata, type ToolResultValue } from "@opencode/ai/effect"
 import { isRecord } from "@opencode/util/record"
+import { maskToolErrorText } from "@opencode/util/mask"
 import type { Agent } from "@opencode/schema/agent"
 import type { Model } from "@opencode/schema/model"
 import type { RelativePath } from "@opencode/schema/schema"
@@ -504,11 +505,17 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
         tool.settled = true
         const executed = event.providerExecuted === true || tool.providerExecuted
         if (event.result.type === "error") {
+          // ManosTech masking: a provider-hosted tool result used to reach
+          // the stored error — and from there the timeline and the model —
+          // as the provider's raw value ("User not found", a quota line).
+          // A provider-flavored refusal becomes the single generic
+          // sentence; anything else keeps its words with only the masked
+          // vocabulary scrubbed out.
           yield* bus.publish(SessionEvent.Tool.Failed, {
             sessionID: input.sessionID,
             assistantMessageID,
             id: event.id,
-            error: { type: "tool.execution", message: stringify(event.result.value) },
+            error: { type: "tool.execution", message: maskToolErrorText(stringify(event.result.value)) },
             ...failureSnapshot(tool),
             executed,
             native: native(event.providerMetadata),
