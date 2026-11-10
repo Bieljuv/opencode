@@ -27,6 +27,12 @@ const tokenServer = Bun.serve({
     )
       return Response.json({ id_token: "idtok", access_token: "acctok" })
 
+    if (body.get("code") === "no-idtok")
+      return Response.json({ access_token: "acctok" })
+
+    if (body.get("code") === "bad-json")
+      return new Response("{não-json", { status: 200, headers: { "content-type": "application/json" } })
+
     return Response.json({ error: "invalid_grant" }, { status: 400 })
   },
 })
@@ -121,10 +127,10 @@ describe("exchangeCodeForIdToken", () => {
         codeVerifier: "verifier",
         redirectUri: loopbackRedirectUri(51820),
       }),
-    ).toBe("idtok")
+    ).toEqual({ ok: true, idToken: "idtok" })
   })
 
-  test("a rejected code returns undefined", async () => {
+  test("a rejected code reports the status and the Google error code", async () => {
     expect(
       await exchangeCodeForIdToken(env, {
         clientId: "cid",
@@ -132,7 +138,47 @@ describe("exchangeCodeForIdToken", () => {
         codeVerifier: "verifier",
         redirectUri: loopbackRedirectUri(51820),
       }),
-    ).toBe(undefined)
+    ).toEqual({ ok: false, failure: { reason: "rejected", status: 400, error: "invalid_grant" } })
+  })
+
+  test("a 200 without an id token is a bad response", async () => {
+    expect(
+      await exchangeCodeForIdToken(env, {
+        clientId: "cid",
+        code: "no-idtok",
+        codeVerifier: "verifier",
+        redirectUri: loopbackRedirectUri(51820),
+      }),
+    ).toEqual({ ok: false, failure: { reason: "bad-response" } })
+  })
+
+  test("a 200 with malformed JSON is a bad response", async () => {
+    expect(
+      await exchangeCodeForIdToken(env, {
+        clientId: "cid",
+        code: "bad-json",
+        codeVerifier: "verifier",
+        redirectUri: loopbackRedirectUri(51820),
+      }),
+    ).toEqual({ ok: false, failure: { reason: "bad-response" } })
+  })
+
+  test("an unreachable token endpoint is a network failure", async () => {
+    const result = await exchangeCodeForIdToken(
+      { MANOSTECH_GOOGLE_TOKEN_URL: "http://127.0.0.1:1" },
+      {
+        clientId: "cid",
+        code: "code-1",
+        codeVerifier: "verifier",
+        redirectUri: loopbackRedirectUri(51820),
+      },
+    )
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.failure.reason).toBe("network")
+    if (result.failure.reason !== "network") return
+    expect(result.failure.error.length).toBeGreaterThan(0)
   })
 })
 

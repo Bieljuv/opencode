@@ -101,11 +101,21 @@ export function parseAuthReturn(url: string): AuthReturn | undefined {
   return { kind: "code", code, state }
 }
 
+/** O motivo da troca falhada: rede (inclui o timeout), rejeição do Google ou resposta sem ID token. */
+export type ExchangeFailure =
+  | { readonly reason: "network"; readonly error: string }
+  | { readonly reason: "rejected"; readonly status: number; readonly error: string | undefined }
+  | { readonly reason: "bad-response" }
+
+export type ExchangeResult =
+  | { readonly ok: true; readonly idToken: string }
+  | { readonly ok: false; readonly failure: ExchangeFailure }
+
 /** Troca o código da autorização pelo ID token no Google (PKCE, sem segredo). */
 export async function exchangeCodeForIdToken(
   env: Record<string, string | undefined>,
   input: { clientId: string; code: string; codeVerifier: string; redirectUri: string },
-): Promise<string | undefined> {
+): Promise<ExchangeResult> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code: input.code,
@@ -123,19 +133,32 @@ export async function exchangeCodeForIdToken(
       body,
       signal: AbortSignal.timeout(EXCHANGE_TIMEOUT_MS),
     })
-  } catch {
-    return undefined
+  } catch (error) {
+    return {
+      ok: false,
+      failure: { reason: "network", error: error instanceof Error ? error.name : "unknown" },
+    }
   }
 
-  if (!response.ok) return undefined
+  if (!response.ok) {
+    const json: unknown = await response.json().catch(() => undefined)
+    const record = (typeof json === "object" && json !== null ? json : {}) as Record<string, unknown>
+    // Só o código de erro OAuth (invalid_grant, invalid_client...): nunca
+    // a descrição, que pode ecoar o pedido.
+    const error = typeof record.error === "string" ? record.error : undefined
+
+    return { ok: false, failure: { reason: "rejected", status: response.status, error } }
+  }
 
   const json: unknown = await response.json().catch(() => undefined)
 
-  if (typeof json !== "object" || json === null) return undefined
+  if (typeof json !== "object" || json === null) return { ok: false, failure: { reason: "bad-response" } }
 
   const idToken = (json as Record<string, unknown>).id_token
 
-  return typeof idToken === "string" && idToken.length > 0 ? idToken : undefined
+  return typeof idToken === "string" && idToken.length > 0
+    ? { ok: true, idToken }
+    : { ok: false, failure: { reason: "bad-response" } }
 }
 
 export type LoopbackListener = {

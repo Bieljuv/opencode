@@ -4,6 +4,7 @@ import { ManosTechClientChanged } from "../../shared/ipc-rpc/events"
 import { MANOSTECH_GOOGLE_CLIENT_ID } from "../constants"
 import { openExternalURL } from "../files"
 import { emitIpcEvent } from "../ipc-events"
+import { logMain } from "../native/logging"
 import { getMainWindows } from "../windows"
 import {
   authorizeUrl,
@@ -455,18 +456,21 @@ async function finishGoogleLoopback(code: Promise<AuthReturn>, state: string): P
   pendingGoogle = undefined
 
   if (result.kind === "error") {
+    logMain("warn", "[manostech] google login: loopback returned an error")
     notifyClientChanged()
 
     return
   }
 
   if (pending.state !== result.state || Date.now() - pending.startedAt > GOOGLE_FLOW_TTL_MS) {
+    logMain("warn", "[manostech] google login: state mismatch or flow expired")
     notifyClientChanged()
 
     return
   }
 
   if (!MANOSTECH_GOOGLE_CLIENT_ID) {
+    logMain("warn", "[manostech] google login: no client id")
     notifyClientChanged()
 
     return
@@ -474,38 +478,47 @@ async function finishGoogleLoopback(code: Promise<AuthReturn>, state: string): P
 
   // O painel aceita o ID token, não o código: a troca acontece no Google.
   // O redirect_uri da troca tem que ser o mesmo do authorize.
-  const idToken = await exchangeCodeForIdToken(process.env, {
+  const exchange = await exchangeCodeForIdToken(process.env, {
     clientId: MANOSTECH_GOOGLE_CLIENT_ID,
     code: result.code,
     codeVerifier: pending.verifier,
     redirectUri: pending.redirectUri,
   })
 
-  if (!idToken) {
+  if (!exchange.ok) {
+    logMain("warn", "[manostech] google login: code exchange failed", { ...exchange.failure })
     notifyClientChanged()
 
     return
   }
 
+  logMain("info", "[manostech] google login: code exchange ok")
+
   const loginResult = await Panel.googleLogin(Panel.panelBaseUrl(process.env), {
-    idToken,
+    idToken: exchange.idToken,
     deviceId: deviceId(),
   })
 
-  if (loginResult.ok) {
-    saveSession(loginResult.value)
-    storeGatewayCredentials(loginResult.value.apiKey, loginResult.value.gatewayUrl)
-    writeClientIdentity({ id: loginResult.value.client.id, email: loginResult.value.client.email })
-    // Como no login por e-mail: sem chave guardada, buscá-la agora
-    // conecta o gateway já neste login.
-    const fresh = await Panel.ensureApiKey(Panel.panelBaseUrl(process.env), {
-      token: loginResult.value.token,
-      storedApiKey: loadApiKey(),
-    })
+  if (!loginResult.ok) {
+    logMain("warn", "[manostech] google login: panel rejected", { tag: loginResult.error.tag })
+    notifyClientChanged()
 
-    if (fresh) saveApiKey(fresh)
-    await refreshGatewayCredential()
+    return
   }
+
+  saveSession(loginResult.value)
+  storeGatewayCredentials(loginResult.value.apiKey, loginResult.value.gatewayUrl)
+  writeClientIdentity({ id: loginResult.value.client.id, email: loginResult.value.client.email })
+  // Como no login por e-mail: sem chave guardada, buscá-la agora
+  // conecta o gateway já neste login.
+  const fresh = await Panel.ensureApiKey(Panel.panelBaseUrl(process.env), {
+    token: loginResult.value.token,
+    storedApiKey: loadApiKey(),
+  })
+
+  if (fresh) saveApiKey(fresh)
+  await refreshGatewayCredential()
+  logMain("info", "[manostech] google login: panel accepted")
 
   notifyClientChanged()
 }
