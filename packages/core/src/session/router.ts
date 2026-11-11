@@ -647,3 +647,44 @@ export function nextHopWithLargerWindow(
     return window > 0 && window > currentWindow
   })
 }
+
+/**
+ * The next model in the chain after `current` fails with `error`, or
+ * undefined when the chain is exhausted. Exhaustion takes the next
+ * untried model; a prompt the model cannot hold takes a strictly larger
+ * window; any other hop signal prefers a different provider — a cap or a
+ * dead key is usually per provider, so another model of the same provider
+ * hits the same wall. The step's retry callback and the auto-compaction
+ * failure in the runner both hop through this one function, so a model
+ * that fails anywhere in the step is treated the same way.
+ */
+export function nextHopFor(
+  chain: readonly Model.Ref[],
+  tried: ReadonlySet<string>,
+  available: readonly Model.Info[],
+  error: { readonly type: string },
+  current: Pick<Model.Info, "limit"> & { readonly ref: Model.Ref },
+): Model.Ref | undefined {
+  if (isExhaustionError(error)) return nextHop(chain, tried)
+  if (error.type === CONTEXT_OVERFLOW_TYPE) return nextHopWithLargerWindow(available, chain, tried, current)
+  return nextHopFromProvider(chain, tried, current.ref.providerID)
+}
+
+/**
+ * The session model to fall back to when the chain is exhausted, or
+ * undefined when there is nothing to fall back to. The session keeps the
+ * model it was on — the one that answered before any hop — and tries it
+ * once more instead of dying: a key that just failed on another model
+ * may still answer on it, and a transient failure may have passed.
+ * Only one fallback per step: after it, the step fails with the generic
+ * message instead of looping back to the same model forever.
+ */
+export function sessionFallback(
+  sessionModel: Model.Ref | undefined,
+  current: Pick<Model.Ref, "providerID" | "id">,
+  alreadyFellBack: boolean,
+): Model.Ref | undefined {
+  if (alreadyFellBack || sessionModel === undefined) return undefined
+  if (refKey(sessionModel) === refKey(current)) return undefined
+  return sessionModel
+}

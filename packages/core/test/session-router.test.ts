@@ -22,10 +22,12 @@ import {
   isRoutable,
   multiAgentFromMetadata,
   nextHop,
+  nextHopFor,
   nextHopFromProvider,
   nextHopWithLargerWindow,
   refKey,
   requestCeiling,
+  sessionFallback,
   stepHead,
   variantForEffort,
 } from "@opencode/core/session/router"
@@ -791,5 +793,119 @@ describe("isExhaustionError", () => {
     expect(isExhaustionError({ type: "provider.rate-limit" })).toBe(false)
     expect(isExhaustionError({ type: "provider.auth" })).toBe(false)
     expect(isExhaustionError({ type: "provider.internal" })).toBe(false)
+  })
+})
+
+describe("nextHopFor", () => {
+  const ref = (providerID: string, id: string) =>
+    Model.Ref.make({ providerID: Provider.ID.make(providerID), id: Model.ID.make(id) })
+  // The shape the runner hands over: a catalog model plus its resolved ref.
+  const resolved = (info: Model.Info) => ({
+    ...info,
+    ref: Model.Ref.make({ providerID: info.providerID, id: info.id }),
+  })
+  const gateway = resolved(free("manostech", "auto"))
+  const chain = [
+    ref("manostech", "auto"),
+    ref("openrouter", "a-free"),
+    ref("nvidia", "b-free"),
+    ref("anthropic", "pricey"),
+  ]
+  const pool = [
+    free("manostech", "auto"),
+    free("openrouter", "a-free"),
+    free("nvidia", "b-free"),
+    model("anthropic", "pricey", { cost: [priced(3, 15)] }),
+  ]
+
+  test("an auth failure on the gateway hops to the next model on another provider", () => {
+    // Gabriel's log (2026-11-11 13:29:21Z): a model failed with a dead
+    // key and the step died instead of trying the next model in the
+    // chain. Auth is a hop signal — the credential is per provider, so
+    // a dead key on one provider must not condemn the others, and the
+    // hop prefers a different provider.
+    expect(nextHopFor(chain, new Set(["manostech/auto"]), pool, { type: "provider.auth" }, gateway)).toEqual(
+      ref("openrouter", "a-free"),
+    )
+  })
+
+  test("an auth failure with the whole chain tried returns undefined", () => {
+    expect(
+      nextHopFor(
+        chain,
+        new Set(["manostech/auto", "openrouter/a-free", "nvidia/b-free", "anthropic/pricey"]),
+        pool,
+        { type: "provider.auth" },
+        gateway,
+      ),
+    ).toBeUndefined()
+  })
+
+  test("a timeout or provider failure hops to another provider", () => {
+    // The same log's earlier hop (13:29:15Z): the free model froze and
+    // the router moved to the next provider. Timeout and internal
+    // failures keep hopping the same way.
+    const stepfun = resolved(free("openrouter", "a-free"))
+    expect(nextHopFor(chain, new Set(["openrouter/a-free"]), pool, { type: "provider.timeout" }, stepfun)).toEqual(
+      ref("manostech", "auto"),
+    )
+    expect(nextHopFor(chain, new Set(["openrouter/a-free"]), pool, { type: "provider.internal" }, stepfun)).toEqual(
+      ref("manostech", "auto"),
+    )
+  })
+
+  test("exhaustion takes the next untried model, any provider", () => {
+    const stepfun = resolved(free("openrouter", "a-free"))
+    expect(
+      nextHopFor(chain, new Set(["manostech/auto", "openrouter/a-free"]), pool, { type: "provider.exhausted" }, stepfun),
+    ).toEqual(ref("nvidia", "b-free"))
+  })
+
+  test("a prompt the model cannot hold hops to a larger window, never to a smaller one", () => {
+    const small = resolved(free("openrouter", "small-free", { limit: { context: 32_000, output: 8_000 } }))
+    const mid = free("openrouter", "mid-free", { limit: { context: 128_000, output: 32_000 } })
+    const big = free("nvidia", "big-free", { limit: { context: 200_000, output: 32_000 } })
+    const pool2 = [small, mid, big]
+    const chain2 = buildChain(pool2, { complexity: "simple", effort: "automatico" })
+    expect(
+      nextHopFor(chain2, new Set(["openrouter/small-free"]), pool2, { type: "provider.context-too-long" }, small)?.id,
+    ).toBe(Model.ID.make("mid-free"))
+    expect(
+      nextHopFor(
+        chain2,
+        new Set(["openrouter/small-free", "openrouter/mid-free"]),
+        pool2,
+        { type: "provider.context-too-long" },
+        small,
+      )?.id,
+    ).toBe(Model.ID.make("big-free"))
+    const bigResolved = resolved(big)
+    expect(nextHopFor(chain2, new Set(), pool2, { type: "provider.context-too-long" }, bigResolved)).toBeUndefined()
+  })
+})
+
+describe("sessionFallback", () => {
+  const ref = (providerID: string, id: string) =>
+    Model.Ref.make({ providerID: Provider.ID.make(providerID), id: Model.ID.make(id) })
+  const sessionModel = ref("opencode", "console-model")
+  const hopTarget = ref("openrouter", "a-free")
+
+  test("returns the session model when the chain is exhausted on a hop target", () => {
+    // Gabriel's order (2026-11-11): when no model is left to try, the
+    // session keeps the model it was on and tries it once more instead
+    // of dying with the key error.
+    expect(sessionFallback(sessionModel, hopTarget, false)).toEqual(sessionModel)
+  })
+
+  test("nothing to fall back to when already on the session model", () => {
+    expect(sessionFallback(sessionModel, sessionModel, false)).toBeUndefined()
+  })
+
+  test("only one fallback per step: after it, there is nothing left", () => {
+    expect(sessionFallback(sessionModel, hopTarget, true)).toBeUndefined()
+  })
+
+  test("no session model means no fallback", () => {
+    expect(sessionFallback(undefined, hopTarget, false)).toBeUndefined()
   })
 })
