@@ -12,11 +12,14 @@ import {
 import { nativeT } from "../native/translations"
 
 // Um endpoint de token falso: a troca real é com o Google, mas o envio
-// (form-urlencoded + PKCE) é o mesmo contra qualquer URL.
+// (form-urlencoded + PKCE) é o mesmo contra qualquer URL. O último corpo
+// recebido fica guardado para os testes conferirem o que foi enviado.
+let lastBody: URLSearchParams | undefined
 const tokenServer = Bun.serve({
   port: 0,
   async fetch(request) {
     const body = new URLSearchParams(await request.text())
+    lastBody = body
 
     if (
       body.get("grant_type") === "authorization_code" &&
@@ -128,6 +131,34 @@ describe("exchangeCodeForIdToken", () => {
         redirectUri: loopbackRedirectUri(51820),
       }),
     ).toEqual({ ok: true, idToken: "idtok" })
+  })
+
+  test("sends the client secret when the build has one", async () => {
+    // O endpoint de token do Google exige o segredo para clientes
+    // Desktop; sem ele, a troca falha com 400 invalid_request
+    // (Gabriel, 3 tentativas em 2026-11-11).
+    expect(
+      await exchangeCodeForIdToken(env, {
+        clientId: "cid",
+        clientSecret: "segredo",
+        code: "code-1",
+        codeVerifier: "verifier",
+        redirectUri: loopbackRedirectUri(51820),
+      }),
+    ).toEqual({ ok: true, idToken: "idtok" })
+    expect(lastBody?.get("client_secret")).toBe("segredo")
+  })
+
+  test("sends no client secret when the build has none", async () => {
+    expect(
+      await exchangeCodeForIdToken(env, {
+        clientId: "cid",
+        code: "code-1",
+        codeVerifier: "verifier",
+        redirectUri: loopbackRedirectUri(51820),
+      }),
+    ).toEqual({ ok: true, idToken: "idtok" })
+    expect(lastBody?.get("client_secret")).toBeNull()
   })
 
   test("a rejected code reports the status and the Google error code", async () => {

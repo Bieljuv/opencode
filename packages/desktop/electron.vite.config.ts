@@ -57,6 +57,14 @@ export default defineConfig(async ({ command }) => {
         "import.meta.env.OPENCODE_CHANNEL": JSON.stringify(channel === "local" ? "dev" : channel),
         // ManosTech: the Google OAuth Client ID, baked in the same way. Empty until the Client ID exists.
         "import.meta.env.MANOSTECH_GOOGLE_CLIENT_ID": JSON.stringify(process.env.MANOSTECH_GOOGLE_CLIENT_ID ?? ""),
+        // ManosTech: the Google OAuth client secret, baked in the same way.
+        // Desktop OAuth clients are public clients: Google ships the secret
+        // inside installed apps by design, and the token endpoint requires
+        // it. Empty until the repo secret exists; the exchange then sends
+        // no secret, as before.
+        "import.meta.env.MANOSTECH_GOOGLE_CLIENT_SECRET": JSON.stringify(
+          process.env.MANOSTECH_GOOGLE_CLIENT_SECRET ?? "",
+        ),
       },
       build: {
         minify: command === "build",

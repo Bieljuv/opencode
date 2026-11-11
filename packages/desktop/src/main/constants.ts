@@ -15,6 +15,18 @@ export const MANOSTECH_GOOGLE_CLIENT_ID =
     ? undefined
     : import.meta.env.MANOSTECH_GOOGLE_CLIENT_ID
 
+// ManosTech: o segredo do cliente OAuth do Google embutido no build (o
+// workflow de release define MANOSTECH_GOOGLE_CLIENT_SECRET). Clientes
+// OAuth Desktop são clientes públicos: o Google embute o segredo em apps
+// instalados por desenho, e o endpoint de token exige o segredo na troca
+// do código — sem ele, o login falha com 400 invalid_request. Ausente
+// até o segredo existir no GitHub; sem ele, a troca segue sem segredo,
+// como antes.
+export const MANOSTECH_GOOGLE_CLIENT_SECRET =
+  import.meta.env.MANOSTECH_GOOGLE_CLIENT_SECRET === ""
+    ? undefined
+    : import.meta.env.MANOSTECH_GOOGLE_CLIENT_SECRET
+
 export const VERSION = app.isPackaged ? app.getVersion() : (process.env.OPENCODE_VERSION ?? app.getVersion())
 
 const appNames: Record<string, string> = {
