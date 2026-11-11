@@ -20,6 +20,8 @@ export type SessionActivityItem = {
   type: "subagent" | "shell"
   label?: string
   agent?: string
+  // The newest thing the subagent is doing, for the live list; absent when nothing is known yet.
+  activity?: string
   sessionID?: string
   target: string
   // When the work started running, from the server's record of it.
@@ -101,9 +103,10 @@ export function SessionActivityChips(props: {
 
   const rowStopping = (item: SessionActivityItem) => view().stoppingKeys[item.key] !== undefined
 
-  // One clock for every row, ticking only while the panel is open and something still runs.
+  // One clock for every row, ticking while the panel is open and something still runs, or while the live list shows
+  // running subagents.
   const [now, setNow] = createSignal(Date.now())
-  const clockRunning = createMemo(() => view().clockRunning)
+  const clockRunning = createMemo(() => view().clockRunning || props.subagents.length > 0)
   createEffect(() => {
     if (!clockRunning()) return
 
@@ -157,8 +160,65 @@ export function SessionActivityChips(props: {
   // Each session mounts its own composer, so a capsule that is already there on a switch stays at rest; only work
   // that starts while the session is open fades in.
   return (
-    <Show when={active()}>
-      <div data-component="session-activity-chips" class="flex min-w-0 shrink items-center">
+    <>
+      {/* The live list: every running subagent visible at once, with what it is doing right now — no click needed to
+          see who is working. A row opens the subagent where it runs; stopping stays in the capsule menu. */}
+      <Show when={props.subagents.length > 0}>
+        <div
+          data-component="session-activity-live"
+          class="flex min-w-0 flex-col gap-1 text-[13px] leading-[var(--line-height-compact)]"
+        >
+          <span
+            data-slot="session-activity-live-title"
+            class="text-[11px] leading-[var(--line-height-compact)] text-v2-text-text-faint"
+          >
+            {language.t("session.activity.live.title")}
+          </span>
+          <For each={props.subagents}>
+            {(item) => (
+              <button
+                type="button"
+                data-slot="session-activity-live-row"
+                class="flex min-w-0 flex-col gap-px rounded-[6px] px-2 py-1.5 text-start hover:bg-[var(--v2-overlay-simple-overlay-hover)]"
+                onClick={() => props.onOpen(item)}
+              >
+                <span class="flex min-w-0 items-center gap-2">
+                  <SessionProgressIndicatorV2 class="shrink-0" />
+                  <span class="shrink-0 font-[530]">
+                    <bdi>
+                      {item.agent
+                        ? `${item.agent[0].toUpperCase()}${item.agent.slice(1)}`
+                        : language.t("ui.tool.agent.default")}
+                    </bdi>
+                  </span>
+                  <span
+                    data-slot="session-activity-elapsed"
+                    dir="auto"
+                    class="ms-auto text-[11px] tabular-nums whitespace-nowrap text-v2-text-text-muted"
+                  >
+                    {formatElapsed(now() - item.started, language.t)}
+                  </span>
+                </span>
+                <span dir="auto" class="min-w-0 truncate text-v2-text-text-muted">
+                  {item.label}
+                </span>
+                <Show when={item.activity}>
+                  {(activity) => (
+                    <span
+                      dir="auto"
+                      class="min-w-0 truncate font-mono text-[13px] tracking-[-0.04px] text-v2-text-text-muted"
+                    >
+                      {activity()}
+                    </span>
+                  )}
+                </Show>
+              </button>
+            )}
+          </For>
+        </div>
+      </Show>
+      <Show when={active()}>
+        <div data-component="session-activity-chips" class="flex min-w-0 shrink items-center">
         <Menu gutter={8} placement={composerLanePlacement(alignment())} open={view().open} onOpenChange={panel.toggle}>
           <Menu.Trigger
             as="button"
@@ -287,7 +347,8 @@ export function SessionActivityChips(props: {
           </Menu.Portal>
         </Menu>
       </div>
-    </Show>
+      </Show>
+    </>
   )
 }
 

@@ -50,6 +50,8 @@ type ComposerSubmitInput = {
   mode: Accessor<"normal" | "shell">
   /** The effort picked for the automatic router; every prompt it sends carries it as metadata. */
   effort?: Accessor<RouterEffort>
+  /** The multi-agent toggle; every prompt it sends carries it as metadata. */
+  multiAgent?: Accessor<boolean>
   commands: Accessor<readonly { name: string }[] | undefined>
   editor: () => HTMLDivElement | undefined
   queueScroll: () => void
@@ -552,6 +554,7 @@ function dispatchPrompt(input: ComposerSubmitInput, session: ComposerSession, va
     value,
     input.adapter.controls().model.selection.trackSessionCommit,
     input.effort,
+    input.multiAgent,
   ).then(
     () => ({ ok: true as const }),
     (error) => ({ ok: false as const, error }),
@@ -778,6 +781,7 @@ async function sendPrompt(
   value: ComposerSubmission,
   track: ModelSelection["trackSessionCommit"] | undefined,
   effort?: Accessor<RouterEffort>,
+  multiAgent?: Accessor<boolean>,
 ) {
   const request = await buildSubmissionRequest(session, value)
 
@@ -824,6 +828,8 @@ async function sendPrompt(
       model: selectionModel(value.selection),
       // The router reads this to pick how much effort the answer gets; "automatico" when no composer chose one.
       manostechEffort: effort?.() ?? "automatico",
+      // The router reads this to decide whether the agent may split the work across parallel subagents.
+      manostechMultiAgent: multiAgent?.() ?? false,
     },
     prepare: staged ? undefined : () => (committed ??= commit()),
   }

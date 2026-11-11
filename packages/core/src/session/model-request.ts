@@ -152,12 +152,24 @@ export const DIRECT_REPLY =
 export const FAILED_TOOL_RETRY =
   "Failed tool calls: when a tool call fails, never repeat the identical call. Read the error message — including any closest lines it shows — and adjust the call before trying again; when the failure is about content that does not match, re-read the file first. If the same operation fails a second time, stop and tell the user what went wrong and what you need, instead of trying again."
 
+/**
+ * ManosTech multi-agent, appended to the system prompt only while the
+ * composer's multi-agent toggle is on. The agent splits work that has
+ * independent fronts across parallel subagents and joins the results;
+ * the user watches each front live by its task label. Without the toggle
+ * the agent works alone, as before.
+ */
+export const MULTI_AGENT =
+  "Multi-agent: when the request splits into independent fronts, split it and run each front in its own parallel subagent in the background, so the fronts work at the same time, then join the results into one answer at the end. Fronts that depend on each other run in order, not in parallel. Give each front a short label of a few words saying what it does, so the user can follow it live. Only delegate fronts that are truly independent; a single small question or a single-file change is done directly, without subagents."
+
 export const baseTranscript = (input: {
   readonly agent: Agent.Info
   readonly model: SessionRunnerModel.Resolved
   readonly tools: Tool.Snapshot
   readonly initial: ReadonlyArray<Instructions.Rendered>
   readonly messages: ReadonlyArray<SessionMessage.Info>
+  /** The composer's multi-agent toggle for this turn; off keeps the agent working alone. */
+  readonly multiAgent?: boolean
 }) => {
   const providerMetadataKey = input.model.model.route.providerMetadataKey ?? input.model.model.provider
   return {
@@ -191,6 +203,10 @@ export const baseTranscript = (input: {
       // reads the error, adjusts, and after a second failure of the same
       // operation stops and tells the user.
       SystemPart.make(FAILED_TOOL_RETRY),
+      // ManosTech multi-agent: only while the toggle is on. The agent splits
+      // independent fronts across parallel subagents and joins the results;
+      // the user watches each front live by its task label.
+      ...(input.multiAgent ? [SystemPart.make(MULTI_AGENT)] : []),
     ].filter((part) => part.text.length > 0),
     messages: toLLMMessages(input.messages, input.model.ref, providerMetadataKey),
   }

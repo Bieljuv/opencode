@@ -17,6 +17,8 @@ type Subagent = {
   partID: string | undefined
   label: string | undefined
   agent?: string
+  /** The newest thing the child session is doing, for the live panel; absent when nothing is known yet. */
+  activity?: string
   started: number
 }
 
@@ -28,6 +30,43 @@ const decodeString = Schema.decodeUnknownOption(Schema.String)
 
 // Tool input and metadata are open JSON, so a field of the wrong type reads as absent.
 const text = (value: JsonValue | undefined) => Option.getOrUndefined(decodeString(value))
+
+// A tool call's most telling input field: the file it reads or edits, the command it runs, or the pattern it
+// searches for.
+const TOOL_HINT_KEYS = ["filePath", "path", "command", "pattern", "url", "description"] as const
+
+/**
+ * The newest thing a child session is doing, for the live panel: its latest tool call (name plus the file,
+ * command or pattern it works on) or the first line of its latest text. Nothing known reads as no activity.
+ */
+export function latestSubagentActivity(messages: readonly SessionMessageInfo[]): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index]
+
+    if (message?.type !== "assistant") continue
+    for (let partIndex = message.content.length - 1; partIndex >= 0; partIndex--) {
+      const part = message.content[partIndex]
+
+      if (part?.type === "tool") {
+        // A streaming call's input is still partial JSON text, not an object: the tool name alone is its activity.
+        const input = part.state.input
+        const hint =
+          typeof input === "object"
+            ? TOOL_HINT_KEYS.map((key) => text(input[key])).find((value) => value !== undefined)
+            : undefined
+
+        return (hint ? `${part.name} ${hint}` : part.name).slice(0, 120)
+      }
+      if (part?.type === "text") {
+        const line = part.text.trim().split("\n")[0]?.trim()
+
+        if (line) return line.slice(0, 120)
+      }
+    }
+    return undefined
+  }
+  return undefined
+}
 
 export function createSessionBackground(input: {
   sessionID: () => string | undefined
@@ -124,6 +163,7 @@ export function createSessionBackground(input: {
           partID: calls.find((item) => child(item, info))?.partID,
           label: latest?.label ?? info.title ?? info.id,
           agent: latest?.agent,
+          activity: latestSubagentActivity(input.messages(info.id)),
           started: latest?.started ?? info.time.created,
         },
       ]

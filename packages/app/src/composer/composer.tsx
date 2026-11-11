@@ -1,4 +1,4 @@
-import { For } from "solid-js"
+import { For, Show } from "solid-js"
 import { formatKeybind, useCommand } from "@/shell/commands/command"
 import { useLanguage } from "@/runtime/i18n/language"
 import { DictationButton } from "@/voice/dictation"
@@ -77,6 +77,21 @@ export function Composer(props: {
                   </Menu.Content>
                 </Menu.Portal>
               </Menu>
+            </Tooltip>
+            <Tooltip placement="top" value={language.t("composer.multiAgent.hint")}>
+              <Button
+                variant="ghost-muted"
+                size="normal"
+                class="max-w-[220px] justify-start ![font-weight:440] aria-pressed:bg-[var(--v2-overlay-simple-overlay-pressed)] aria-pressed:text-v2-text-text-base"
+                aria-label={language.t("composer.multiAgent.label")}
+                aria-pressed={props.model.multiAgent.current()}
+                onClick={() => props.model.multiAgent.set(!props.model.multiAgent.current())}
+              >
+                <Show when={props.model.multiAgent.current()}>
+                  <Icon name="check" />
+                </Show>
+                <span class="truncate leading-5">{language.t("composer.multiAgent.label")}</span>
+              </Button>
             </Tooltip>
           </>
         }

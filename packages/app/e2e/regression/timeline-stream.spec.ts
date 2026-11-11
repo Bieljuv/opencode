@@ -4,6 +4,7 @@ import { timelinePresets } from "@opencode/session-ui/timeline/detail"
 import { createTwoFilesPatch } from "diff"
 import { readSessionDraftText } from "../utils/drafts"
 import { holdRoute } from "../utils/app"
+import { fileNode } from "../utils/workspace"
 import {
   assistantID,
   assistantMessage,
@@ -1265,6 +1266,55 @@ test.describe("background shortcut", () => {
     await expect(page.getByRole("button", { name: "1 subagent", exact: true })).toBeVisible()
     await timeline.transport.send(status("idle", 1, childID))
     await expect(capsule).toHaveCount(0)
+  })
+
+  test("shows a running subagent live above the composer without opening the menu", async ({ page }) => {
+    const childID = "ses_live_subagent"
+
+    await setupTimeline(page, {
+      settings: { timelineDetail: detailed },
+      sessionMessages: [
+        user,
+        {
+          id: "msg_live_call",
+          type: "assistant",
+          agent: "build",
+          model: { id: "model", providerID: "provider" },
+          content: [
+            {
+              type: "tool",
+              id: "call_live",
+              name: "subagent",
+              state: {
+                status: "running",
+                input: { description: "Foreground task", agent: "explore" },
+                metadata: { sessionID: childID },
+              },
+              time: { created: 4 },
+            },
+          ],
+          time: { created: 4 },
+        },
+      ],
+      sessions: [
+        session(),
+        session({ id: childID, parentID: sessionID, title: "Foreground task", agent: "explore" }),
+      ],
+      sessionStatus: {
+        [sessionID]: { type: "busy" },
+        [childID]: { type: "busy" },
+      },
+    })
+
+    // The live list, not the capsule menu: the agent, its task and its run time are visible with nothing opened.
+    const live = page.locator('[data-slot="session-activity-live-row"]')
+    await expect(page.getByText("Working now", { exact: true })).toBeVisible()
+    await expect(live).toHaveCount(1)
+    await expect(live).toContainText("Explore")
+    await expect(live).toContainText("Foreground task")
+    await expect(live).toContainText(/\d+h \d{2}m/)
+    await expect(page.locator('[data-slot="session-activity-panel"]')).toHaveCount(0)
+    await expect(page.getByRole("button", { name: "1 subagent", exact: true })).toBeVisible()
   })
 
   test("separates blocking and already-backgrounded work into two rows", async ({ page }) => {

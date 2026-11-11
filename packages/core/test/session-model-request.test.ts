@@ -10,6 +10,7 @@ import {
   DIRECT_REPLY,
   FAILED_TOOL_RETRY,
   HIDE_MODEL_IDENTITY,
+  MULTI_AGENT,
   unsupportedParts,
 } from "@opencode/core/session/model-request"
 import { SessionMessage } from "@opencode/core/session/message"
@@ -322,6 +323,19 @@ describe("SessionModelRequest.FAILED_TOOL_RETRY", () => {
   })
 })
 
+describe("SessionModelRequest.MULTI_AGENT", () => {
+  test("independent fronts run in parallel subagents and join at the end", () => {
+    for (const topic of [
+      "split it and run each front in its own parallel subagent in the background",
+      "Fronts that depend on each other run in order, not in parallel",
+      "Give each front a short label of a few words saying what it does",
+      "a single small question or a single-file change is done directly, without subagents",
+    ]) {
+      expect(MULTI_AGENT).toContain(topic)
+    }
+  })
+})
+
 describe("SessionModelRequest.baseTranscript direct reply", () => {
   const model = SessionRunnerModel.resolved(OpenAIChat.route.model({ id: "gpt-5.5", provider: "test" }), {
     capabilities: { tools: true, input: ["text"], output: ["text"] },
@@ -363,5 +377,28 @@ describe("SessionModelRequest.baseTranscript direct reply", () => {
     const last = transcript.messages.at(-1)
     expect(last?.role).toBe("user")
     expect(JSON.stringify(last)).toContain('"oi"')
+  })
+
+  test("the multi-agent rule only rides along while the toggle is on", () => {
+    const messages = [textUser("Crie o PDV completo")]
+    const withToggle = baseTranscript({
+      agent: Agent.Info.default(Agent.ID.make("build")),
+      model,
+      tools: { definitions: [], execute: () => Effect.die("unused tool execution") },
+      initial: [],
+      messages,
+      multiAgent: true,
+    })
+    expect(withToggle.system.map((part) => part.text).join("\n")).toContain(
+      "run each front in its own parallel subagent in the background",
+    )
+    const withoutToggle = baseTranscript({
+      agent: Agent.Info.default(Agent.ID.make("build")),
+      model,
+      tools: { definitions: [], execute: () => Effect.die("unused tool execution") },
+      initial: [],
+      messages,
+    })
+    expect(withoutToggle.system.map((part) => part.text).join("\n")).not.toContain("parallel subagent")
   })
 })

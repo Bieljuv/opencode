@@ -5,6 +5,7 @@ import { setCursorPosition } from "@/composer/editor/dom"
 import { promptLength } from "@/composer/prompt-parts"
 import { createComposerModel } from "@/composer/model"
 import { useRouterEffort } from "@/composer/effort"
+import { useMultiAgent } from "@/composer/multi-agent"
 import { useSettings } from "@/settings/model"
 import { createActiveComposerAdapter } from "./adapter"
 import { useComposerFocus } from "./focus"
@@ -28,6 +29,8 @@ export function createSessionComposerController(input: {
 
   // One global effort selection for this composer: the dropdown beside the chip and every prompt it sends share it.
   const effort = useRouterEffort()
+  // One global multi-agent toggle for this composer, beside the effort dropdown; every prompt it sends shares it.
+  const multiAgent = useMultiAgent()
 
   const adapter = createActiveComposerAdapter({
     sessionID: input.sessionID,
@@ -48,6 +51,7 @@ export function createSessionComposerController(input: {
     behavior: settings.general.followUpBehavior,
     background,
     effort: effort.current,
+    multiAgent: multiAgent.current,
     restoreFocus: (cursor) => {
       const target = editor()
 
@@ -59,7 +63,7 @@ export function createSessionComposerController(input: {
     },
   })
 
-  const composer = createComposerModel(adapter, { queue, effort })
+  const composer = createComposerModel(adapter, { queue, effort, multiAgent })
   const editable = createMemo(() => region.showComposer() && !region.child())
   // This controller is recreated when a session becomes active, which is when its composer takes focus
   // (focus-machine.ts). It waits for the draft, the editor and any request dock or dialog to clear.

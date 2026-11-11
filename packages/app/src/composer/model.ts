@@ -34,6 +34,7 @@ import { createComposerHistory } from "./history/store"
 import { createComposerSubmit } from "./submit"
 import { composerSubmitView } from "./machine"
 import type { RouterEffortSelection } from "./effort"
+import type { MultiAgentSelection } from "./multi-agent"
 import { useAttachmentDestination } from "./attachments/destination"
 import { parseClientSlashCommand } from "./client-slash-command"
 
@@ -41,6 +42,8 @@ export type ComposerModel = ComposerEditorModel & {
   readonly model: ComposerControls["model"]
   /** The global effort selection for the automatic router, shown as a dropdown beside the chip. */
   readonly effort: RouterEffortSelection
+  /** The global multi-agent toggle, shown beside the effort dropdown. */
+  readonly multiAgent: MultiAgentSelection
 }
 
 const sendFailedTitle = {
@@ -51,7 +54,7 @@ const sendFailedTitle = {
 
 export function createComposerModel(
   adapter: ComposerAdapter,
-  options: { queue?: ComposerQueue; effort: RouterEffortSelection },
+  options: { queue?: ComposerQueue; effort: RouterEffortSelection; multiAgent: MultiAgentSelection },
 ): ComposerModel {
   const sdk = useWorkspaceLocation()
   const data = useData()
@@ -302,6 +305,7 @@ export function createComposerModel(
     adapter,
     mode,
     effort: options.effort.current,
+    multiAgent: options.multiAgent.current,
     commands: () => data.location.command.list({ directory: sdk().directory }),
     editor: () => editor,
     queueScroll: () => requestAnimationFrame(() => editor?.scrollIntoView({ block: "nearest" })),
@@ -573,6 +577,7 @@ export function createComposerModel(
 
   Object.defineProperty(controller, "model", { get: () => adapter.controls().model })
   Object.defineProperty(controller, "effort", { get: () => options.effort })
+  Object.defineProperty(controller, "multiAgent", { get: () => options.multiAgent })
 
   command.register("composer-editor", () => [
     {
