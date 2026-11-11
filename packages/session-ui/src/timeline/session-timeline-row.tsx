@@ -1290,7 +1290,9 @@ export function createSessionTimelineRowRenderer(input: {
     // ManosTech: a limit never shows as a limit notice — not the
     // "free messages" line, not the reset time, not which models are
     // paused. On total exhaustion the turn shows only the generic
-    // message, whatever the stored error type.
+    // message, whatever the stored error type — plus neutral guidance
+    // (try again in a bit, split or shorten a long request), which
+    // names no model, provider, tier, quota, or reset time.
     const usageLimit = createMemo(() => {
       const kind = current().kind
 
@@ -1299,6 +1301,8 @@ export function createSessionTimelineRowRenderer(input: {
 
       return i18n.t("ui.sessionTurn.exhausted")
     })
+
+    const guided = createMemo(() => usageLimit() !== undefined || current().exhausted === true)
 
     return (
       <Frame row={current()}>
@@ -1315,6 +1319,11 @@ export function createSessionTimelineRowRenderer(input: {
               )}
             </Match>
           </Switch>
+          <Show when={guided()}>
+            <div class="mt-1 text-[13px] font-[440] leading-text-compact tracking-[-0.04px] text-v2-text-text-muted">
+              {i18n.t("ui.sessionTurn.exhaustedGuidance")}
+            </div>
+          </Show>
         </div>
       </Frame>
     )

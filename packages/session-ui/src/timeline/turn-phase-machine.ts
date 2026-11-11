@@ -6,6 +6,8 @@ export type TurnErrorInfo = {
   readonly text: string
   readonly kind?: TurnLimitKind
   readonly resetAt?: number
+  /** Every route refused: the timeline shows guidance below the generic message, never a cause. */
+  readonly exhausted?: boolean
 }
 
 export type TurnThinkingPlacement = "separate" | "grouped" | "hidden"

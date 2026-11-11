@@ -87,6 +87,8 @@ const source = {
   "ui.sessionTurn.retry.attemptRetryingNow": "Attempt {{attempt}} - retrying",
   "ui.sessionTurn.retry.geminiHot": "gemini is way too hot right now",
   "ui.sessionTurn.exhausted": "Try again later.",
+  "ui.sessionTurn.exhaustedGuidance":
+    "You can try again in a few minutes. If the request is long, split it into smaller parts or rephrase it more briefly.",
   "ui.sessionTurn.budgetLimit.all":
     "Workspace budget reached · paid models paused until {{time}} · free models still work",
   "ui.sessionTurn.budgetLimit.allUntilReset":

@@ -1733,6 +1733,35 @@ describe("current session timeline rows", () => {
     )
   })
 
+  test("marks total exhaustion so the timeline can guide the user, and nothing else", () => {
+    const user = { id: "msg_user", type: "user", text: "prompt", time: { created: 1 } } satisfies SessionMessageInfo
+    const assistant = {
+      id: "msg_assistant",
+      type: "assistant",
+      agent: "build",
+      model: { id: "model", providerID: "provider" },
+      content: [],
+      finish: "error",
+      error: { type: "provider.exhausted", message: "Tente novamente mais tarde." },
+      time: { created: 2, completed: 3 },
+    } satisfies SessionMessageAssistant
+
+    expect(Timeline.constructSessionMessageRows([user, assistant], true, { type: "idle" }).rows.at(-1)).toEqual(
+      new TimelineRow.Error({
+        userMessageID: "msg_user",
+        text: "Tente novamente mais tarde.",
+        exhausted: true,
+      }),
+    )
+    expect(
+      Timeline.constructSessionMessageRows(
+        [user, { ...assistant, error: { type: "provider.auth", message: "No access." } }],
+        true,
+        { type: "idle" },
+      ).rows.at(-1),
+    ).toEqual(new TimelineRow.Error({ userMessageID: "msg_user", text: "No access." }))
+  })
+
   test("summarizes a turn's changed files after the idle marker that ends it", () => {
     const step = (id: string, files?: string[]) =>
       ({

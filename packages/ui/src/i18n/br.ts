@@ -330,6 +330,8 @@ export const dict = {
   "ui.sessionTurn.diffs.failed": "Diff indisponível",
   "ui.sessionTurn.diffs.retry": "Tentar novamente",
   "ui.sessionTurn.exhausted": "Tente novamente mais tarde.",
+  "ui.sessionTurn.exhaustedGuidance":
+    "Você pode tentar de novo em alguns minutos. Se o pedido for longo, divida-o em partes menores ou reformule-o de forma mais curta.",
   "ui.sources.count.one": "{{count}} fonte",
   "ui.sources.count.other": "{{count}} fontes",
   "ui.sources.noResults": "Nenhum resultado",
