@@ -38,6 +38,7 @@ import { Icon } from "@opencode/ui/icon"
 import { Tooltip } from "@opencode/ui/tooltip"
 import { createSessionTimelineInteraction } from "./timeline/interaction"
 import { createTimelineSearchController } from "./timeline/search-controller"
+import { PreviewAutoOpen } from "./preview-auto-open"
 import { TimelineSearchBar } from "./timeline/search-bar"
 import { createTimelineQuote, TimelineQuote } from "./timeline/quote"
 import { createTimelineQuoteHighlight } from "./timeline/quote-highlight"
@@ -286,6 +287,7 @@ function SessionScreenContent(props: {
 
       return (
         <PluginLinks session={own()} active={active()}>
+          <PreviewAutoOpen session={own()} active={active()} />
           <MessageTimeline
             active={active()}
             hideHeader={!isDesktop()}
