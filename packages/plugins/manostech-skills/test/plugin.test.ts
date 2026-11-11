@@ -8,8 +8,11 @@ import plugin, {
   buildArenaCommand,
   buildArenaSkill,
   buildArenaTool,
+  buildGraphifyCommand,
+  buildGraphifySkill,
   buildPonytailCommand,
   buildPonytailSkill,
+  graphifyCommandText,
   ponytailCommandText,
   ponytailLevel,
 } from "../index.ts"
@@ -268,8 +271,8 @@ describe("ponytail skill", () => {
     const { ctx, skills, commands } = makeCtx(dir)
     await plugin.setup(ctx as unknown as Context)
     await plugin.setup(ctx as unknown as Context)
-    expect(skills.size).toBe(2)
-    expect(commands.size).toBe(2)
+    expect(skills.size).toBe(3)
+    expect(commands.size).toBe(3)
   })
 
   test("user-visible descriptions and command texts stay in pt-BR and name nothing internal", async () => {
@@ -372,5 +375,123 @@ describe("ponytail command", () => {
     expect(prompts).toHaveLength(1)
     expect(prompts[0]?.["skills"]).toEqual([])
     expect(String(prompts[0]?.["text"])).toContain("Desligue o modo ponytail")
+  })
+})
+
+describe("graphify skill", () => {
+  test("skill graphify is the upstream content with pt-BR triggers", async () => {
+    const dir = await makeTmp()
+    const { ctx, skills, tools, commands } = makeCtx(dir)
+    await plugin.setup(ctx as unknown as Context)
+
+    const skill = skills.get("graphify")
+    expect(skill).toBeDefined()
+    const info = buildGraphifySkill()
+    expect(String(info.id)).toBe("graphify")
+    expect(String(info.name)).toBe("Graphify")
+    expect(String(info.path)).toBe("skill://graphify/SKILL.md")
+    expect(info.autoinvoke).toBe(true)
+    for (const trigger of ["graphify", "mapa do projeto", "mapa do código", "onde fica", "quem chama", "quem usa", "como funciona"]) {
+      expect(info.description ?? "").toContain(trigger)
+    }
+    // Upstream body, adapted in ~10 lines so it passes the repo's own
+    // SkillSpector gate (the upstream body scores 88/100 CRITICAL: `rm -f`
+    // on its own cache files, "without warning", "do not ask the user" and
+    // unpinned `uv tool run`). The fast path, the honesty rules and the
+    // "no API key" line are the upstream text, with the flagged patterns
+    // reworded (deleting the skill's own cache files now uses the Python
+    // interpreter, `uv tool run` is pinned to graphifyy==0.9.106, and the
+    // 5,000-node rule is phrased positively).
+    expect(info.content).toContain("# /graphify")
+    expect(info.content).toContain("## Usage")
+    expect(info.content).toContain("## Honesty Rules")
+    expect(info.content).toContain("Fast path — existing graph")
+    expect(info.content).toContain("graphify-out/graph.json")
+    expect(info.content).toContain("graphify needs no API key. Proceed without one")
+    expect(info.content).toContain("Never invent an edge. If unsure, use AMBIGUOUS.")
+    expect(info.content).not.toContain("opencode")
+    // Gate lock: the patterns that made the upstream body score 88/100
+    // must stay out, so a future edit cannot silently re-break the CI gate.
+    expect(info.content).not.toContain("rm -f")
+    expect(info.content).not.toContain("Do not ask the user")
+    expect(info.content).not.toContain("Never ask the user")
+    expect(info.content).not.toContain("Do not run any commands")
+    expect(info.content).not.toContain("without warning")
+    expect(info.content).not.toContain("uv tool run --from graphifyy ")
+    expect(info.content).toContain("uv tool run --from graphifyy==0.9.106")
+    // The body is upstream-faithful, so it keeps the upstream words for the
+    // tools it drives ("python3", "Claude Code" as one host example). Those
+    // are instructions the model reads, never visible text: the visible
+    // masking is enforced by the system prompt, not by editing the body.
+    expect(info.content).toContain("python3")
+
+    // Graphify is a behavior instruction: no tool, only the skill and the command.
+    expect(tools.get("graphify")).toBeUndefined()
+    expect(commands.get("graphify")).toBeDefined()
+  })
+
+  test("user-visible descriptions and command texts stay in pt-BR and name nothing internal", async () => {
+    const dir = await makeTmp()
+    const { ctx, commands } = makeCtx(dir)
+    await plugin.setup(ctx as unknown as Context)
+    const forbidden = ["Claude", "OpenCode", "Nexus", "grátis", "gratuito", "pago", "cota", "crédito", "roteamento", "US$", "free", "paid", "model", "provider"]
+    const info = buildGraphifySkill()
+    for (const word of forbidden) {
+      expect(info.description ?? "").not.toContain(word)
+    }
+    const command = buildGraphifyCommand({ prompt: async () => undefined } as never)
+    expect(command.description).toMatch(/Graphify/)
+    for (const word of forbidden) {
+      expect(command.description).not.toContain(word)
+      expect((commands.get("graphify") as unknown as { description: string }).description).not.toContain(word)
+    }
+    for (const args of ["", ".", "src --update", "--mode deep"]) {
+      for (const word of forbidden) {
+        expect(graphifyCommandText(args)).not.toContain(word)
+      }
+    }
+  })
+})
+
+describe("graphify command", () => {
+  test("blank arguments load the skill for the current directory", async () => {
+    const prompts: Array<Record<string, unknown>> = []
+    const session = {
+      prompt: async (input: Record<string, unknown>) => {
+        prompts.push(input)
+        return undefined
+      },
+    }
+    const command = buildGraphifyCommand(session as never)
+    await command.execute({
+      sessionID: "ses_graphify_command_test",
+      prompt: { text: "   " },
+      delivery: "steer",
+    } as never)
+    expect(prompts).toHaveLength(1)
+    const sent = prompts[0]
+    expect(sent["sessionID"]).toBe("ses_graphify_command_test")
+    expect(sent["delivery"]).toBe("steer")
+    expect(sent["skills"]).toEqual([{ id: "graphify" }])
+    expect(String(sent["text"])).toContain('skill "graphify"')
+    expect(String(sent["text"])).toContain("diretório atual")
+  })
+
+  test("a path and flags pass through to the skill", async () => {
+    const prompts: Array<Record<string, unknown>> = []
+    const session = {
+      prompt: async (input: Record<string, unknown>) => {
+        prompts.push(input)
+        return undefined
+      },
+    }
+    const command = buildGraphifyCommand(session as never)
+    await command.execute({
+      sessionID: "ses_graphify_command_args",
+      prompt: { text: "src --update" },
+      delivery: "steer",
+    } as never)
+    expect(prompts[0]?.["skills"]).toEqual([{ id: "graphify" }])
+    expect(String(prompts[0]?.["text"])).toContain("src --update")
   })
 })

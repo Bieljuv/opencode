@@ -5,6 +5,7 @@ import type { ToolContext } from "@opencode/plugin/promise/tool"
 import { Schema } from "effect"
 import matter from "gray-matter"
 import skillMd from "./skills/arena/SKILL.md" with { type: "text" }
+import graphifyMd from "./skills/graphify/SKILL.md" with { type: "text" }
 import ponytailMd from "./skills/ponytail/SKILL.md" with { type: "text" }
 import { runArena } from "./src/bracket.ts"
 
@@ -22,10 +23,21 @@ import { runArena } from "./src/bracket.ts"
  * description matches any coding task, so the agent loads it on the first
  * coding turn and it stays active for the session; `/ponytail` switches the
  * level (lite/full/ultra, default full) or turns it off.
+ *
+ * Graphify: the project map, as the `skill://graphify` virtual skill and the
+ * `/graphify` command. The skill is the upstream Graphify skill, byte for
+ * byte except for the frontmatter (pt-BR triggers); it tells the agent to
+ * build the map of the project (graphify-out/) with the graphify CLI when it
+ * is installed and to consult the map before reading files. The map rule in
+ * the system prompt makes consulting the map mandatory, and when the CLI is
+ * not installed the agent builds a lightweight map with its own tools —
+ * nobody is ever asked to install Python or anything else.
  */
 
 export const ARENA_SKILL_ID = "arena"
 export const ARENA_SKILL_PATH = "skill://arena/SKILL.md"
+export const GRAPHIFY_SKILL_ID = "graphify"
+export const GRAPHIFY_SKILL_PATH = "skill://graphify/SKILL.md"
 export const PONYTAIL_SKILL_ID = "ponytail"
 export const PONYTAIL_SKILL_PATH = "skill://ponytail/SKILL.md"
 
@@ -52,6 +64,18 @@ export function buildPonytailSkill(): Skill.Info {
     description: parsed.data.description,
     autoinvoke: parsed.data["disable-model-invocation"] !== true,
     path: Skill.Info.fields.path.make(PONYTAIL_SKILL_PATH),
+    content: parsed.content,
+  })
+}
+
+export function buildGraphifySkill(): Skill.Info {
+  const parsed = matter(graphifyMd)
+  return Skill.Info.make({
+    id: Skill.ID.make(GRAPHIFY_SKILL_ID),
+    name: Skill.Name.make("Graphify"),
+    description: parsed.data.description,
+    autoinvoke: parsed.data["disable-model-invocation"] !== true,
+    path: Skill.Info.fields.path.make(GRAPHIFY_SKILL_PATH),
     content: parsed.content,
   })
 }
@@ -163,6 +187,31 @@ export function buildPonytailCommand(session: Pick<SessionDomain, "prompt">) {
   }
 }
 
+export function graphifyCommandText(args: string): string {
+  const trimmed = args.trim()
+  return [
+    "Construa ou consulte o mapa do projeto com a skill \"graphify\". Primeiro carregue a skill \"graphify\" com a ferramenta skill (id \"graphify\") e siga as instruções dela à risca, sem pular passos.",
+    "",
+    `Argumentos: ${trimmed ? trimmed : "(nenhum — diretório atual.)"}`,
+  ].join("\n")
+}
+
+export function buildGraphifyCommand(session: Pick<SessionDomain, "prompt">) {
+  return {
+    name: "graphify",
+    description: "Graphify: o mapa do projeto — consulte antes de ler os arquivos, construa quando não existir",
+    execute: async (input: CommandInvocation) => {
+      await session.prompt({
+        ...input.prompt,
+        sessionID: input.sessionID,
+        text: graphifyCommandText(input.prompt.text),
+        skills: [{ id: GRAPHIFY_SKILL_ID }],
+        delivery: input.delivery,
+      })
+    },
+  }
+}
+
 export default Plugin.define({
   id: "manostech.skills",
   async setup(ctx) {
@@ -172,6 +221,8 @@ export default Plugin.define({
       if (!editor.get(arena.id)) editor.add(arena)
       const ponytail = buildPonytailSkill()
       if (!editor.get(ponytail.id)) editor.add(ponytail)
+      const graphify = buildGraphifySkill()
+      if (!editor.get(graphify.id)) editor.add(graphify)
     })
     await ctx.tool.transform((editor) => {
       if (editor.get("arena")) return
@@ -192,6 +243,7 @@ export default Plugin.define({
     await ctx.command.transform((editor) => {
       editor.add(buildArenaCommand(ctx.session))
       editor.add(buildPonytailCommand(ctx.session))
+      editor.add(buildGraphifyCommand(ctx.session))
     })
   },
 })

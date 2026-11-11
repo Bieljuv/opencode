@@ -111,6 +111,28 @@ export const TOKEN_ECONOMY =
   "Token economy: be economical with tokens. Summarize long context in your own words before reasoning over it; prefer short, direct answers; do not repeat the user's text or tool output verbatim; only read the files and tool output you actually need."
 
 /**
+ * ManosTech mandatory token saving, appended to the system prompt of every
+ * turn. The ponytail and graphify skills are not optional: ponytail keeps
+ * every change minimal, and graphify keeps the agent from re-reading the
+ * codebase on every question by consulting the project map. When the
+ * graphify CLI is not installed the agent builds a lightweight map with its
+ * own tools — nobody is ever asked to install anything, and the turn never
+ * fails because the map is missing.
+ */
+export const MANDATORY_TOKEN_SAVING =
+  "Token saving (mandatory, every turn): the ponytail and graphify skills are not optional. On every coding turn, apply the ponytail skill: the smallest change that fully solves the task. Before reading files to understand the codebase, consult the project map at graphify-out/graph.json or graphify-out/GRAPH_REPORT.md when it exists, and read only the files it points to. When no map exists and the task needs broad codebase understanding, build one: use the graphify CLI when installed, otherwise build a lightweight map with your own tools (tree, entry points, modules, imports, callers) and save it to graphify-out/GRAPH_REPORT.md. For a single targeted lookup, search directly instead of building a map. Never ask the user to install anything, and never fail the turn because the map is missing — fall back to normal file reading. The graphify skill was written for another editor: never create a CLAUDE.md and never install hooks here."
+
+/**
+ * ManosTech Arena auto-activation, appended to the system prompt of every
+ * turn. The tournament is a tool the agent fires when the request justifies
+ * it, not on every turn. The triggers are dissatisfaction, a high-stakes
+ * decision, or a complex task whose first attempt was weak. Trivial
+ * requests never fire it; when unsure, offer it instead.
+ */
+export const ARENA_AUTO =
+  "Arena (automatic, only when the request justifies it): invoke the arena tool when (a) the user is unhappy with a previous answer (\"resposta ruim\", \"tenta de novo\", \"não gostei\", \"faz de novo\", \"errado\" after your answer), (b) the request is a high-stakes decision that is hard to reverse (choosing between approaches, architecture, or a library), or (c) the task is complex and your first attempt was weak (it failed, or the user had to correct it). Never run the tournament for a trivial request (a greeting, a quick question, a small fix). When unsure, offer the tournament and ask instead of running it silently. When you run it, tell the user in chat that the tournament is running and why, so they know why it takes longer. The user can always start it directly with /arena."
+
+/**
  * ManosTech identity masking, appended to the system prompt of every turn.
  * The user must never learn which model or provider is answering, what tier
  * it runs on, or that models are switched behind the scenes. The rule covers
@@ -203,6 +225,17 @@ export const baseTranscript = (input: {
       // reads the error, adjusts, and after a second failure of the same
       // operation stops and tells the user.
       SystemPart.make(FAILED_TOOL_RETRY),
+      // ManosTech mandatory token saving: embedded in every message,
+      // invisible to the user. The ponytail and graphify skills are not
+      // optional — the agent applies them on every turn where they fit, and
+      // consults (or builds) the project map instead of re-reading files.
+      SystemPart.make(MANDATORY_TOKEN_SAVING),
+      // ManosTech Arena auto-activation: embedded in every message,
+      // invisible to the user. The agent fires the tournament when the
+      // request justifies it (dissatisfaction, a high-stakes decision, or
+      // a weak first attempt), never for a trivial request, and offers it
+      // instead when unsure.
+      SystemPart.make(ARENA_AUTO),
       // ManosTech multi-agent: only while the toggle is on. The agent splits
       // independent fronts across parallel subagents and joins the results;
       // the user watches each front live by its task label.
