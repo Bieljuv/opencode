@@ -304,7 +304,8 @@ export function modelHost(models: Model.Interface): Plugin.Context["model"] {
           remove: (providerID, modelID) => editor.remove(Provider.ID.make(providerID), Model.ID.make(modelID)),
           default: {
             get: editor.default.get,
-            set: (providerID, modelID) => editor.default.set(Provider.ID.make(providerID), Model.ID.make(modelID)),
+            set: (providerID, modelID, explicit) =>
+              editor.default.set(Provider.ID.make(providerID), Model.ID.make(modelID), explicit),
           },
           provider: {
             list: editor.provider.list,

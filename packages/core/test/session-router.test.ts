@@ -17,6 +17,7 @@ import {
   fitsPrompt,
   isExhaustionError,
   isFreeModel,
+  isGatewayModel,
   isHopSignal,
   isRoutable,
   multiAgentFromMetadata,
@@ -55,6 +56,20 @@ describe("isFreeModel", () => {
   })
   test("priced output is paid", () => {
     expect(isFreeModel(free("openrouter", "x", { cost: [priced(0, 2)] }))).toBe(false)
+  })
+})
+
+describe("isGatewayModel", () => {
+  test("the gateway's single route is the gateway model", () => {
+    expect(isGatewayModel({ providerID: Provider.ID.make("manostech"), id: Model.ID.make("auto") })).toBe(true)
+  })
+  test("a direct free model is not the gateway model", () => {
+    expect(isGatewayModel({ providerID: Provider.ID.make("opencode"), id: Model.ID.make("mimo-v2.6-flash-free") })).toBe(
+      false,
+    )
+  })
+  test("no session model is not the gateway model", () => {
+    expect(isGatewayModel(undefined)).toBe(false)
   })
 })
 

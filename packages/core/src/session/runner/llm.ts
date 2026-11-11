@@ -301,7 +301,7 @@ const layer = Layer.effect(
         multiAgent,
         explicit,
       })
-      if (!explicit) {
+      if (!explicit && !SessionRouter.isGatewayModel(first.session.model)) {
         // The chain head answers this step unless it is already the session
         // model. The switch is published, so the loop below re-resolves the
         // new model; the user never sees the change. A head that is already
@@ -309,7 +309,9 @@ const layer = Layer.effect(
         // continuation step the head is the next free model after the
         // session model when the turn runs on a free model, so rotation
         // keeps moving mid-task; a turn on a paid model keeps its model
-        // (see stepHead).
+        // (see stepHead). A session on the gateway keeps its model too:
+        // the gateway is the automatic mode, not a free model to rotate
+        // away from, and leaving it would bypass the panel.
         const sessionModel = first.session.model
         const sessionModelFree =
           sessionModel !== undefined &&

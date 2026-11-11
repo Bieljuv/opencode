@@ -13,7 +13,13 @@ export interface ModelEditor {
   remove(providerID: string, modelID: string): void
   readonly default: {
     get(): { providerID: string; modelID: string } | undefined
-    set(providerID: string, modelID: string): void
+    /**
+     * Sets the model new sessions resolve to. `explicit` marks whether the
+     * default is an explicit choice; an internal automatic default passes
+     * false, so it never counts as a configured choice and never disables
+     * the free-model rotation. Defaults to true.
+     */
+    set(providerID: string, modelID: string, explicit?: boolean): void
   }
   /** Immutable provider inputs, including inactive templates, before model transforms. */
   readonly provider: {

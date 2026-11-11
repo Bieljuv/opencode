@@ -90,10 +90,15 @@ export const ManosTechGatewayPlugin = define({
       // whichever transform runs first). Without a credential the model is
       // not in the catalog and nothing changes; on logout the next rebuild
       // starts from an empty default again. The default is internal — no
-      // model, provider, or tier name reaches visible text.
+      // model, provider, or tier name reaches visible text. It is also
+      // internal to the router: the gateway is the automatic mode, not an
+      // explicit model choice, so it is set with explicit false — otherwise
+      // every session would count as having an explicit model and the
+      // free-model rotation would never run, pinning direct sessions to
+      // whichever model they happened to start on.
       if (models.get("manostech", "auto") === undefined) return
       if (models.default.get() !== undefined) return
-      models.default.set("manostech", "auto")
+      models.default.set("manostech", "auto", false)
     })
   }),
 })
