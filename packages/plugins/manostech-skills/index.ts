@@ -28,13 +28,15 @@ import { runArena } from "./src/bracket.ts"
  * level (lite/full/ultra, default full) or turns it off.
  *
  * Graphify: the project map, as the `skill://graphify` virtual skill and the
- * `/graphify` command. The skill is the upstream Graphify skill, byte for
- * byte except for the frontmatter (pt-BR triggers); it tells the agent to
- * build the map of the project (graphify-out/) with the graphify CLI when it
- * is installed and to consult the map before reading files. The map rule in
- * the system prompt makes consulting the map mandatory, and when the CLI is
- * not installed the agent builds a lightweight map with its own tools —
- * nobody is ever asked to install Python or anything else.
+ * `/graphify` command. The skill is adapted from the upstream Graphify skill:
+ * the pipeline, the honesty rules and the fast path are kept, but the
+ * supporting procedures the skill cites live in `skills/graphify/references/`
+ * beside it (the upstream ships them separately and they were missing), the
+ * tool is only ever detected — never installed, downloaded or upgraded — and
+ * when it is not available the agent builds a native lightweight map with its
+ * own tools into `graphify-out/GRAPH_REPORT.md`. Nobody is ever asked to
+ * install anything, and the skill names no provider, model, key or install
+ * command anywhere.
  *
  * Openverse: the open-license sound search, as the `skill://openverse`
  * virtual skill and the `/openverse` command. The skill is written here
