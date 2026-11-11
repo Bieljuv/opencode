@@ -570,6 +570,7 @@ export function CurrentUserMessageDisplay(props: {
             const mediaView = createMemo(() => viewAttachmentMedia(mediaState(), mediaTarget()))
             const name = () => file().name ?? i18n.t("ui.message.attachment.alt")
             const image = () => file().mime.startsWith("image/")
+            const video = () => file().mime.startsWith("video/")
 
             const width = () => {
               const current = file()
@@ -589,6 +590,57 @@ export function CurrentUserMessageDisplay(props: {
                 height: height(),
                 loaded: mediaView().status === "ready",
               })
+
+            // A video attachment plays inline with native controls instead of
+            // opening an image preview; the button below downloads or reveals
+            // the file through the same open-attachment action as other files.
+            if (video()) {
+              return (
+                <div
+                  data-slot="user-message-attachment"
+                  data-type="video"
+                  data-clickable={mediaView().canRetry ? "true" : undefined}
+                  data-placeholder={mediaView().placeholder ? "true" : undefined}
+                  onClick={() => {
+                    if (mediaView().canRetry) dispatchMedia({ type: "retry.requested", target: mediaTarget() })
+                  }}
+                >
+                  <Switch>
+                    <Match when={mediaView().src}>
+                      {(src) => (
+                        <video
+                          data-slot="user-message-attachment-video"
+                          src={src()}
+                          controls
+                          preload="metadata"
+                          aria-label={name()}
+                        />
+                      )}
+                    </Match>
+                    <Match when={mediaView().status === "failed"}>
+                      <div
+                        data-slot="user-message-attachment-icon"
+                        role="img"
+                        aria-label={i18n.t("ui.fileMedia.state.error", {
+                          kind: i18n.t("ui.fileMedia.kind.video"),
+                        })}
+                      >
+                        <Icon name="outline-video" size="small" />
+                      </div>
+                    </Match>
+                  </Switch>
+                  <Show when={mediaView().src && props.actions?.openAttachment}>
+                    <button
+                      type="button"
+                      data-slot="user-message-attachment-open"
+                      onClick={() => props.actions?.openAttachment?.(file())}
+                    >
+                      {i18n.t("ui.sessionReview.openFile")}
+                    </button>
+                  </Show>
+                </div>
+              )
+            }
 
             return (
               <Show

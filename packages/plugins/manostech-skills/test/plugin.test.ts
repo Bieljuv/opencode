@@ -10,17 +10,20 @@ import plugin, {
   buildArenaTool,
   buildGraphifyCommand,
   buildGraphifySkill,
+  buildHyperframesSkill,
   buildOpenverseCommand,
   buildOpenverseSkill,
   buildPonytailCommand,
   buildPonytailSkill,
   buildRealSfxCommand,
   buildRealSfxSkill,
+  buildVideoCommand,
   graphifyCommandText,
   openverseCommandText,
   ponytailCommandText,
   ponytailLevel,
   realSfxCommandText,
+  videoCommandText,
 } from "../index.ts"
 import { ArenaError } from "../src/bracket.ts"
 
@@ -277,8 +280,11 @@ describe("ponytail skill", () => {
     const { ctx, skills, commands } = makeCtx(dir)
     await plugin.setup(ctx as unknown as Context)
     await plugin.setup(ctx as unknown as Context)
-    expect(skills.size).toBe(5)
-    expect(commands.size).toBe(5)
+    // Six skills (arena, ponytail, graphify, hyperframes, openverse,
+    // real-sfx) and six commands (arena, ponytail, graphify, openverse,
+    // real-sfx, video): setup twice still registers each one once.
+    expect(skills.size).toBe(6)
+    expect(commands.size).toBe(6)
   })
 
   test("user-visible descriptions and command texts stay in pt-BR and name nothing internal", async () => {
@@ -729,5 +735,132 @@ describe("real-sfx command", () => {
     } as never)
     expect(prompts[0]?.["skills"]).toEqual([{ id: "real-sfx" }])
     expect(String(prompts[0]?.["text"])).toContain("video.mp4 cues.json")
+  })
+})
+
+describe("hyperframes skill", () => {
+  test("skill hyperframes is the workspace HyperFrames skill adapted to the bundled tools", async () => {
+    const dir = await makeTmp()
+    const { ctx, skills, tools, commands } = makeCtx(dir)
+    await plugin.setup(ctx as unknown as Context)
+
+    const skill = skills.get("hyperframes")
+    expect(skill).toBeDefined()
+    const info = buildHyperframesSkill()
+    expect(String(info.id)).toBe("hyperframes")
+    expect(String(info.name)).toBe("HyperFrames")
+    expect(String(info.path)).toBe("skill://hyperframes/SKILL.md")
+    expect(info.autoinvoke).toBe(true)
+    for (const trigger of ["hyperframes", "fazer vídeo", "vídeo do produto", "renderizar vídeo", "clipe vertical"]) {
+      expect(info.description ?? "").toContain(trigger)
+    }
+    // Adapted from the workspace HyperFrames skill: the contract, the house
+    // rules and the work cycle are kept, but the environment section is
+    // rewritten for this app — Node and FFmpeg come bundled with the
+    // installer, never assumed from the user's machine — and the skill ends
+    // in the single flow (render, add real sound, deliver with a player
+    // page) instead of stopping at the MP4.
+    expect(info.content).toContain("# /video")
+    expect(info.content).toContain("data-start")
+    expect(info.content).toContain("data-duration")
+    expect(info.content).toContain("hyperframes doctor")
+    expect(info.content).toContain("hyperframes browser ensure")
+    expect(info.content).toContain("FLUXO ÚNICO")
+    expect(info.content).toContain("real-sfx")
+    expect(info.content).toContain("openverse")
+    expect(info.content).toContain("assistir.html")
+    expect(info.content).toContain("video-pronto_sfx.mp4")
+    expect(info.content).toContain("sem zoom nem efeito Ken Burns")
+    expect(info.content).toContain("60 segundos ou mais")
+    expect(info.content).not.toContain("opencode")
+    // The old workspace claim ("Node e FFmpeg JÁ VÊM DENTRO do Editor")
+    // described the other desktop, not this one: it must not survive here.
+    expect(info.content).not.toContain("JÁ VÊM DENTRO")
+    // The masking words stay out of the skill text, and the gate patterns
+    // that broke the upstream Graphify body stay out too.
+    for (const word of ["Claude", "OpenCode", "python3", "Python", "Shift+Tab", "free", "paid", "model", "provider", "grátis", "pago", "cota"]) {
+      expect(info.content).not.toContain(word)
+      expect(info.description ?? "").not.toContain(word)
+    }
+    expect(info.content).not.toContain("rm -f")
+    expect(info.content).not.toContain("Do not ask the user")
+    expect(info.content).not.toContain("Never ask the user")
+    expect(info.content).not.toContain("Do not run any commands")
+    expect(info.content).not.toContain("without warning")
+
+    // HyperFrames is a behavior instruction: no tool, only the skill. The
+    // entry point is the /video command, which loads the three flow skills.
+    expect(tools.get("hyperframes")).toBeUndefined()
+    expect(commands.get("hyperframes")).toBeUndefined()
+    expect(commands.get("video")).toBeDefined()
+  })
+
+  test("user-visible descriptions and command texts stay in pt-BR and name nothing internal", async () => {
+    const dir = await makeTmp()
+    const { ctx, commands } = makeCtx(dir)
+    await plugin.setup(ctx as unknown as Context)
+    const forbidden = ["Claude", "OpenCode", "Nexus", "grátis", "gratuito", "pago", "cota", "crédito", "roteamento", "US$", "free", "paid", "model", "provider"]
+    const info = buildHyperframesSkill()
+    for (const word of forbidden) {
+      expect(info.description ?? "").not.toContain(word)
+    }
+    const command = buildVideoCommand({ prompt: async () => undefined } as never)
+    expect(command.description).toMatch(/Vídeo/)
+    for (const word of forbidden) {
+      expect(command.description).not.toContain(word)
+      expect((commands.get("video") as unknown as { description: string }).description).not.toContain(word)
+    }
+    for (const args of ["", "lançamento do app"]) {
+      for (const word of forbidden) {
+        expect(videoCommandText(args)).not.toContain(word)
+      }
+    }
+  })
+})
+
+describe("video command", () => {
+  test("blank arguments load the three flow skills for what the conversation asks", async () => {
+    const prompts: Array<Record<string, unknown>> = []
+    const session = {
+      prompt: async (input: Record<string, unknown>) => {
+        prompts.push(input)
+        return undefined
+      },
+    }
+    const command = buildVideoCommand(session as never)
+    await command.execute({
+      sessionID: "ses_video_command_test",
+      prompt: { text: "   " },
+      delivery: "steer",
+    } as never)
+    expect(prompts).toHaveLength(1)
+    const sent = prompts[0]
+    expect(sent["sessionID"]).toBe("ses_video_command_test")
+    expect(sent["delivery"]).toBe("steer")
+    // One flow, three skills: render (hyperframes), add sound (real-sfx),
+    // find the sounds (openverse). No step is left for the agent to remember.
+    expect(sent["skills"]).toEqual([{ id: "hyperframes" }, { id: "real-sfx" }, { id: "openverse" }])
+    expect(String(sent["text"])).toContain('skill "hyperframes"')
+    expect(String(sent["text"])).toContain('skill "real-sfx"')
+    expect(String(sent["text"])).toContain('skill "openverse"')
+    expect(String(sent["text"])).toContain("(nenhum")
+  })
+
+  test("the video subject passes through to the skill", async () => {
+    const prompts: Array<Record<string, unknown>> = []
+    const session = {
+      prompt: async (input: Record<string, unknown>) => {
+        prompts.push(input)
+        return undefined
+      },
+    }
+    const command = buildVideoCommand(session as never)
+    await command.execute({
+      sessionID: "ses_video_command_args",
+      prompt: { text: "tour da tela inicial" },
+      delivery: "steer",
+    } as never)
+    expect(prompts[0]?.["skills"]).toEqual([{ id: "hyperframes" }, { id: "real-sfx" }, { id: "openverse" }])
+    expect(String(prompts[0]?.["text"])).toContain("tour da tela inicial")
   })
 })

@@ -4,8 +4,8 @@ import type { PromptAttachment } from "@opencode/client/promise"
 export const ATTACHMENT_MEDIA_TIMEOUT_MS = 15_000
 
 /**
- * What an attachment slot shows, read from its current attachment: nothing (not an image), a URL already in hand, a
- * `media:` reference nothing here can read, or a reference the host reads.
+ * What an attachment slot shows, read from its current attachment: nothing (not an image or a video), a URL already
+ * in hand, a `media:` reference nothing here can read, or a reference the host reads.
  */
 export type AttachmentMediaTarget =
   | { readonly kind: "none" }
@@ -73,11 +73,18 @@ export function resolveAttachmentMediaTarget(
   file: PromptAttachment,
   options: { readonly peekMedia?: (uri: string, mime: string) => string | undefined; readonly hasReader: boolean },
 ): AttachmentMediaTarget {
-  if (!file.mime.startsWith("image/")) return NONE_ATTACHMENT_MEDIA_TARGET
+  const isImage = file.mime.startsWith("image/")
+  const isVideo = file.mime.startsWith("video/")
+
+  if (!isImage && !isVideo) return NONE_ATTACHMENT_MEDIA_TARGET
 
   if (file.source?.type === "uri") return { kind: "direct", src: file.source.uri }
 
-  if ("data" in file && file.data !== undefined) return { kind: "direct", src: `data:${file.mime};base64,${file.data}` }
+  // A video never rides on an inline base64 payload: the data URI of an MP4
+  // would be many megabytes of text in the message. Images keep the direct
+  // data URI; a video with only inline data is unreadable here.
+  if (isImage && "data" in file && file.data !== undefined)
+    return { kind: "direct", src: `data:${file.mime};base64,${file.data}` }
 
   const uri = "uri" in file ? file.uri : undefined
 

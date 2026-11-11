@@ -27,6 +27,10 @@ O som nunca é sintetizado. Cada som que entra no vídeo é uma gravação real 
 
 Cada som usado entra no relatório com título, quem gravou, licença e a linha de atribuição (quando a licença pedir).
 
+## Onde esta skill entra no fluxo do vídeo
+
+Esta skill é o passo 4 do fluxo único do comando `/video`: o vídeo acabou de ser renderizado pela skill `hyperframes` e agora recebe som. Nesse caso o MP4 de entrada é o render (`video/video-pronto.mp4`), os momentos vêm da timeline dele (seção 1, item 2) e a saída é `video/video-pronto_sfx.mp4` — o mesmo arquivo que a página `video/assistir.html` aponta. Não volte ao passo de renderizar: se a mixagem falhar, siga para a seção "Se o FFmpeg não estiver disponível" e devolva o MP4 mudo com o relatório, sem travar a entrega.
+
 ## 1. Achar os momentos
 
 O momento é o instante exato em que algo pede som. Ache os momentos por uma destas fontes:

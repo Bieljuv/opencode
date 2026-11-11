@@ -141,8 +141,16 @@ test("shared packaging defaults", async () => {
   expect(config.nsis?.include).toBe(include)
   expect(await Bun.file(include).exists()).toBe(true)
   expect(config.files).toContain("!resources/opencode-cli*")
+  // The bundled video tools ship only when the build machine staged them
+  // (resources/manostech-tools/, git-ignored); the filter lists the
+  // directory so a staged build packs it and an unstaged build packs
+  // nothing extra.
   expect(config.extraResources).toEqual([
-    { from: "resources/", to: "", filter: ["opencode-cli", "opencode-cli.exe", "opencode-cli.version"] },
+    {
+      from: "resources/",
+      to: "",
+      filter: ["opencode-cli", "opencode-cli.exe", "opencode-cli.version", "manostech-tools/**"],
+    },
   ])
 })
 
