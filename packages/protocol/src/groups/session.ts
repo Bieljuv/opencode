@@ -499,6 +499,43 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S, FormI ext
       }).annotateMerge(OpenApi.annotations({ identifier: "session.revert.commit", summary: "Commit staged revert" })),
     )
     .add(
+      HttpApiEndpoint.post("session.revert.undoEdit", "/api/experimental/session/:sessionID/revert/undo-edit", {
+        params: { sessionID: Session.ID },
+        payload: Schema.Struct({ messageID: SessionMessage.ID, file: Schema.String }),
+        success: Schema.Struct({ data: Schema.NullOr(Session.UndoEdit) }),
+        error: [MessageNotFoundError, SessionNotFoundError, SessionBusyError, UnknownError],
+      })
+        .middleware(sessionLocationMiddleware)
+        .annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.session.revert.undoEdit",
+            summary: "Undo one file edit",
+            description:
+              "Experimental: may change without compatibility guarantees. Restore one file to its content before the given assistant step; other files that step touched stay as they are. Returns null when the step never changed the file or its edit no longer stands.",
+          }),
+        ),
+    )
+    .add(
+      HttpApiEndpoint.post(
+        "session.revert.undoLastEdit",
+        "/api/experimental/session/:sessionID/revert/undo-last-edit",
+        {
+          params: { sessionID: Session.ID },
+          success: Schema.Struct({ data: Schema.NullOr(Session.UndoEdit) }),
+          error: [SessionNotFoundError, SessionBusyError, UnknownError],
+        },
+      )
+        .middleware(sessionLocationMiddleware)
+        .annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.session.revert.undoLastEdit",
+            summary: "Undo the most recent file edit",
+            description:
+              "Experimental: may change without compatibility guarantees. Restore the last file the newest step with a standing edit touched; one call undoes one edit. Returns null when no step has an edit left to undo.",
+          }),
+        ),
+    )
+    .add(
       HttpApiEndpoint.get("session.context", "/api/session/:sessionID/context", {
         params: { sessionID: Session.ID },
         success: Schema.Struct({ data: Schema.Array(PublicSessionMessage) }),

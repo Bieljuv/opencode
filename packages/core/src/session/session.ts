@@ -355,7 +355,28 @@ export const make = Effect.fn("Session.make")(function* () {
     if (yield* execution.isActive(sessionID)) return yield* new BusyError({ sessionID })
     return yield* SessionRevert.commit(bus, session)
   })
-  const revert = { stage, clear, commit }
+  const undoEdit = Effect.fn("Session.revert.undoEdit")(function* (
+    sessionID: SessionSchema.ID,
+    input: { messageID: SessionMessage.ID; file: string },
+  ) {
+    const session = yield* get(sessionID)
+    if (yield* execution.isActive(sessionID)) return yield* new BusyError({ sessionID })
+    return yield* SessionRevert.undoEdit({ session, messageID: input.messageID, file: input.file }).pipe(
+      Effect.provideService(Instance.Service, instances),
+      Effect.provideService(Database.Service, database),
+      Effect.provideService(Bus.Service, bus),
+    )
+  })
+  const undoLastEdit = Effect.fn("Session.revert.undoLastEdit")(function* (sessionID: SessionSchema.ID) {
+    const session = yield* get(sessionID)
+    if (yield* execution.isActive(sessionID)) return yield* new BusyError({ sessionID })
+    return yield* SessionRevert.undoLastEdit({ session }).pipe(
+      Effect.provideService(Instance.Service, instances),
+      Effect.provideService(Database.Service, database),
+      Effect.provideService(Bus.Service, bus),
+    )
+  })
+  const revert = { stage, clear, commit, undoEdit, undoLastEdit }
   const operations = {
     get,
     message,
@@ -408,7 +429,9 @@ export const make = Effect.fn("Session.make")(function* () {
     const stage = operations.revert.stage.bind(undefined, sessionID)
     const clear = operations.revert.clear.bind(undefined, sessionID)
     const commit = operations.revert.commit.bind(undefined, sessionID)
-    const revert = { stage, clear, commit }
+    const undoEdit = operations.revert.undoEdit.bind(undefined, sessionID)
+    const undoLastEdit = operations.revert.undoLastEdit.bind(undefined, sessionID)
+    const revert = { stage, clear, commit, undoEdit, undoLastEdit }
 
     return {
       id: sessionID,

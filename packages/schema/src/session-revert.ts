@@ -13,6 +13,17 @@ export const Revert = Schema.Struct({
   files: Schema.Array(FileDiff.Info).pipe(optional),
 }).annotate({ identifier: "Session.Revert" })
 
+/**
+ * ManosTech: the result of undoing one file edit (audit I-30). The file is
+ * restored to its content before the step that changed it; every other file
+ * the step touched is left alone.
+ */
+export interface UndoEdit extends Schema.Schema.Type<typeof UndoEdit> {}
+export const UndoEdit = Schema.Struct({
+  messageID: SessionMessage.ID,
+  file: Schema.String,
+}).annotate({ identifier: "Session.UndoEdit" })
+
 const FileDiffV1 = Schema.Struct({
   path: Schema.String,
   status: Schema.Literals(["added", "modified", "deleted"]),
