@@ -1,19 +1,49 @@
 import { describe, expect, test } from "bun:test"
-import type { SessionMessageInfo } from "@opencode/client/promise"
+import type { SessionMessageAssistant, SessionMessageInfo } from "@opencode/client/promise"
 import { findPreviewHref, latestBuildPreview } from "./preview-link"
 
 const assistant = (
   id: string,
-  agent: string,
+  agent: SessionMessageAssistant["agent"],
   text: string,
   completed = true,
 ): SessionMessageInfo => ({
   id,
   type: "assistant",
-  agent: agent as "build",
+  agent,
   model: { id: "model", providerID: "provider" },
   content: [{ type: "text", text }],
   time: { created: 1, completed: completed ? 2 : undefined },
+})
+
+const assistantParts = (
+  id: string,
+  agent: SessionMessageAssistant["agent"],
+  parts: SessionMessageAssistant["content"],
+  completed = true,
+): SessionMessageInfo => ({
+  id,
+  type: "assistant",
+  agent,
+  model: { id: "model", providerID: "provider" },
+  content: parts,
+  time: { created: 1, completed: completed ? 2 : undefined },
+})
+
+const fileWrite = (
+  id: string,
+  name: "write" | "edit",
+  path: string,
+  status: "completed" | "running" = "completed",
+): SessionMessageAssistant["content"][number] => ({
+  id,
+  type: "tool",
+  name,
+  state:
+    status === "completed"
+      ? { status: "completed", input: { path }, content: [{ type: "text", text: "ok" }] }
+      : { status: "running", input: { path }, metadata: {} },
+  time: { created: 1, completed: status === "completed" ? 2 : undefined },
 })
 
 const user = (id: string): SessionMessageInfo => ({
@@ -66,8 +96,95 @@ describe("latestBuildPreview", () => {
     expect(latestBuildPreview([assistant("msg_streaming", "build", "Pronto: [index.html](index.html)", false)])).toBeUndefined()
   })
 
+  test("a streaming Build message opens the preview once its write finishes", () => {
+    const messages = [assistantParts("msg_streaming", "build", [fileWrite("call_write", "write", "index.html")], false)]
+
+    expect(latestBuildPreview(messages)).toEqual({ href: "index.html", messageID: "msg_streaming" })
+  })
+
+  test("a streaming Build message previews the page it just wrote", () => {
+    const messages = [assistantParts("msg_streaming", "build", [fileWrite("call_write", "write", "loja.html")], false)]
+
+    expect(latestBuildPreview(messages)).toEqual({ href: "loja.html", messageID: "msg_streaming" })
+  })
+
+  test("a finished edit opens its page while the turn streams", () => {
+    const messages = [assistantParts("msg_streaming", "build", [fileWrite("call_edit", "edit", "sobre.html")], false)]
+
+    expect(latestBuildPreview(messages)).toEqual({ href: "sobre.html", messageID: "msg_streaming" })
+  })
+
+  test("a write still running does not open a preview", () => {
+    const messages = [
+      assistantParts("msg_streaming", "build", [fileWrite("call_write", "write", "index.html", "running")], false),
+    ]
+
+    expect(latestBuildPreview(messages)).toBeUndefined()
+  })
+
+  test("a finished write of a non-HTML file does not open a preview", () => {
+    const messages = [assistantParts("msg_streaming", "build", [fileWrite("call_write", "write", "estilo.css")], false)]
+
+    expect(latestBuildPreview(messages)).toBeUndefined()
+  })
+
+  test("a finished Build message without a link previews the file it wrote", () => {
+    const messages = [assistantParts("msg_build", "build", [fileWrite("call_write", "write", "index.html")])]
+
+    expect(latestBuildPreview(messages)).toEqual({ href: "index.html", messageID: "msg_build" })
+  })
+
+  test("a finished Build message's link wins over its write", () => {
+    const messages = [
+      assistantParts("msg_build", "build", [
+        { type: "text", text: "Pronto: [index.html](index.html)" },
+        fileWrite("call_write", "write", "sobre.html"),
+      ]),
+    ]
+
+    expect(latestBuildPreview(messages)).toEqual({ href: "index.html", messageID: "msg_build" })
+  })
+
+  test("a newer Build turn writing another page moves the preview to it", () => {
+    const messages = [
+      assistant("msg_old", "build", "Pronto: [index.html](index.html)"),
+      assistantParts("msg_new", "build", [fileWrite("call_write", "write", "sobre.html")], false),
+    ]
+
+    expect(latestBuildPreview(messages)).toEqual({ href: "sobre.html", messageID: "msg_new" })
+  })
+
+  test("the entry file wins among the files one turn wrote", () => {
+    const first = [
+      assistantParts(
+        "msg_streaming",
+        "build",
+        [fileWrite("call_a", "write", "sobre.html"), fileWrite("call_b", "write", "index.html")],
+        false,
+      ),
+    ]
+
+    const second = [
+      assistantParts(
+        "msg_streaming",
+        "build",
+        [fileWrite("call_a", "write", "index.html"), fileWrite("call_b", "write", "sobre.html")],
+        false,
+      ),
+    ]
+
+    expect(latestBuildPreview(first)).toEqual({ href: "index.html", messageID: "msg_streaming" })
+    expect(latestBuildPreview(second)).toEqual({ href: "index.html", messageID: "msg_streaming" })
+  })
+
   test("a Plan message never opens a preview", () => {
     expect(latestBuildPreview([assistant("msg_plan", "plan", "Veja [index.html](index.html)")])).toBeUndefined()
+  })
+
+  test("a Plan turn writing a file never opens a preview", () => {
+    const messages = [assistantParts("msg_plan", "plan", [fileWrite("call_write", "write", "index.html")], false)]
+
+    expect(latestBuildPreview(messages)).toBeUndefined()
   })
 
   test("a user message linking a file never opens a preview", () => {
