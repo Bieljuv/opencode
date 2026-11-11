@@ -5,11 +5,13 @@ import { Agent } from "@opencode/schema/agent"
 import { Model } from "@opencode/schema/model"
 import { Provider } from "@opencode/schema/provider"
 import {
+  ARENA_AUTO,
   baseTranscript,
   boundImages,
   DIRECT_REPLY,
   FAILED_TOOL_RETRY,
   HIDE_MODEL_IDENTITY,
+  MANDATORY_TOKEN_SAVING,
   MULTI_AGENT,
   unsupportedParts,
 } from "@opencode/core/session/model-request"
@@ -400,5 +402,59 @@ describe("SessionModelRequest.baseTranscript direct reply", () => {
       messages,
     })
     expect(withoutToggle.system.map((part) => part.text).join("\n")).not.toContain("parallel subagent")
+  })
+})
+
+describe("SessionModelRequest.baseTranscript mandatory token saving and arena auto-activation", () => {
+  const model = SessionRunnerModel.resolved(OpenAIChat.route.model({ id: "gpt-5.5", provider: "test" }), {
+    capabilities: { tools: true, input: ["text"], output: ["text"] },
+    cost: [],
+    limit: { context: 200_000, output: 32_000 },
+  })
+  const textUser = (text: string) =>
+    SessionMessage.User.make({
+      id: SessionMessage.ID.create(),
+      type: "user",
+      text,
+      time: { created: DateTime.makeUnsafe(0) },
+    })
+
+  test("a greeting still carries the mandatory rules, so they cannot be skipped", () => {
+    const transcript = baseTranscript({
+      agent: Agent.Info.default(Agent.ID.make("build")),
+      model,
+      tools: { definitions: [], execute: () => Effect.die("unused tool execution") },
+      initial: [],
+      messages: [textUser("oi")],
+    })
+    const system = transcript.system.map((part) => part.text).join("\n")
+    // The rules ride along in full: removing them from baseTranscript, or
+    // gutting their text, fails this test.
+    expect(system).toContain(MANDATORY_TOKEN_SAVING)
+    expect(system).toContain(ARENA_AUTO)
+    // Distinctive phrases, so an emptied constant fails too.
+    expect(system).toContain("ponytail and graphify skills are not optional")
+    expect(system).toContain("graphify-out/graph.json")
+    expect(system).toContain("Never ask the user to install anything")
+    expect(system).toContain("fall back to normal file reading")
+    expect(system).toContain("never create a CLAUDE.md")
+    expect(system).toContain("resposta ruim")
+    expect(system).toContain("high-stakes decision")
+    expect(system).toContain("Never run the tournament for a trivial request")
+    expect(system).toContain("offer the tournament and ask")
+    expect(system).toContain("tell the user in chat that the tournament is running")
+  })
+
+  test("the mandatory rules also ride along on a coding turn", () => {
+    const transcript = baseTranscript({
+      agent: Agent.Info.default(Agent.ID.make("build")),
+      model,
+      tools: { definitions: [], execute: () => Effect.die("unused tool execution") },
+      initial: [],
+      messages: [textUser("Crie o PDV completo")],
+    })
+    const system = transcript.system.map((part) => part.text).join("\n")
+    expect(system).toContain(MANDATORY_TOKEN_SAVING)
+    expect(system).toContain(ARENA_AUTO)
   })
 })

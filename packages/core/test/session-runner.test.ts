@@ -134,7 +134,10 @@ const defaultSystem = SessionSystemPrompt.make([])
 // names the model or provider (see IdentityPlugin).
 const genericIdentity = IdentityPlugin.identity()
 const replacementModel = testModel("replacement")
-const compactModel = testModel("compact", { context: 4_000, output: 50 })
+// The compact window is 4,600, not a round 4,000: the system prompt carries the ManosTech rules on
+// every turn, and the compaction tests below are calibrated to the prompt size — a smaller window
+// compacts before the triggering turn is sent, instead of after it.
+const compactModel = testModel("compact", { context: 4_600, output: 50 })
 const fullOutputModel = testModel("full-output", { context: 262_144, output: 262_144 })
 const unknownContextModel = testModel("unknown-context", { context: 0, output: 32_000 })
 const undersizedContextModel = testModel("undersized-context", { context: 1, output: 1_000 })
@@ -1841,7 +1844,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.session.prompt({ sessionID: forked.id, text: "Forked", resume: false })
     yield* s.session.resume(forked.id)
 
-    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Latest context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY])
+    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Latest context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO])
     // Copied history keeps the frozen chronological update; no new update is emitted.
     expect(systemTexts(s.requests.at(-1)!)).toContain("Changed context")
     expect(systemTexts(s.requests.at(-1)!)).not.toContain("Latest context")
@@ -1904,7 +1907,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.resume
 
     expect(s.requests).toHaveLength(1)
-    expect(s.requests[0]?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY])
+    expect(s.requests[0]?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO])
     expect(messageRoles(s.requests[0])).toEqual(["user", "user"])
     // The projected row is authoritative: a missing row admits a fresh baseline
     // instead of rebuilding from durable events.
@@ -1948,8 +1951,8 @@ describe("SessionRunnerLLM", () => {
     expect(s.requests[0].messages).toHaveLength(1)
     expect(s.requests[1].messages.slice(0, 1)).toEqual([...s.requests[0].messages])
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO],
     ])
     expect(messageRoles(s.requests[1])).toEqual(["user", "system", "user"])
     expect(s.requests[1]?.messages.at(1)?.content).toEqual([Expected.text("Changed context")])
@@ -1985,7 +1988,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Second")
     const third = yield* s.runPrompt("Third")
     const before = s.requests.at(-1)?.system.map((part) => part.text)
-    expect(before).toEqual([defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY])
+    expect(before).toEqual([defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO])
 
     yield* s.bus.publish(SessionEvent.RevertEvent.Committed, { sessionID, to: third.id })
     yield* s.runPrompt("Fourth")
@@ -2004,7 +2007,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.bus.publish(SessionEvent.RevertEvent.Committed, { sessionID, to: second.id })
     yield* s.runPrompt("Fourth")
 
-    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Latest context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY])
+    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Latest context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO])
   })
 
   scenario("uses the selected model family prompt when the agent does not override it", function* (s) {
@@ -2020,6 +2023,10 @@ describe("SessionRunnerLLM", () => {
       "Initial context",
       SessionModelRequest.TOKEN_ECONOMY,
       SessionModelRequest.HIDE_MODEL_IDENTITY,
+      SessionModelRequest.DIRECT_REPLY,
+      SessionModelRequest.FAILED_TOOL_RETRY,
+      SessionModelRequest.MANDATORY_TOKEN_SAVING,
+      SessionModelRequest.ARENA_AUTO,
     ])
   })
 
@@ -2043,6 +2050,10 @@ describe("SessionRunnerLLM", () => {
       "Initial context",
       SessionModelRequest.TOKEN_ECONOMY,
       SessionModelRequest.HIDE_MODEL_IDENTITY,
+      SessionModelRequest.DIRECT_REPLY,
+      SessionModelRequest.FAILED_TOOL_RETRY,
+      SessionModelRequest.MANDATORY_TOKEN_SAVING,
+      SessionModelRequest.ARENA_AUTO,
     ])
   })
 
@@ -2065,6 +2076,10 @@ describe("SessionRunnerLLM", () => {
       "Initial context",
       SessionModelRequest.TOKEN_ECONOMY,
       SessionModelRequest.HIDE_MODEL_IDENTITY,
+      SessionModelRequest.DIRECT_REPLY,
+      SessionModelRequest.FAILED_TOOL_RETRY,
+      SessionModelRequest.MANDATORY_TOKEN_SAVING,
+      SessionModelRequest.ARENA_AUTO,
     ])
   })
 
@@ -2092,6 +2107,10 @@ describe("SessionRunnerLLM", () => {
       "Initial context",
       SessionModelRequest.TOKEN_ECONOMY,
       SessionModelRequest.HIDE_MODEL_IDENTITY,
+      SessionModelRequest.DIRECT_REPLY,
+      SessionModelRequest.FAILED_TOOL_RETRY,
+      SessionModelRequest.MANDATORY_TOKEN_SAVING,
+      SessionModelRequest.ARENA_AUTO,
     ])
     expect((yield* s.messages)[0]).toMatchObject({ type: "assistant", agent: "reviewer" })
   })
@@ -2121,6 +2140,10 @@ describe("SessionRunnerLLM", () => {
       "Initial context",
       SessionModelRequest.TOKEN_ECONOMY,
       SessionModelRequest.HIDE_MODEL_IDENTITY,
+      SessionModelRequest.DIRECT_REPLY,
+      SessionModelRequest.FAILED_TOOL_RETRY,
+      SessionModelRequest.MANDATORY_TOKEN_SAVING,
+      SessionModelRequest.ARENA_AUTO,
     ])
     expect((yield* s.messages)[0]).toMatchObject({ type: "assistant", agent: "reviewer" })
   })
@@ -2163,8 +2186,8 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Second")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, genericIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
-      [defaultSystem, genericIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
+      [defaultSystem, genericIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO],
+      [defaultSystem, genericIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO],
     ])
     expect(systemTexts(s.requests[1])).toContainEqual(expect.stringContaining("Reviewer skills"))
   })
@@ -2186,7 +2209,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("First")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, genericIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
+      [defaultSystem, genericIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO],
     ])
   })
 
@@ -2205,7 +2228,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("First")
     expect(s.requests.map((request) => request.model)).toEqual([model])
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO],
     ])
   })
 
@@ -2233,10 +2256,16 @@ describe("SessionRunnerLLM", () => {
       ["Initial context", "", '<context key="deploy-target">', "production", "</context>"].join("\n"),
       SessionModelRequest.TOKEN_ECONOMY,
       SessionModelRequest.HIDE_MODEL_IDENTITY,
+      SessionModelRequest.DIRECT_REPLY,
+      SessionModelRequest.FAILED_TOOL_RETRY,
+      SessionModelRequest.MANDATORY_TOKEN_SAVING,
+      SessionModelRequest.ARENA_AUTO,
     ])
     // Each source stays keyed, so a provider can leave out what its own harness already supplies.
     // `testLLM` strips the empty Code Mode notice from the text only.
-    expect(s.requests[0]?.system.at(-3)?.metadata?.experimental).toEqual({
+    // The instructions part sits at index 2 (after the agent system and the identity part), so it
+    // does not drift when rules are appended at the end of the system prompt.
+    expect(s.requests[0]?.system.at(2)?.metadata?.experimental).toEqual({
       instructions: [
         expect.objectContaining({ key: "core/codemode" }),
         { key: "test/context", text: "Initial context" },
@@ -2328,9 +2357,9 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Third")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO],
     ])
     expect(messageRoles(s.requests[1])).toEqual(["user", "system", "user"])
     expect(s.requests[2]?.messages.filter((message) => message.role === "system")).toHaveLength(2)
@@ -2392,9 +2421,9 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Third")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO],
     ])
   })
 
@@ -2410,9 +2439,9 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Second")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO],
     ])
     expect(messageRoles(s.requests[2])).toEqual(["user", "system", "user"])
     expect(s.requests[2]?.messages.at(1)?.content).toEqual([Expected.text("Replacement context")])
@@ -3744,6 +3773,10 @@ describe("SessionRunnerLLM", () => {
       "Initial context",
       SessionModelRequest.TOKEN_ECONOMY,
       SessionModelRequest.HIDE_MODEL_IDENTITY,
+      SessionModelRequest.DIRECT_REPLY,
+      SessionModelRequest.FAILED_TOOL_RETRY,
+      SessionModelRequest.MANDATORY_TOKEN_SAVING,
+      SessionModelRequest.ARENA_AUTO,
     ])
     expect(systemTexts(s.requests[2])).toContain("Changed during compaction")
     expect(userTexts(s.requests[2])[0]).toContain("<summary>\n## Objective\n- Overflow summary\n</summary>")
@@ -3997,7 +4030,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Third")
 
     // Compaction already moved current values into the new epoch before the unavailable read.
-    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Changed context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY])
+    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Changed context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO])
     expect(systemTexts(s.requests.at(-1)!)).not.toContain("Changed context")
   })
 
@@ -4132,8 +4165,8 @@ describe("SessionRunnerLLM", () => {
 
     expect(s.requests.map((request) => request.model)).toEqual([model, replacementModel])
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO],
     ])
     expect(systemTexts(s.requests[1])).toContain("Replacement context")
   })
@@ -6199,10 +6232,19 @@ describe("SessionRunnerLLM", () => {
       yield* s.runPrompt("Complete the response")
 
       expect(s.requests).toHaveLength(2)
-      expect(s.requests[1]?.messages.at(-2)).toMatchObject({
-        role: "assistant",
-        content: [expect.objectContaining({ text: "Partial" })],
-      })
+      if (type === "text") {
+        expect(s.requests[1]?.messages.at(-2)).toMatchObject({
+          role: "assistant",
+          content: [expect.objectContaining({ text: "Partial" })],
+        })
+      } else {
+        // Reasoning without native data is not replayed (it is the model's own thinking, not conversation),
+        // so the continuation request holds only the user prompt and the nudge.
+        expect(s.requests[1]?.messages.at(-2)).toMatchObject({
+          role: "user",
+          content: [{ type: "text", text: "Complete the response" }],
+        })
+      }
       expect(s.requests[1]?.messages.at(-1)).toMatchObject({
         role: "user",
         content: [{ type: "text", text: nudge }],
