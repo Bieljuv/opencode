@@ -56,8 +56,10 @@ export * as SessionRouter from "./router.js"
  * single element and no hop ever happens in the app — provider failover
  * and model selection happen on the server, invisible to the app. The law
  * above still describes the local fallback (direct provider keys), and
- * complexity classification and effort keep running; they just no longer
- * pick a local model or rescue a turn.
+ * complexity classification and effort keep running: the complexity now
+ * rides to the server on the primary request (`gatewayComplexityBody`),
+ * so the gateway can route a complex turn to its paid head first instead
+ * of treating every turn as simple.
  */
 import { Model } from "@opencode/schema/model"
 import { SessionError } from "@opencode/schema/session-error"
@@ -78,6 +80,30 @@ export const KIMI_K3 = { providerID: "moonshotai", id: "kimi-k3.1-pro" } as cons
 
 /** The ManosTech gateway's single route: the server picks the model behind it. */
 export const GATEWAY_MODEL = { providerID: "manostech", id: "auto" } as const
+
+/** Wire field carrying the turn's complexity to the ManosTech gateway. */
+export const GATEWAY_COMPLEXITY_FIELD = "manostech_complexidade"
+
+/** The gateway's word for the turn's complexity: "simples" or "complexa". */
+export function complexityForGateway(complexity: Complexity): "simples" | "complexa" {
+  return complexity === "complex" ? "complexa" : "simples"
+}
+
+/**
+ * Body overlay carrying the turn's complexity to the gateway, or undefined
+ * when the request does not ride the gateway (a direct model never sees
+ * the field — strict providers reject unknown body fields) or the turn
+ * has no classified complexity (the gateway defaults to "simples").
+ * The field is internal: no model, provider, or tier name reaches
+ * visible text, and the server — never the app — decides what it means.
+ */
+export function gatewayComplexityBody(
+  ref: Model.Ref | undefined,
+  complexity: Complexity | undefined,
+): Record<string, unknown> | undefined {
+  if (!isGatewayModel(ref) || complexity === undefined) return undefined
+  return { [GATEWAY_COMPLEXITY_FIELD]: complexityForGateway(complexity) }
+}
 
 /**
  * True when the ref is the gateway's single route. A session on it never

@@ -40,6 +40,7 @@ import { QuestionTool } from "../tool/plugin/question.js"
 import { Tool } from "../tool.js"
 import { SessionAffinity } from "./affinity.js"
 import { SessionModelTransport } from "./model-transport.js"
+import { SessionRouter } from "./router.js"
 import { SessionRunnerModel } from "./runner/model.js"
 import { SessionSchema } from "./schema.js"
 import { SessionSystemPrompt } from "./system-prompt.js"
@@ -89,6 +90,12 @@ export interface Input {
   readonly webSocket?: "session"
   /** Prompt size, measured by the provider or estimated. The default output limit leaves room for it. */
   readonly inputTokens?: { readonly measured: number; readonly estimated: number }
+  /**
+   * The turn's classified complexity (primary only). On the gateway model
+   * it rides to the server as a body overlay, so the gateway routes a
+   * complex turn to its paid head first; direct models never see it.
+   */
+  readonly complexity?: SessionRouter.Complexity
 }
 
 /** The default output limit: the catalog limit, fitted to the room the prompt leaves in the context window. */
@@ -462,6 +469,14 @@ export const layer = Layer.effect(
       const generation = Object.fromEntries(entries.filter(([k]) => GENERATION_KEYS.has(k))) as GenerationOptionsFields
       const providerOptions = Object.fromEntries(entries.filter(([k]) => !GENERATION_KEYS.has(k)))
       const affinity = SessionAffinity.get(session)
+      // Gateway mode, primary only: the turn's complexity rides to the
+      // server as a body overlay (`http.body` merges over the provider
+      // body after validation). Compaction, title, and generate never
+      // carry it — the gateway defaults those to "simples".
+      const gatewayBody =
+        kind === "primary"
+          ? SessionRouter.gatewayComplexityBody(model.ref, input.complexity)
+          : undefined
       const base = ai.request({
         model: model.model,
         headers: {
@@ -484,6 +499,7 @@ export const layer = Layer.effect(
         toolChoice: input.toolChoice,
         ...generation,
         providerOptions: Object.keys(providerOptions).length === 0 ? undefined : providerOptions,
+        http: gatewayBody === undefined ? undefined : { body: gatewayBody },
       })
 
       const baseURL = base.model.route.endpoint.baseURL

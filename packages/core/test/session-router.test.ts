@@ -12,9 +12,11 @@ import {
   buildChain,
   cascadeBudgetSpent,
   classifyComplexity,
+  complexityForGateway,
   effortFromMetadata,
   effortFromVariant,
   fitsPrompt,
+  gatewayComplexityBody,
   isExhaustionError,
   isFreeModel,
   isGatewayModel,
@@ -72,6 +74,32 @@ describe("isGatewayModel", () => {
   })
   test("no session model is not the gateway model", () => {
     expect(isGatewayModel(undefined)).toBe(false)
+  })
+})
+
+describe("complexityForGateway", () => {
+  test("a complex turn is complexa for the gateway", () => {
+    expect(complexityForGateway("complex")).toBe("complexa")
+  })
+  test("a simple turn is simples for the gateway", () => {
+    expect(complexityForGateway("simple")).toBe("simples")
+  })
+})
+
+describe("gatewayComplexityBody", () => {
+  const gateway = { providerID: Provider.ID.make("manostech"), id: Model.ID.make("auto") }
+  const direct = { providerID: Provider.ID.make("opencode"), id: Model.ID.make("mimo-v2.6-flash-free") }
+  test("a complex gateway turn carries complexa", () => {
+    expect(gatewayComplexityBody(gateway, "complex")).toEqual({ manostech_complexidade: "complexa" })
+  })
+  test("a simple gateway turn carries simples", () => {
+    expect(gatewayComplexityBody(gateway, "simple")).toEqual({ manostech_complexidade: "simples" })
+  })
+  test("a direct model never carries the field", () => {
+    expect(gatewayComplexityBody(direct, "complex")).toBeUndefined()
+  })
+  test("no classified complexity carries nothing", () => {
+    expect(gatewayComplexityBody(gateway, undefined)).toBeUndefined()
   })
 })
 
