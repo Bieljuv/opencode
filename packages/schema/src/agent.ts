@@ -43,6 +43,8 @@ export const Info = Schema.Struct({
           request: { settings: {}, headers: {}, body: {} },
           mode: "primary",
           hidden: false,
+          // ManosTech: every agent starts capped (audit C-04); see DEFAULT_MAX_STEPS.
+          steps: DEFAULT_MAX_STEPS,
           permissions: [
             { action: "*", resource: "*", effect: "allow" },
             { action: "read", resource: "*.env", effect: "ask" },
@@ -65,3 +67,13 @@ export const Event = {
   Updated,
   Definitions: inventory(Updated),
 }
+
+/**
+ * ManosTech: default step cap per turn (audit C-04). A turn without a cap can
+ * spin until the context fills, spending usage in silence. 50 steps is enough
+ * for a full build (create files, run checks, fix failures) while still
+ * stopping a stuck turn on its own; the agent then summarizes what is done
+ * and what is left instead of looping. Any agent may override it with an
+ * explicit `steps` value in its own config.
+ */
+export const DEFAULT_MAX_STEPS = 50

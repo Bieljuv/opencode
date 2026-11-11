@@ -257,6 +257,20 @@ export interface Interface {
       sessionID: SessionSchema.ID,
     ) => Effect.Effect<void, NotFoundError | BusyError | Snapshot.Error | FileSystem.DirectoryNotFoundError>
     readonly commit: (sessionID: SessionSchema.ID) => Effect.Effect<void, NotFoundError | BusyError>
+    readonly undoEdit: (input: {
+      sessionID: SessionSchema.ID
+      messageID: SessionMessage.ID
+      file: string
+    }) => Effect.Effect<
+      SessionSchema.UndoEdit | undefined,
+      NotFoundError | MessageNotFoundError | BusyError | Snapshot.Error | FileSystem.DirectoryNotFoundError
+    >
+    readonly undoLastEdit: (
+      sessionID: SessionSchema.ID,
+    ) => Effect.Effect<
+      SessionSchema.UndoEdit | undefined,
+      NotFoundError | BusyError | Snapshot.Error | FileSystem.DirectoryNotFoundError
+    >
   }
 }
 
@@ -531,6 +545,8 @@ const layer = Layer.effect(
         stage: (input) => sessions.forSession(input.sessionID).revert.stage(input),
         clear: (sessionID) => sessions.forSession(sessionID).revert.clear(),
         commit: (sessionID) => sessions.forSession(sessionID).revert.commit(),
+        undoEdit: (input) => sessions.forSession(input.sessionID).revert.undoEdit(input),
+        undoLastEdit: (sessionID) => sessions.forSession(sessionID).revert.undoLastEdit(),
       },
     })
 

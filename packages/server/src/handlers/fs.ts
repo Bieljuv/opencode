@@ -1,9 +1,10 @@
 import { FileSystem } from "@opencode/core/filesystem"
 import { FileWatch } from "@opencode/core/filesystem/file-watch"
 import { Location } from "@opencode/core/location"
+import { createZip, type ZipEntry } from "@opencode/core/publish/zip"
 import { RelativePath } from "@opencode/core/schema"
 import { FileNotFoundError, ServiceUnavailableError } from "@opencode/protocol/errors"
-import { Effect, Option, Stream } from "effect"
+import { Effect, Option, Stream, type PlatformError } from "effect"
 import { type HttpServerRequest, HttpServerResponse } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import path from "path"
@@ -92,8 +93,89 @@ export const FileSystemHandler = HttpApiBuilder.group(Api, "server.fs", (handler
           })
         }),
       )
+      .handleRaw("fs.downloadProject", (ctx) =>
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.Service
+          const location = yield* Location.Service
+          const entries = yield* collectProjectFiles(fs).pipe(
+            Effect.mapError(
+              (error) => new FileNotFoundError({ path: location.directory, message: error.message }),
+            ),
+          )
+          const name = `${path.basename(location.directory) || "projeto"}.zip`
+          return HttpServerResponse.uint8Array(createZip(entries), {
+            status: 200,
+            contentType: "application/zip",
+            headers: ContentHeaders.download({ path: name, mime: "application/zip" }),
+          })
+        }),
+      )
   }),
 )
+
+/**
+ * ManosTech: the project download (publish step 1). Walks the location and
+ * zips the source files, leaving out what must never travel with the
+ * project: version control, installed dependencies, build output, and secret
+ * files (`.env` stays out; `.env.example` stays in). Files over 25 MB are
+ * skipped and logged instead of failing the whole download.
+ */
+const DOWNLOAD_EXCLUDED_DIRS = new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  ".next",
+  "out",
+  "coverage",
+  ".turbo",
+  "target",
+  "__pycache__",
+])
+
+const DOWNLOAD_MAX_FILE_BYTES = 25 * 1024 * 1024
+
+function collectProjectFiles(
+  fs: FileSystem.Interface,
+): Effect.Effect<ZipEntry[], FileSystem.NotFoundError | PlatformError.PlatformError> {
+  const walk = (
+    dir: string | undefined,
+  ): Effect.Effect<ZipEntry[], FileSystem.NotFoundError | PlatformError.PlatformError> =>
+    Effect.gen(function* () {
+      const listed = yield* fs.list(dir === undefined ? undefined : { path: dir })
+      const entries: ZipEntry[] = []
+      for (const entry of listed) {
+        const first = entry.path.split("/")[0] ?? ""
+        if (entry.type === "directory") {
+          if (dir === undefined && DOWNLOAD_EXCLUDED_DIRS.has(first)) continue
+          entries.push(...(yield* walk(entry.path)))
+          continue
+        }
+        const base = entry.path.split("/").pop() ?? ""
+        if (base === ".env" || base.endsWith(".pem") || base.endsWith(".key")) continue
+        const file = yield* fs.read({ path: entry.path })
+        if (file.size > DOWNLOAD_MAX_FILE_BYTES) {
+          yield* Effect.logWarning("project download skipped an oversized file", { path: entry.path })
+          continue
+        }
+        const chunks = yield* file.stream().pipe(Stream.runCollect)
+        entries.push({ path: entry.path, content: concatChunks(chunks) })
+      }
+      return entries
+    })
+  return walk(undefined)
+}
+
+function concatChunks(chunks: readonly Uint8Array[]): Uint8Array {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+  const out = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    out.set(chunk, offset)
+    offset += chunk.length
+  }
+  return out
+}
 
 function decodeRequestPath(url: string) {
   const raw = new URL(url, "http://localhost").pathname.slice(13)

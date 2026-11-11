@@ -101,6 +101,10 @@ import type {
   ExperimentalSessionSkillOutput,
   ExperimentalSessionWaitInput,
   ExperimentalSessionWaitOutput,
+  ExperimentalSessionRevertUndoEditInput,
+  ExperimentalSessionRevertUndoEditOutput,
+  ExperimentalSessionRevertUndoLastEditInput,
+  ExperimentalSessionRevertUndoLastEditOutput,
   ExperimentalSessionInstructionsEntryListInput,
   ExperimentalSessionInstructionsEntryListOutput,
   ExperimentalSessionInstructionsEntryPutInput,
@@ -205,6 +209,8 @@ import type {
   ExperimentalFileWatchOutput,
   ExperimentalFileUnwatchInput,
   ExperimentalFileUnwatchOutput,
+  ExperimentalFileDownloadProjectInput,
+  ExperimentalFileDownloadProjectOutput,
   CommandListInput,
   CommandListOutput,
   SkillListInput,
@@ -841,6 +847,27 @@ const EndpointExperimentalSessionWait = (raw: RawClient["server.session"]) => (i
     raw["session.wait"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError)),
   )
 
+const EndpointExperimentalSessionRevertUndoEdit =
+  (raw: RawClient["server.session"]) => (input: ExperimentalSessionRevertUndoEditInput) =>
+    preserveEffect<ExperimentalSessionRevertUndoEditOutput>()(
+      raw["session.revert.undoEdit"]({
+        params: { sessionID: input["sessionID"] },
+        payload: { messageID: input["messageID"], file: input["file"] },
+      }).pipe(
+        Effect.mapError(mapClientError),
+        Effect.map((value) => value.data),
+      ),
+    )
+
+const EndpointExperimentalSessionRevertUndoLastEdit =
+  (raw: RawClient["server.session"]) => (input: ExperimentalSessionRevertUndoLastEditInput) =>
+    preserveEffect<ExperimentalSessionRevertUndoLastEditOutput>()(
+      raw["session.revert.undoLastEdit"]({ params: { sessionID: input["sessionID"] } }).pipe(
+        Effect.mapError(mapClientError),
+        Effect.map((value) => value.data),
+      ),
+    )
+
 const EndpointExperimentalSessionInstructionsEntryList =
   (raw: RawClient["server.session"]) => (input: ExperimentalSessionInstructionsEntryListInput) =>
     preserveEffect<ExperimentalSessionInstructionsEntryListOutput>()(
@@ -886,6 +913,10 @@ const adaptGroupExperimentalSession = (raw: RawClient["server.session"]) => ({
   export: EndpointExperimentalSessionExport(raw),
   skill: EndpointExperimentalSessionSkill(raw),
   wait: EndpointExperimentalSessionWait(raw),
+  revert: {
+    undoEdit: EndpointExperimentalSessionRevertUndoEdit(raw),
+    undoLastEdit: EndpointExperimentalSessionRevertUndoLastEdit(raw),
+  },
   instructions: {
     entry: {
       list: EndpointExperimentalSessionInstructionsEntryList(raw),
@@ -1385,9 +1416,16 @@ const EndpointExperimentalFileUnwatch = (raw: RawClient["server.fs"]) => (input:
     ),
   )
 
+const EndpointExperimentalFileDownloadProject =
+  (raw: RawClient["server.fs"]) => (input?: ExperimentalFileDownloadProjectInput) =>
+    preserveEffect<ExperimentalFileDownloadProjectOutput>()(
+      raw["fs.downloadProject"]({ query: { location: input?.["location"] } }).pipe(Effect.mapError(mapClientError)),
+    )
+
 const adaptGroupExperimentalFile = (raw: RawClient["server.fs"]) => ({
   watch: EndpointExperimentalFileWatch(raw),
   unwatch: EndpointExperimentalFileUnwatch(raw),
+  downloadProject: EndpointExperimentalFileDownloadProject(raw),
 })
 
 const EndpointCommandList = (raw: RawClient["server.command"]) => (input?: CommandListInput) =>
@@ -2017,6 +2055,13 @@ const adaptClient = (raw: RawClient) => {
       skill: client.experimental.session.skill,
       /** @deprecated Use `client.experimental.session.wait`. Removed in the next minor. */
       wait: client.experimental.session.wait,
+      revert: {
+        ...client.session.revert,
+        /** @deprecated Use `client.experimental.session.revert.undoEdit`. Removed in the next minor. */
+        undoEdit: client.experimental.session.revert.undoEdit,
+        /** @deprecated Use `client.experimental.session.revert.undoLastEdit`. Removed in the next minor. */
+        undoLastEdit: client.experimental.session.revert.undoLastEdit,
+      },
       /** @deprecated Use `client.experimental.session.instructions`. Removed in the next minor. */
       instructions: {
         /** @deprecated Use `client.experimental.session.instructions.entry`. Removed in the next minor. */
@@ -2078,6 +2123,8 @@ const adaptClient = (raw: RawClient) => {
       watch: client.experimental.file.watch,
       /** @deprecated Use `client.experimental.file.unwatch`. Removed in the next minor. */
       unwatch: client.experimental.file.unwatch,
+      /** @deprecated Use `client.experimental.file.downloadProject`. Removed in the next minor. */
+      downloadProject: client.experimental.file.downloadProject,
     },
     /** @deprecated Use `client.experimental.migration`. Removed in the next minor. */
     migration: {

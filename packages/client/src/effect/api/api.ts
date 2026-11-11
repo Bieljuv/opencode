@@ -420,6 +420,12 @@ export interface SessionApi<E = never> {
     readonly stage: SessionRevertStageOperation<E>
     readonly clear: SessionRevertClearOperation<E>
     readonly commit: SessionRevertCommitOperation<E>
+
+    /** @deprecated Use `client.experimental.session.revert.undoEdit`. Removed in the next minor. */
+    readonly undoEdit: ExperimentalSessionRevertUndoEditOperation<E>
+
+    /** @deprecated Use `client.experimental.session.revert.undoLastEdit`. Removed in the next minor. */
+    readonly undoLastEdit: ExperimentalSessionRevertUndoLastEditOperation<E>
   }
   readonly context: SessionContextOperation<E>
   readonly diff: SessionDiffOperation<E>
@@ -577,6 +583,22 @@ export type ExperimentalSessionWaitOutput = void
 export type ExperimentalSessionWaitOperation<E = never> = (
   input: ExperimentalSessionWaitInput,
 ) => Effect.Effect<ExperimentalSessionWaitOutput, E>
+
+export type ExperimentalSessionRevertUndoEditInput = {
+  readonly sessionID: Session.ID
+  readonly messageID: SessionMessage.ID
+  readonly file: string
+}
+export type ExperimentalSessionRevertUndoEditOutput = Session.UndoEdit | null
+export type ExperimentalSessionRevertUndoEditOperation<E = never> = (
+  input: ExperimentalSessionRevertUndoEditInput,
+) => Effect.Effect<ExperimentalSessionRevertUndoEditOutput, E>
+
+export type ExperimentalSessionRevertUndoLastEditInput = { readonly sessionID: Session.ID }
+export type ExperimentalSessionRevertUndoLastEditOutput = Session.UndoEdit | null
+export type ExperimentalSessionRevertUndoLastEditOperation<E = never> = (
+  input: ExperimentalSessionRevertUndoLastEditInput,
+) => Effect.Effect<ExperimentalSessionRevertUndoLastEditOutput, E>
 
 export type ExperimentalSessionInstructionsEntryListInput = { readonly sessionID: Session.ID }
 export type ExperimentalSessionInstructionsEntryListOutput = ReadonlyArray<InstructionEntry.Info>
@@ -1426,6 +1448,10 @@ export interface ExperimentalSessionApi<E = never> {
   readonly export: ExperimentalSessionExportOperation<E>
   readonly skill: ExperimentalSessionSkillOperation<E>
   readonly wait: ExperimentalSessionWaitOperation<E>
+  readonly revert: {
+    readonly undoEdit: ExperimentalSessionRevertUndoEditOperation<E>
+    readonly undoLastEdit: ExperimentalSessionRevertUndoLastEditOperation<E>
+  }
   readonly instructions: {
     readonly entry: {
       readonly list: ExperimentalSessionInstructionsEntryListOperation<E>
@@ -1991,6 +2017,9 @@ export interface FileApi<E = never> {
 
   /** @deprecated Use `client.experimental.file.unwatch`. Removed in the next minor. */
   readonly unwatch: ExperimentalFileUnwatchOperation<E>
+
+  /** @deprecated Use `client.experimental.file.downloadProject`. Removed in the next minor. */
+  readonly downloadProject: ExperimentalFileDownloadProjectOperation<E>
 }
 
 export type ExperimentalFileWatchInput = {
@@ -2011,9 +2040,18 @@ export type ExperimentalFileUnwatchOperation<E = never> = (
   input: ExperimentalFileUnwatchInput,
 ) => Effect.Effect<ExperimentalFileUnwatchOutput, E>
 
+export type ExperimentalFileDownloadProjectInput = {
+  readonly location?: { readonly directory?: string | undefined } | undefined
+}
+export type ExperimentalFileDownloadProjectOutput = globalThis.Uint8Array
+export type ExperimentalFileDownloadProjectOperation<E = never> = (
+  input?: ExperimentalFileDownloadProjectInput,
+) => Effect.Effect<ExperimentalFileDownloadProjectOutput, E>
+
 export interface ExperimentalFileApi<E = never> {
   readonly watch: ExperimentalFileWatchOperation<E>
   readonly unwatch: ExperimentalFileUnwatchOperation<E>
+  readonly downloadProject: ExperimentalFileDownloadProjectOperation<E>
 }
 
 export type CommandListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
@@ -2840,6 +2878,24 @@ export type SessionWaitOutput = ExperimentalSessionWaitOutput
 /** @deprecated Use `ExperimentalSessionWaitOperation`. Removed in the next minor. */
 export type SessionWaitOperation<E = never> = ExperimentalSessionWaitOperation<E>
 
+/** @deprecated Use `ExperimentalSessionRevertUndoEditInput`. Removed in the next minor. */
+export type SessionRevertUndoEditInput = ExperimentalSessionRevertUndoEditInput
+
+/** @deprecated Use `ExperimentalSessionRevertUndoEditOutput`. Removed in the next minor. */
+export type SessionRevertUndoEditOutput = ExperimentalSessionRevertUndoEditOutput
+
+/** @deprecated Use `ExperimentalSessionRevertUndoEditOperation`. Removed in the next minor. */
+export type SessionRevertUndoEditOperation<E = never> = ExperimentalSessionRevertUndoEditOperation<E>
+
+/** @deprecated Use `ExperimentalSessionRevertUndoLastEditInput`. Removed in the next minor. */
+export type SessionRevertUndoLastEditInput = ExperimentalSessionRevertUndoLastEditInput
+
+/** @deprecated Use `ExperimentalSessionRevertUndoLastEditOutput`. Removed in the next minor. */
+export type SessionRevertUndoLastEditOutput = ExperimentalSessionRevertUndoLastEditOutput
+
+/** @deprecated Use `ExperimentalSessionRevertUndoLastEditOperation`. Removed in the next minor. */
+export type SessionRevertUndoLastEditOperation<E = never> = ExperimentalSessionRevertUndoLastEditOperation<E>
+
 /** @deprecated Use `ExperimentalSessionInstructionsEntryListInput`. Removed in the next minor. */
 export type SessionInstructionsEntryListInput = ExperimentalSessionInstructionsEntryListInput
 
@@ -2989,6 +3045,15 @@ export type FileUnwatchOutput = ExperimentalFileUnwatchOutput
 
 /** @deprecated Use `ExperimentalFileUnwatchOperation`. Removed in the next minor. */
 export type FileUnwatchOperation<E = never> = ExperimentalFileUnwatchOperation<E>
+
+/** @deprecated Use `ExperimentalFileDownloadProjectInput`. Removed in the next minor. */
+export type FileDownloadProjectInput = ExperimentalFileDownloadProjectInput
+
+/** @deprecated Use `ExperimentalFileDownloadProjectOutput`. Removed in the next minor. */
+export type FileDownloadProjectOutput = ExperimentalFileDownloadProjectOutput
+
+/** @deprecated Use `ExperimentalFileDownloadProjectOperation`. Removed in the next minor. */
+export type FileDownloadProjectOperation<E = never> = ExperimentalFileDownloadProjectOperation<E>
 
 /** @deprecated Use `ExperimentalMigrationV1StatusOutput`. Removed in the next minor. */
 export type MigrationV1StatusOutput = ExperimentalMigrationV1StatusOutput

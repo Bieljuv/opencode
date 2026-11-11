@@ -491,6 +491,39 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
         }),
       )
       .handle(
+        "session.revert.undoEdit",
+        Effect.fn(function* (ctx) {
+          yield* Effect.log("session.revert.undoEdit", {
+            sessionID: ctx.params.sessionID,
+            messageID: ctx.payload.messageID,
+            file: ctx.payload.file,
+          })
+          const undone = yield* session.revert
+            .undoEdit({ ...ctx.params, ...ctx.payload })
+            .pipe(
+              Effect.catchTag("Session.NotFoundError", missingSession),
+              Effect.catchTag("Session.MessageNotFoundError", missingMessage),
+              Effect.catchTag("Session.BusyError", busySession),
+              Effect.catchTag("Snapshot.Error", failedSnapshot("undo session edit", ctx.params.sessionID)),
+              locationErrors,
+            )
+          return { data: undone ?? null }
+        }),
+      )
+      .handle(
+        "session.revert.undoLastEdit",
+        Effect.fn(function* (ctx) {
+          yield* Effect.log("session.revert.undoLastEdit", { sessionID: ctx.params.sessionID })
+          const undone = yield* session.revert.undoLastEdit(ctx.params.sessionID).pipe(
+            Effect.catchTag("Session.NotFoundError", missingSession),
+            Effect.catchTag("Session.BusyError", busySession),
+            Effect.catchTag("Snapshot.Error", failedSnapshot("undo last session edit", ctx.params.sessionID)),
+            locationErrors,
+          )
+          return { data: undone ?? null }
+        }),
+      )
+      .handle(
         "session.context",
         Effect.fn(function* (ctx) {
           return {
