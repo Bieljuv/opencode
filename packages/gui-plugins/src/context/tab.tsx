@@ -10,7 +10,6 @@ import { StickyAccordionHeader } from "@opencode/ui/sticky-accordion-header"
 import { showToast } from "@opencode/ui/toast"
 import { useI18n } from "@opencode/ui/context/i18n"
 import { File } from "@opencode/session-ui/file"
-import { Markdown } from "@opencode/session-ui/markdown"
 import type { SessionMessageInfo } from "@opencode/client/promise"
 import { cumulativeSessionUsage, lastAssistantWithUsage } from "@opencode/client/solid"
 import { createKeyed, usePlugin, type DailyTokens, type MountedSession } from "@opencode/plugin/gui"
@@ -189,17 +188,6 @@ export default function SessionContextTab(props: { session: MountedSession }) {
       user,
       assistant,
     }
-  })
-
-  const systemPrompt = createMemo(() => {
-    const system = messages().findLast((message) => message.type === "system")?.text
-
-    if (!system) return
-    const trimmed = system.trim()
-
-    if (!trimmed) return
-
-    return trimmed
   })
 
   const providerLabel = createMemo(() => {
@@ -434,17 +422,6 @@ export default function SessionContextTab(props: { session: MountedSession }) {
         </div>
 
         <WeeklyUsageSection time={formatter().time} />
-
-        <Show when={systemPrompt()}>
-          {(prompt) => (
-            <div class="flex flex-col gap-2">
-              <div class="text-12-regular text-text-weak">{ctx.t("systemPrompt.title")}</div>
-              <div class="border border-v2-border-border-base rounded-md bg-surface-base px-3 py-2">
-                <Markdown text={prompt()} class="text-12-regular" />
-              </div>
-            </div>
-          )}
-        </Show>
 
         <div class="flex flex-col gap-2">
           <div class="flex items-center justify-between">
