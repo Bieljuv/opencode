@@ -76,6 +76,20 @@ export const MULTI_AGENT_METADATA_KEY = "manostechMultiAgent"
 /** Kimi K3.1 Pro: paid tier, complex tasks only, only with a Moonshot key. */
 export const KIMI_K3 = { providerID: "moonshotai", id: "kimi-k3.1-pro" } as const
 
+/** The ManosTech gateway's single route: the server picks the model behind it. */
+export const GATEWAY_MODEL = { providerID: "manostech", id: "auto" } as const
+
+/**
+ * True when the ref is the gateway's single route. A session on it never
+ * rotates in the app — provider failover and model selection happen on the
+ * server, invisible here — so the rotation must not move it to a direct
+ * model and bypass the panel's limits and measurement. Failure hops still
+ * rescue the turn (see the runner's retry callback).
+ */
+export function isGatewayModel(ref: Model.Ref | undefined): boolean {
+  return ref !== undefined && ref.providerID === GATEWAY_MODEL.providerID && ref.id === GATEWAY_MODEL.id
+}
+
 /**
  * Subscription-gated providers the router never picks. A Go model must never
  * be the end of the line: the app used to stop on the "subscribe to Go"

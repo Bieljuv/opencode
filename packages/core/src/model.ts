@@ -65,7 +65,14 @@ export interface Editor {
   readonly remove: (providerID: Provider.ID, modelID: ID) => void
   readonly default: {
     readonly get: () => { providerID: Provider.ID; modelID: ID } | undefined
-    readonly set: (providerID: Provider.ID, modelID: ID) => void
+    /**
+     * Sets the model new sessions resolve to. `explicit` marks whether the
+     * default is an explicit choice — a model pinned in opencode.json, or a
+     * plugin choosing for the user. An internal automatic default (the
+     * gateway's) passes false, so it never counts as a configured choice
+     * and never disables the free-model rotation. Defaults to true.
+     */
+    readonly set: (providerID: Provider.ID, modelID: ID, explicit?: boolean) => void
   }
   /** Coherent, read-only provider inputs, including definitions from inactive providers. */
   readonly provider: {
@@ -83,7 +90,10 @@ export interface Interface extends State.Transformable<Editor> {
   /**
    * The model pinned in opencode.json, when one is set. Unlike `default`,
    * this never falls back to the first available model, so callers can tell
-   * an explicit choice apart from the automatic fallback.
+   * an explicit choice apart from the automatic fallback. A default set by
+   * a plugin as internal — the gateway's automatic model — is not a
+   * configured choice and returns undefined here, while `default` still
+   * resolves to it for new sessions.
    */
   readonly configuredDefault: () => Effect.Effect<{ providerID: Provider.ID; modelID: ID } | undefined>
   readonly small: (providerID: Provider.ID) => Effect.Effect<Info | undefined>
@@ -94,6 +104,8 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/Mo
 type Data = {
   models: Map<Provider.ID, ReadonlyMap<ID, Info>>
   defaultModel?: { providerID: Provider.ID; modelID: ID }
+  /** False when the default was set by a plugin as internal (the gateway's automatic model). */
+  defaultModelExplicit?: boolean
 }
 
 const layer = Layer.effect(
@@ -164,8 +176,9 @@ const layer = Layer.effect(
           },
           default: {
             get: () => data.defaultModel,
-            set: (providerID, modelID) => {
+            set: (providerID, modelID, explicit) => {
               data.defaultModel = { providerID, modelID }
+              data.defaultModelExplicit = explicit ?? true
             },
           },
           provider: {
@@ -311,6 +324,7 @@ const layer = Layer.effect(
       }),
       configuredDefault: Effect.fn("Model.configuredDefault")(function* () {
         const value = yield* read()
+        if (value.data.defaultModelExplicit === false) return undefined
         return value.data.defaultModel
       }),
       small: Effect.fn("Model.small")(function* (providerID) {

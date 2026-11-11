@@ -467,3 +467,70 @@ it.effect(
       expect(yield* models.get(custom, modelID)).toMatchObject({ limit: { context: 32_768 } })
     }),
 )
+
+it.effect("an internal default never counts as configured, while an explicit default does", () =>
+  Effect.gen(function* () {
+    const plugins = yield* Plugin.Service
+    const models = yield* Model.Service
+    const providerID = Provider.ID.make("company")
+    const auto = Model.ID.make("auto")
+    const chat = Model.ID.make("chat")
+    const source: Plugin.Generation = {
+      id: "company-source",
+      revision: "1",
+      effect: (ctx) =>
+        ctx.provider
+          .transform((editor) =>
+            editor.add({
+              info: { ...Provider.Info.empty(providerID), activation: "enabled" },
+              models: [Model.Info.default(providerID, auto), Model.Info.default(providerID, chat)],
+            }),
+          )
+          .pipe(Effect.asVoid),
+    }
+    // The gateway's automatic default: new sessions resolve to it, but it
+    // is not an explicit model choice, so the free-model rotation must
+    // still run for direct sessions.
+    const internalDefault: Plugin.Generation = {
+      id: "internal-default",
+      revision: "1",
+      effect: (ctx) =>
+        ctx.model
+          .transform((editor) => {
+            if (editor.get(providerID, auto) === undefined) return
+            if (editor.default.get() !== undefined) return
+            editor.default.set(providerID, auto, false)
+          })
+          .pipe(Effect.asVoid),
+    }
+    yield* plugins.activate([source, internalDefault])
+    expect(yield* models.configuredDefault()).toBeUndefined()
+    expect(yield* models.default()).toMatchObject({ providerID, id: auto })
+    expect((yield* models.available()).map((model) => model.id)).toEqual([auto, chat])
+
+    // A model pinned in opencode.json (or by a plugin choosing for the
+    // user) is an explicit choice: it counts as configured and wins over
+    // the internal default.
+    const explicitDefault: Plugin.Generation = {
+      id: "explicit-default",
+      revision: "1",
+      effect: (ctx) =>
+        ctx.model
+          .transform((editor) => {
+            if (editor.get(providerID, chat) === undefined) return
+            editor.default.set(providerID, chat, true)
+          })
+          .pipe(Effect.asVoid),
+    }
+    yield* plugins.activate([source, explicitDefault])
+    expect(yield* models.configuredDefault()).toEqual({ providerID, modelID: chat })
+    expect(yield* models.default()).toMatchObject({ providerID, id: chat })
+
+    // The internal default never overwrites an explicit one: with the
+    // explicit default already set, the gateway-style transform leaves it.
+    yield* plugins.activate([source, explicitDefault, internalDefault])
+    expect(yield* models.configuredDefault()).toEqual({ providerID, modelID: chat })
+    expect(yield* models.default()).toMatchObject({ providerID, id: chat })
+  }),
+)
+
