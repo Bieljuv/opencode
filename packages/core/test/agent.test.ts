@@ -203,8 +203,19 @@ describe("Agent", () => {
       expect(Permission.evaluate("external_directory", path.join(global.config, "*"), permissions).effect).toBe("allow")
       expect(Permission.evaluate("external_directory", path.join(global.tmp, "*"), permissions).effect).toBe("allow")
       expect(Permission.evaluate("external_directory", "/outside/*", permissions).effect).toBe("allow")
+      // ManosTech: approval before acting. The default agent asks before
+      // file edits and mutating shell commands; read-only shell commands
+      // and questions stay allowed.
+      expect(Permission.evaluate("edit", "src/index.ts", permissions).effect).toBe("ask")
+      expect(Permission.evaluate("shell.mutate", "rm -rf foo", permissions).effect).toBe("ask")
+      expect(Permission.evaluate("shell.mutate", "git reset --hard", permissions).effect).toBe("ask")
+      expect(Permission.evaluate("shell", "git log -5", permissions).effect).toBe("allow")
+      expect(Permission.evaluate("shell", "ls -la", permissions).effect).toBe("allow")
+      expect(Permission.evaluate("question", "*", permissions).effect).toBe("allow")
+      expect(Permission.evaluate("read", "src/index.ts", permissions).effect).toBe("allow")
       const explore = yield* agent.get(Agent.ID.make("explore"))
       expect(Permission.evaluate("shell", "git log -5", explore?.permissions ?? []).effect).toBe("allow")
+      expect(Permission.evaluate("shell.mutate", "rm -rf foo", explore?.permissions ?? []).effect).toBe("deny")
       expect(Permission.evaluate("edit", "src/index.ts", explore?.permissions ?? []).effect).toBe("deny")
       expect(Permission.evaluate("read", ".env", explore?.permissions ?? []).effect).toBe("ask")
       expect(Permission.evaluate("read", ".env.local", explore?.permissions ?? []).effect).toBe("ask")

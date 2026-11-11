@@ -490,8 +490,9 @@ it.effect("auto compaction estimates current content against the buffered prompt
     // Without provider usage, the estimate includes the whole system prompt and tool definition, not just the
     // message. The parts are named here, not pinned as a number: editing a rule's wording leaves the expectation
     // alone, while adding or removing a rule moves it — and this list must follow baseTranscript. Today it is
-    // 1,122 tokens (agent system 7, instructions 5, token economy 62, identity masking 300, direct reply 214,
-    // failed tool retry 96, mandatory token saving 235, arena auto 195, read tool 8), plus the one "Done" token.
+    // 1,456 tokens (agent system 7, instructions 5, token economy 62, identity masking 300, direct reply 214,
+    // failed tool retry 96, mandatory token saving 235, arena auto 195, approval before building 186,
+    // delivery rules 148, read tool 8), plus the one "Done" token.
     const systemTokens =
       Token.estimate("You are a helpful assistant.") +
       Token.estimate("Project instructions.") +
@@ -501,6 +502,8 @@ it.effect("auto compaction estimates current content against the buffered prompt
       Token.estimate(SessionModelRequest.FAILED_TOOL_RETRY) +
       Token.estimate(SessionModelRequest.MANDATORY_TOKEN_SAVING) +
       Token.estimate(SessionModelRequest.ARENA_AUTO) +
+      Token.estimate(SessionModelRequest.APPROVAL_BEFORE_BUILD) +
+      Token.estimate(SessionModelRequest.DELIVERY_RULES) +
       // Mirrors estimateTool: name + description + input schema.
       Token.estimate("read" + "Read files" + JSON.stringify({ type: "object" }))
     expect(SessionCompaction.estimateContext({ ...grown, messages: [interrupted] })).toBe(systemTokens + 1)

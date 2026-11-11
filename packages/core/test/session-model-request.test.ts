@@ -5,9 +5,11 @@ import { Agent } from "@opencode/schema/agent"
 import { Model } from "@opencode/schema/model"
 import { Provider } from "@opencode/schema/provider"
 import {
+  APPROVAL_BEFORE_BUILD,
   ARENA_AUTO,
   baseTranscript,
   boundImages,
+  DELIVERY_RULES,
   DIRECT_REPLY,
   FAILED_TOOL_RETRY,
   HIDE_MODEL_IDENTITY,
@@ -456,5 +458,57 @@ describe("SessionModelRequest.baseTranscript mandatory token saving and arena au
     const system = transcript.system.map((part) => part.text).join("\n")
     expect(system).toContain(MANDATORY_TOKEN_SAVING)
     expect(system).toContain(ARENA_AUTO)
+  })
+})
+
+describe("SessionModelRequest.baseTranscript approval before building and delivery rules", () => {
+  const model = SessionRunnerModel.resolved(OpenAIChat.route.model({ id: "gpt-5.5", provider: "test" }), {
+    capabilities: { tools: true, input: ["text"], output: ["text"] },
+    cost: [],
+    limit: { context: 200_000, output: 32_000 },
+  })
+  const textUser = (text: string) =>
+    SessionMessage.User.make({
+      id: SessionMessage.ID.create(),
+      type: "user",
+      text,
+      time: { created: DateTime.makeUnsafe(0) },
+    })
+
+  test("a greeting still carries the approval and delivery rules, so no model can skip them", () => {
+    const transcript = baseTranscript({
+      agent: Agent.Info.default(Agent.ID.make("build")),
+      model,
+      tools: { definitions: [], execute: () => Effect.die("unused tool execution") },
+      initial: [],
+      messages: [textUser("oi")],
+    })
+    const system = transcript.system.map((part) => part.text).join("\n")
+    // The rules ride along in full: removing them from baseTranscript, or
+    // gutting their text, fails this test.
+    expect(system).toContain(APPROVAL_BEFORE_BUILD)
+    expect(system).toContain(DELIVERY_RULES)
+    // Distinctive phrases, so an emptied constant fails too.
+    expect(system).toContain("before the user has approved the plan")
+    expect(system).toContain("ask the user to confirm with the question tool")
+    expect(system).toContain("Only start building after the user says yes")
+    expect(system).toContain("Never downgrade a system to a demo")
+    expect(system).toContain("never present media as a system")
+    expect(system).toContain("born ready to publish")
+    expect(system).toContain("never localStorage as the final destination")
+    expect(system).toContain("never as architecture")
+  })
+
+  test("the approval and delivery rules also ride along on a coding turn", () => {
+    const transcript = baseTranscript({
+      agent: Agent.Info.default(Agent.ID.make("build")),
+      model,
+      tools: { definitions: [], execute: () => Effect.die("unused tool execution") },
+      initial: [],
+      messages: [textUser("Crie o PDV completo")],
+    })
+    const system = transcript.system.map((part) => part.text).join("\n")
+    expect(system).toContain(APPROVAL_BEFORE_BUILD)
+    expect(system).toContain(DELIVERY_RULES)
   })
 })

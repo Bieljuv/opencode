@@ -747,6 +747,11 @@ export const dict = {
   "settings.permissions.tool.list.description": "Listar arquivos dentro de um diretório",
   "settings.permissions.tool.bash.title": "Bash",
   "settings.permissions.tool.bash.description": "Executar comandos shell",
+  "settings.permissions.tool.shell.title": "Terminal",
+  "settings.permissions.tool.shell.description": "Executar comandos de terminal somente leitura",
+  "settings.permissions.tool.shell.mutate.title": "Terminal (alterações)",
+  "settings.permissions.tool.shell.mutate.description":
+    "Executar comandos de terminal que alteram arquivos ou o sistema",
   "settings.permissions.tool.task.title": "Tarefa",
   "settings.permissions.tool.task.description": "Iniciar subagentes",
   "settings.permissions.tool.skill.title": "Habilidade",

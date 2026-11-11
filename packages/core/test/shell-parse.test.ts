@@ -249,3 +249,55 @@ describe("ShellParse", () => {
     expect(powershell.directories).toEqual(["/workspace/src", "/usr/local/bin"])
   })
 })
+
+describe("ShellParse.isMutatingCommand", () => {
+  // ManosTech: approval before acting. Read-only commands keep the "shell"
+  // action and run free; anything that can change state asks first under
+  // "shell.mutate". Unknown commands fail closed to mutating.
+  test.each([
+    ["ls -la", "/bin/bash", false],
+    ["cat file.txt", "/bin/bash", false],
+    ["printf hello", "/bin/bash", false],
+    ["echo 'a > b'", "/bin/bash", false],
+    ["printf 'stderr only' >&2", "/bin/bash", false],
+    ["git log -5", "/bin/bash", false],
+    ["git log 2>&1", "/bin/bash", false],
+    ["git status", "/bin/bash", false],
+    ["git diff --stat", "/bin/bash", false],
+    ["git show HEAD", "/bin/bash", false],
+    ["git stash list", "/bin/bash", false],
+    ["node --version", "/bin/bash", false],
+    ["git reset --hard", "/bin/bash", true],
+    ["git reset", "/bin/bash", true],
+    ["git commit -m x", "/bin/bash", true],
+    ["git push", "/bin/bash", true],
+    ["git stash pop", "/bin/bash", true],
+    ["git branch new-feature", "/bin/bash", true],
+    ["rm -rf foo", "/bin/bash", true],
+    ["rm", "/bin/bash", true],
+    ["mkdir -p src/new", "/bin/bash", true],
+    ["mv a b", "/bin/bash", true],
+    ["printf hello > marker", "/bin/bash", true],
+    ["printf hello >> marker", "/bin/bash", true],
+    ["printf x 2> err.log", "/bin/bash", true],
+    ["npm run build", "/bin/bash", true],
+    ["npm install", "/bin/bash", true],
+    ["bun install", "/bin/bash", true],
+    ["docker run alpine", "/bin/bash", true],
+    ["python3 script.py", "/bin/bash", true],
+    ["unknowncmd foo", "/bin/bash", true],
+    ["probe", "/bin/bash", true],
+    ["Write-Output hello", "pwsh", false],
+    ["Get-ChildItem", "pwsh", false],
+    ["Get-Content file.txt", "pwsh", false],
+    ["Start-Sleep -Milliseconds 100", "pwsh", false],
+    ["& 'Write-Output' hello", "pwsh", false],
+    ["[Console]::Out.Write('hello')", "pwsh", false],
+    ["Remove-Item foo", "pwsh", true],
+    ["Set-Content file 'x'", "pwsh", true],
+    ["New-Item foo", "pwsh", true],
+    ["Show-Value", "pwsh", true],
+  ])("classifies %s (%s) as mutating=%s", (command, shell, mutating) => {
+    expect(ShellParse.isMutatingCommand(command, shell)).toBe(mutating)
+  })
+})

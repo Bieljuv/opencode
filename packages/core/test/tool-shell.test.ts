@@ -288,7 +288,7 @@ describe("ShellTool scanner permissions", () => {
       Effect.gen(function* () {
         const saved = yield* PermissionSaved.Service
         const location = yield* Location.Service
-        yield* saved.add({ projectID: location.project.id, action: "shell", resources: ["printf *"] })
+        yield* saved.add({ projectID: location.project.id, action: "shell.mutate", resources: ["printf *"] })
         const marker = path.join(fixture.active, "marker")
         const approved = yield* runPermissionCommand(
           registry,
@@ -332,7 +332,7 @@ describe("ShellTool scanner permissions", () => {
         expect(prompts).toHaveLength(3)
         for (const request of prompts) {
           expect(request).toMatchObject({
-            action: "shell",
+            action: "shell.mutate",
             resources: ["printf hello", 'printf %s "$SCAN_TEST" > marker'],
             save: ["printf *", "printf *"],
           })
@@ -342,7 +342,7 @@ describe("ShellTool scanner permissions", () => {
         const agents = yield* Agent.Service
         yield* agents.transform((editor) =>
           editor.update(toolIdentity.agent, (agent) => {
-            agent.permissions = [{ action: "shell", resource: "printf hello", effect: "deny" }]
+            agent.permissions = [{ action: "shell.mutate", resource: "printf hello", effect: "deny" }]
           }),
         )
         yield* Effect.promise(() => fs.rm(marker))
@@ -360,22 +360,22 @@ describe("ShellTool scanner permissions", () => {
       Effect.gen(function* () {
         const saved = yield* PermissionSaved.Service
         const location = yield* Location.Service
-        yield* saved.add({ projectID: location.project.id, action: "shell", resources: ["printf hello", "cat"] })
+        yield* saved.add({ projectID: location.project.id, action: "shell.mutate", resources: ["printf hello", "cat"] })
         const marker = path.join(fixture.active, "marker")
         const command = "printf hello | cat > marker"
         const unapprovedRedirect = yield* runPermissionCommand(registry, command, marker, ["reject"])
         expect(unapprovedRedirect.requests).toMatchObject([
-          { action: "shell", resources: ["printf hello", "cat > marker"], save: ["printf *", "cat *"] },
+          { action: "shell.mutate", resources: ["printf hello", "cat > marker"], save: ["printf *", "cat *"] },
         ])
         expect(yield* Effect.promise(() => Bun.file(marker).exists())).toBe(false)
 
-        yield* saved.add({ projectID: location.project.id, action: "shell", resources: ["cat > marker"] })
+        yield* saved.add({ projectID: location.project.id, action: "shell.mutate", resources: ["cat > marker"] })
         const exact = yield* runPermissionCommand(registry, command, marker, [])
         expect(exact.requests).toEqual([])
         expect(exact.exit).toMatchObject({ _tag: "Success", value: { status: "completed", metadata: { exit: 0 } } })
         expect(yield* Effect.promise(() => Bun.file(marker).text())).toBe("hello")
 
-        yield* saved.add({ projectID: location.project.id, action: "shell", resources: ["printf *", "cat *"] })
+        yield* saved.add({ projectID: location.project.id, action: "shell.mutate", resources: ["printf *", "cat *"] })
         yield* Effect.promise(() => fs.rm(marker))
         const broad = yield* runPermissionCommand(registry, command, marker, [])
         expect(broad.requests).toEqual([])
@@ -385,7 +385,7 @@ describe("ShellTool scanner permissions", () => {
         const agents = yield* Agent.Service
         yield* agents.transform((editor) =>
           editor.update(toolIdentity.agent, (agent) => {
-            agent.permissions = [{ action: "shell", resource: "* > marker", effect: "deny" }]
+            agent.permissions = [{ action: "shell.mutate", resource: "* > marker", effect: "deny" }]
           }),
         )
         yield* Effect.promise(() => fs.rm(marker))
@@ -405,7 +405,10 @@ describe("ShellTool scanner permissions", () => {
         const agents = yield* Agent.Service
         yield* agents.transform((editor) =>
           editor.update(toolIdentity.agent, (agent) => {
-            agent.permissions = [{ action: "shell", resource: "*", effect: "allow" }]
+            agent.permissions = [
+              { action: "shell", resource: "*", effect: "allow" },
+              { action: "shell.mutate", resource: "*", effect: "allow" },
+            ]
           }),
         )
         const marker = path.join(fixture.active, "marker")
@@ -448,6 +451,7 @@ describe("ShellTool scanner permissions", () => {
           editor.update(toolIdentity.agent, (agent) => {
             agent.permissions = [
               { action: "shell", resource: "*", effect: "allow" },
+              { action: "shell.mutate", resource: "*", effect: "allow" },
               { action: "external_directory", resource: "*", effect: "deny" },
             ]
           }),
@@ -480,6 +484,7 @@ describe("ShellTool scanner permissions", () => {
           editor.update(toolIdentity.agent, (agent) => {
             agent.permissions = [
               { action: "shell", resource: "*", effect: "allow" },
+              { action: "shell.mutate", resource: "*", effect: "allow" },
               { action: "external_directory", resource: path.join(fixture.outside, "*"), effect: "deny" },
             ]
           }),
@@ -510,8 +515,8 @@ describe("ShellTool conditional process substitution", () => {
           yield* agents.transform((editor) =>
             editor.update(toolIdentity.agent, (agent) => {
               agent.permissions = [
-                { action: "shell", resource: "*", effect: "allow" },
-                { action: "shell", resource: "printf *", effect: "deny" },
+                { action: "shell.mutate", resource: "*", effect: "allow" },
+                { action: "shell.mutate", resource: "printf *", effect: "deny" },
               ]
             }),
           )
@@ -538,12 +543,12 @@ describe("ShellTool conditional process substitution", () => {
           Effect.gen(function* () {
             const saved = yield* PermissionSaved.Service
             const location = yield* Location.Service
-            yield* saved.add({ projectID: location.project.id, action: "shell", resources: ["wait *"] })
+            yield* saved.add({ projectID: location.project.id, action: "shell.mutate", resources: ["wait *"] })
             const marker = path.join(directory.active, "marker")
             const command = '[[ -n <(printf reached > marker) ]]; wait "$!"'
             const result = yield* runPermissionCommand(registry, command, marker, [reply])
             expect(result.requests).toMatchObject([
-              { action: "shell", resources: ["printf reached > marker", 'wait "$!"'], save: ["printf *", "wait *"] },
+              { action: "shell.mutate", resources: ["printf reached > marker", 'wait "$!"'], save: ["printf *", "wait *"] },
             ])
             if (reply === "reject") {
               expect(Exit.isFailure(result.exit)).toBe(true)
@@ -572,30 +577,37 @@ describe("ShellTool compound syntax approval compatibility", () => {
       command: 'for value (a b) printf %s "$value"',
       output: "ab",
       saved: ["printf *"],
+      action: "shell",
     },
     {
       shell: "zsh",
       command: 'for value (a b) { printf %s "$value"; }',
       output: "ab",
       saved: ["printf *"],
+      action: "shell",
     },
     {
       shell: "zsh",
       command: 'for value ($(printf a)) do printf %s "$value"; done',
       output: "a",
       saved: ["printf *"],
+      action: "shell",
     },
     {
       shell: "bash",
       command: 'probe() for value in a b; do printf %s "$value"; done; probe',
       output: "ab",
       saved: ["printf *", "probe *"],
+      // "probe" is a user-defined function: unknown commands fail closed
+      // to mutating, so the approval is asked under "shell.mutate".
+      action: "shell.mutate",
     },
     {
       shell: "bash",
       command: 'printf %s "$(probe() case value in (value) printf hello;; esac; probe)"',
       output: "hello",
       saved: ["printf *", "probe *"],
+      action: "shell.mutate",
     },
   ]) {
     const test = isWindows || !Bun.which(fixture.shell) ? permissionIt.live.skip : permissionIt.live
@@ -605,7 +617,11 @@ describe("ShellTool compound syntax approval compatibility", () => {
           Effect.gen(function* () {
             const saved = yield* PermissionSaved.Service
             const location = yield* Location.Service
-            yield* saved.add({ projectID: location.project.id, action: "shell", resources: fixture.saved })
+            yield* saved.add({
+              projectID: location.project.id,
+              action: fixture.action,
+              resources: fixture.saved,
+            })
             const result = yield* runPermissionCommand(
               registry,
               fixture.command,
@@ -631,38 +647,47 @@ describe("ShellTool ordinary shell syntax", () => {
   for (const shell of ["bash", "zsh"]) {
     const test = isWindows || !Bun.which(shell) ? permissionIt.live.skip : permissionIt.live
     for (const fixture of [
-      { name: "quoted heredoc", command: "cat <<'EOF'\nhello\nEOF", output: "hello\n", saved: ["cat *"] },
+      { name: "quoted heredoc", command: "cat <<'EOF'\nhello\nEOF", output: "hello\n", saved: ["cat *"], action: "shell" },
       {
         name: "heredoc substitution",
         command: "cat <<EOF\n$(printf hello)\nEOF",
         output: "hello\n",
         saved: ["cat *", "printf *"],
+        action: "shell",
       },
       {
         name: "loop with a conditional",
         command: 'for value in a b; do if test -n "$value"; then printf %s "$value"; fi; done',
         output: "ab",
         saved: ["test *", "printf *"],
+        action: "shell",
       },
       {
         name: "function and case",
         command: 'greet() { case "$1" in a) printf hello;; *) printf other;; esac; }; greet a',
         output: "hello",
         saved: ["greet *", "printf *"],
+        // "greet" is a user-defined function: unknown commands fail closed
+        // to mutating, so the approval is asked under "shell.mutate".
+        action: "shell.mutate",
       },
       {
         name: "parameter fallback",
         command: 'value=; printf %s "${value:-fallback}"',
         output: "fallback",
         saved: ["printf *"],
+        action: "shell",
       },
       {
         name: "arithmetic statement",
         command: 'count=1; ((count += 1)); printf %s "$count"',
         output: "2",
         saved: ["((count += 1)) *", "printf *"],
+        // The scanner skips the declaration and the arithmetic statement:
+        // only the read-only printf is a command, so this stays "shell".
+        action: "shell",
       },
-      { name: "ANSI-C quoting", command: "printf %s $'a\\nb'", output: "a\nb", saved: ["printf *"] },
+      { name: "ANSI-C quoting", command: "printf %s $'a\\nb'", output: "a\nb", saved: ["printf *"], action: "shell" },
     ]) {
       test(`${shell}: ${fixture.name} reuses existing approvals`, () =>
         withScanner(
@@ -670,7 +695,7 @@ describe("ShellTool ordinary shell syntax", () => {
             Effect.gen(function* () {
               const saved = yield* PermissionSaved.Service
               const location = yield* Location.Service
-              yield* saved.add({ projectID: location.project.id, action: "shell", resources: fixture.saved })
+              yield* saved.add({ projectID: location.project.id, action: fixture.action, resources: fixture.saved })
               const result = yield* runPermissionCommand(
                 registry,
                 fixture.command,
@@ -699,8 +724,8 @@ describe("ShellTool ordinary shell syntax", () => {
             yield* agents.transform((editor) =>
               editor.update(toolIdentity.agent, (agent) => {
                 agent.permissions = [
-                  { action: "shell", resource: "*", effect: "allow" },
-                  { action: "shell", resource: "printf *", effect: "deny" },
+                  { action: "shell.mutate", resource: "*", effect: "allow" },
+                  { action: "shell.mutate", resource: "printf *", effect: "deny" },
                 ]
               }),
             )
@@ -739,9 +764,17 @@ describe("ShellTool ordinary shell syntax", () => {
           Effect.gen(function* () {
             const saved = yield* PermissionSaved.Service
             const location = yield* Location.Service
+            // "Show-Value" is a user-defined function and fails closed to
+            // mutating, so its approval lives under "shell.mutate" while
+            // the Write-Output approvals stay under "shell".
             yield* saved.add({
               projectID: location.project.id,
               action: "shell",
+              resources: ["Write-Output *", "Show-Value *"],
+            })
+            yield* saved.add({
+              projectID: location.project.id,
+              action: "shell.mutate",
               resources: ["Write-Output *", "Show-Value *"],
             })
             const result = yield* runPermissionCommand(registry, command, path.join(directory.active, "marker"), [])

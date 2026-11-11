@@ -607,3 +607,193 @@ function prefix(tokens: string[]) {
   }
   return tokens.slice(0, 1)
 }
+
+/**
+ * ManosTech: whether a scanned shell command can change anything, so the
+ * shell tool asks the user first (permission action "shell.mutate") instead
+ * of running it under the read-only "shell" action. The check is a
+ * heuristic over the scanned resource text and fails closed: anything it
+ * does not recognize as read-only counts as mutating.
+ *
+ * Read-only means the command only reads state and prints it: listing,
+ * printing, searching, and inspecting files, plus `git` subcommands that
+ * only report (log, status, diff, show, ...). Everything else — file
+ * writes, deletes, moves, installs, builds, runs, and any output redirect
+ * to a file — is mutating, including unknown commands and shell functions,
+ * which could do anything. Stream duplications such as `>&2` and `2>&1`
+ * are not file redirects and stay read-only.
+ */
+const READ_ONLY_COMMANDS = new Set([
+  "basename",
+  "cat",
+  "cd",
+  "chdir",
+  "cmp",
+  "cut",
+  "date",
+  "df",
+  "diff",
+  "dir",
+  "dirname",
+  "dirs",
+  "du",
+  "echo",
+  "env",
+  "exit",
+  "export",
+  "file",
+  "free",
+  "getconf",
+  "grep",
+  "head",
+  "history",
+  "host",
+  "hostname",
+  "id",
+  "less",
+  "ls",
+  "lsblk",
+  "md5sum",
+  "more",
+  "nproc",
+  "nslookup",
+  "od",
+  "ping",
+  "printenv",
+  "printf",
+  "pwd",
+  "readlink",
+  "realpath",
+  "rg",
+  "seq",
+  "sha1sum",
+  "sha256sum",
+  "sleep",
+  "sort",
+  "stat",
+  "strings",
+  "tail",
+  "test",
+  "tr",
+  "true",
+  "false",
+  "tty",
+  "type",
+  "uname",
+  "uniq",
+  "unset",
+  "uptime",
+  "wc",
+  "whereis",
+  "which",
+  "whoami",
+  "xxd",
+  "[",
+])
+
+const READ_ONLY_GIT = new Set([
+  "blame",
+  "diff",
+  "grep",
+  "log",
+  "ls-files",
+  "ls-remote",
+  "rev-parse",
+  "show",
+  "status",
+])
+
+const READ_ONLY_POWERSHELL = new Set([
+  "cat",
+  "clear",
+  "cls",
+  "dir",
+  "echo",
+  "gc",
+  "gci",
+  "get-alias",
+  "get-childitem",
+  "get-command",
+  "get-content",
+  "get-date",
+  "get-help",
+  "get-history",
+  "get-item",
+  "get-location",
+  "get-member",
+  "get-process",
+  "get-psdrive",
+  "get-service",
+  "get-variable",
+  "gps",
+  "ls",
+  "pwd",
+  "select-string",
+  "start-sleep",
+  "test-path",
+  "type",
+  "write-host",
+  "write-output",
+])
+
+export function isMutatingCommand(resource: string, shell: string): boolean {
+  if (hasUnquotedRedirect(resource)) return true
+  const powershell = ShellSelect.ps(shell)
+  const head = commandHead(resource, powershell)
+  if (head === undefined) return true
+  if (powershell) return !READ_ONLY_POWERSHELL.has(head.toLowerCase())
+  const tokens = resource.trim().split(/\s+/)
+  // Asking a tool for its version or help only prints text.
+  if (tokens[1] === "--version" || tokens[1] === "--help") return false
+  if (head === "git") return !isReadOnlyGit(tokens)
+  return !READ_ONLY_COMMANDS.has(head)
+}
+
+function isReadOnlyGit(tokens: string[]): boolean {
+  const subcommand = tokens[1]
+  if (subcommand === undefined) return false
+  if (READ_ONLY_GIT.has(subcommand)) return true
+  if (subcommand === "stash") return tokens[2] === "list" || tokens[2] === "show"
+  return false
+}
+
+function commandHead(resource: string, powershell: boolean): string | undefined {
+  const text = resource.trim()
+  if (text === "") return undefined
+  if (powershell) {
+    const lower = text.toLowerCase()
+    if (lower.startsWith("[console]::out.write") || lower.startsWith("[console]::error.write"))
+      return "write-output"
+  }
+  const first = text.split(/\s+/, 1)[0] ?? ""
+  const dequoted = first.replaceAll("'", "").replaceAll('"', "")
+  if (powershell && (dequoted === "&" || dequoted === ".")) {
+    return commandHead(text.slice(first.length), powershell)
+  }
+  const paren = dequoted.startsWith("(") ? dequoted.slice(1).split(")")[0] : dequoted
+  if (paren === undefined || paren === "") return undefined
+  return paren
+}
+
+function hasUnquotedRedirect(resource: string): boolean {
+  let quote: "'" | '"' | undefined
+  for (let index = 0; index < resource.length; index++) {
+    const char = resource[index]
+    if (quote === "'") {
+      if (char === "'") quote = undefined
+      continue
+    }
+    if (quote === '"') {
+      if (char === '"') quote = undefined
+      continue
+    }
+    if (char === "'" || char === '"') {
+      quote = char
+      continue
+    }
+    // `>&2` and `2>&1` only duplicate a stream; a `>` followed by anything
+    // else writes a file.
+    if (char === ">" && resource[index + 1] !== "&") return true
+  }
+  return false
+}
