@@ -31,6 +31,7 @@ export const dict = {
   "client.login.or": "ou",
   "client.login.google": "Entrar com Google",
   "client.login.forgotPassword": "Esqueci minha senha",
+  "client.login.exportLogs.exported": "Logs exportados. O arquivo está na pasta Downloads.",
   "client.forgotPassword.title": "Recuperar senha",
   "client.forgotPassword.description":
     "Informe o e-mail da sua conta. Se ele estiver cadastrado, você receberá uma senha temporária.",

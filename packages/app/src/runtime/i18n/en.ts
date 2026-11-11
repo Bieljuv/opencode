@@ -459,6 +459,7 @@ export const dict = {
   "client.login.or": "or",
   "client.login.google": "Sign in with Google",
   "client.login.forgotPassword": "Forgot your password",
+  "client.login.exportLogs.exported": "Logs exported. The file is in your Downloads folder.",
   "client.forgotPassword.title": "Recover your password",
   "client.forgotPassword.description":
     "Enter your account email. If it's registered, you'll receive a temporary password.",
