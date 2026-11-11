@@ -131,7 +131,16 @@ export function ManosTechClientGate(props: { api: ElectronAPI }) {
         const current = untrack(state)
         const trialEndsAt = current.status === "ready" ? current.trialEndsAt : null
         const untilTrialEnd = trialEndsAt ? Date.parse(trialEndsAt) - Date.now() : Number.POSITIVE_INFINITY
-        const delay = Math.min(REVALIDATE_MS, untilTrialEnd <= 0 ? 5_000 : untilTrialEnd)
+        // A data de renovação da chave: revalidar NA virada do ciclo, para
+        // a chave nova ser buscada e o gateway reconectado antes de a velha
+        // parar de responder no meio da sessão — em vez de até 15 min tarde.
+        const renewsAt = current.status === "ready" ? current.apiKeyRenewsAt : null
+        const untilRenewal = renewsAt ? Date.parse(renewsAt) - Date.now() : Number.POSITIVE_INFINITY
+        const delay = Math.min(
+          REVALIDATE_MS,
+          untilTrialEnd <= 0 ? 5_000 : untilTrialEnd,
+          untilRenewal <= 0 ? 5_000 : untilRenewal,
+        )
         revalidateTimer = setTimeout(() => dispatch({ type: "revalidate" }), delay)
 
         return

@@ -13,6 +13,9 @@ const ClientStatus = Schema.Union([
     client: ClientProfile,
     trialEndsAt: Schema.NullOr(Schema.String),
     gatewayActive: Schema.Boolean,
+    // Fim do ciclo mensal da chave; a chave está sempre presente no
+    // main (null = sem chave), como o releasesAt do uso.
+    apiKeyRenewsAt: Schema.Union([Schema.String, Schema.Null, Schema.Undefined]),
   }),
   Schema.Struct({ state: Schema.Literal("must-change"), client: ClientProfile }),
   Schema.Struct({ state: Schema.Literal("trial-expired"), trialEndsAt: Schema.NullOr(Schema.String) }),

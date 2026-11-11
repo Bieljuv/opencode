@@ -679,6 +679,14 @@ describe("isHopSignal", () => {
       expect(isHopSignal({ type })).toBe(false)
   })
 
+  test("an expired ManosTech client key never hops and is never exhaustion", () => {
+    // Every gateway model shares the same client key: hopping would fail
+    // the same way on each model, and the key never heals with backoff —
+    // so the runner ends the turn with the error itself instead.
+    expect(isHopSignal({ type: "provider.key-expired" })).toBe(false)
+    expect(isExhaustionError({ type: "provider.key-expired" })).toBe(false)
+  })
+
   test("an auth failure hops to another provider instead of killing the turn (log 2026-11-10)", () => {
     // Gabriel's "oi" (2026-11-10 16:01:15Z): the first model failed with
     // quota and the router hopped, but the second failed with auth and

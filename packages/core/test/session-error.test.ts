@@ -304,6 +304,30 @@ describe("toSessionError", () => {
     expect(toSessionError(trial)).toMatchObject({ type: "provider.auth" })
   })
 
+  test("maps the ManosTech gateway expired client key to its own error, never the generic one", () => {
+    // The gateway answers an expired monthly client key with 401 and its
+    // own code (`chave_expirada`). It keeps its own type and message: the
+    // runner ends the turn with it (no hop, no retry) and the timeline
+    // tells the user to send the message again — the generic exhaustion
+    // message would hide that the session expired and that retrying works.
+    // The trial block is still auth: only the expired KEY is key-expired.
+    const gateway = RequestExecutor.httpFailure({
+      message: "A chave expirou. Faça login novamente.",
+      url: "https://painel-manostech.manostech.workers.dev/v1/chat/completions",
+      status: 401,
+      responseBody: JSON.stringify({
+        error: { message: "A chave expirou. Faça login novamente.", type: "chave_expirada", code: "chave_expirada" },
+      }),
+    })
+    expect(toSessionError(gateway)).toEqual({
+      type: "provider.key-expired",
+      message: "Sua sessão expirou. Envie sua mensagem novamente em instantes.",
+    })
+    const shown = JSON.stringify(toSessionError(gateway))
+    for (const leak of ["chave_expirada", "chave", "painel-manostech", "manostech", "gateway", "login"])
+      expect(shown).not.toContain(leak)
+  })
+
   test("collapses a credit-balance refusal into the generic exhaustion error", () => {
     // Anthropic refuses a spent account with 400 and an invalid-request
     // type; the runner treated it as a malformed request and never hopped.

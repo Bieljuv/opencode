@@ -104,6 +104,29 @@ test("a slice from the Chromium MediaRecorder (audio/webm;codecs=opus) is sent a
   expect(requests[0]?.body).toContain("Content-Type: audio/webm")
 })
 
+test("an expired client key is reported as key-expired, not a plain failure", async () => {
+  // O gateway responde 401 com o código dele quando o ciclo mensal da
+  // chave virou no meio da sessão: a fatia volta como "key-expired" para
+  // o chamador renovar a chave e tentar de novo — um 401 genérico
+  // ("failed") deixaria o microfone mudo até a próxima validação.
+  answer = {
+    status: 401,
+    body: { error: { message: "A chave expirou. Faça login novamente.", type: "chave_expirada", code: "chave_expirada" } },
+  }
+
+  const result = await transcribeSlice({ apiKey: "client-key", gatewayUrl: gatewayUrl(), audioDataUrl: AUDIO_DATA_URL })
+
+  expect(result).toEqual({ ok: false, error: "key-expired" })
+})
+
+test("a 401 without the expired-key code stays a plain failure", async () => {
+  answer = { status: 401, body: { error: { message: "Não autorizado.", type: "nao_autorizado", code: "nao_autorizado" } } }
+
+  const result = await transcribeSlice({ apiKey: "client-key", gatewayUrl: gatewayUrl(), audioDataUrl: AUDIO_DATA_URL })
+
+  expect(result).toEqual({ ok: false, error: "failed" })
+})
+
 test("parseAudioDataUrl accepts audio data URLs and rejects the rest", () => {
   expect(parseAudioDataUrl(AUDIO_DATA_URL)).toEqual({ mimeType: "audio/webm", data: AUDIO_B64 })
   expect(parseAudioDataUrl(`data:audio/webm;codecs=opus;base64,${AUDIO_B64}`)).toEqual({
