@@ -16,6 +16,7 @@ import {
   MANDATORY_TOKEN_SAVING,
   MULTI_AGENT,
   unsupportedParts,
+  WEB_SEARCH_FIRST,
 } from "@opencode/core/session/model-request"
 import { SessionMessage } from "@opencode/core/session/message"
 import { SessionRunnerModel } from "@opencode/core/session/runner/model"
@@ -434,7 +435,10 @@ describe("SessionModelRequest.baseTranscript mandatory token saving and arena au
     // gutting their text, fails this test.
     expect(system).toContain(MANDATORY_TOKEN_SAVING)
     expect(system).toContain(ARENA_AUTO)
+    expect(system).toContain(WEB_SEARCH_FIRST)
     // Distinctive phrases, so an emptied constant fails too.
+    expect(system).toContain("search the web with the websearch tool")
+    expect(system).toContain("never invent a current fact, price, version, or link")
     expect(system).toContain("ponytail and graphify skills are not optional")
     expect(system).toContain("graphify-out/graph.json")
     expect(system).toContain("Never ask the user to install anything")
