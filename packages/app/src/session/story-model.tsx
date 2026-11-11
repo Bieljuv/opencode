@@ -183,6 +183,7 @@ export function createPromptController(input: {
       model: { selection: modelSelection, providerName: storyComposerModel.provider.name, paid: true, loading: false },
       effort: { current: () => "automatico" as const, set: () => undefined, ready: () => true },
       multiAgent: { current: () => false, set: () => undefined, ready: () => true },
+      planBlocked: () => undefined,
     } satisfies ComposerModel,
     setValue(value: string) {
       draft[1]("prompt", [{ type: "text", content: value, start: 0, end: value.length }])

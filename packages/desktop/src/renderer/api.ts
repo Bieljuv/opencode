@@ -55,6 +55,7 @@ export const api: ElectronAPI = {
   cancelClientGoogle: () => invoke("ManosTechClientGoogleCancel"),
   getClientUsage: () => invoke("ManosTechClientUsage"),
   markClientUsageWarned: () => invoke("ManosTechClientUsageWarned"),
+  markWeeklyUsageWarned: () => invoke("ManosTechClientWeeklyUsageWarned"),
   transcribeClientAudio: (audio) => invoke("ManosTechClientTranscribe", { audio }),
   onClientChanged: (cb) => listen("ManosTechClientChanged", () => cb()),
 

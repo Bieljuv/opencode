@@ -114,6 +114,14 @@ export type WeeklyUsage = {
   readonly resetsAt: string
   readonly blocked: boolean
   readonly releasesAt: string | undefined
+  /**
+   * Início do ciclo corrente (ISO). É a identidade do ciclo: o aviso
+   * semanal de 75% vale uma vez por ciclo, e a virada da semana
+   * (resetsAt) não muda quando um cooldown de 7h termina no meio da
+   * semana e um novo ciclo começa. Undefined quando o painel não o
+   * reporta (painel antigo) — o main usa o resetsAt como chave então.
+   */
+  readonly cicloInicio: string | undefined
 }
 
 export type ClientErrorTag =
@@ -194,6 +202,7 @@ const WeeklyUsageResponse = Schema.Struct({
   bloqueado: Schema.Boolean,
   liberacao_em: Schema.NullOr(Schema.String),
   reseta_em: Schema.String,
+  ciclo_inicio: Schema.optional(Schema.String),
 })
 
 const MonthlyUsageResponse = Schema.Struct({
@@ -506,6 +515,7 @@ function weeklyUsage(json: unknown): WeeklyUsage | undefined {
     resetsAt: value.reseta_em,
     blocked: value.bloqueado,
     releasesAt: value.liberacao_em ?? undefined,
+    cicloInicio: value.ciclo_inicio ?? undefined,
   }
 }
 

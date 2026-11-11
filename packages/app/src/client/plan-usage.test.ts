@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import {
+  planBlock,
   planUsageBlocks,
   planUsageResetInMs,
   planUsageTone,
   planUsageToneClass,
   shouldShowUsageWarning,
+  shouldShowWeeklyUsageWarning,
   type PlanUsage,
 } from "./plan-usage"
 import { dict as dictBr } from "../runtime/i18n/br"
@@ -50,24 +52,145 @@ describe("plan usage bar blocks", () => {
 })
 
 describe("usage warning trigger", () => {
-  test("fires at 85% in the app-root watcher, once a day, and never below it or after being warned", () => {
+  test("fires at 75% in the app-root watcher, once a day, and never below it or after being warned", () => {
     const usage = (percent: number, warnedToday: boolean): PlanUsage => ({
       percent,
       resetsAt: "2026-11-11T03:00:00Z",
       warnedToday,
       blocked: false,
+      weeklyWarned: false,
     })
 
-    expect(shouldShowUsageWarning(usage(84, false), true)).toBe(false)
-    expect(shouldShowUsageWarning(usage(85, false), true)).toBe(true)
+    expect(shouldShowUsageWarning(usage(74, false), true)).toBe(false)
+    expect(shouldShowUsageWarning(usage(75, false), true)).toBe(true)
     expect(shouldShowUsageWarning(usage(100, false), true)).toBe(true)
     expect(shouldShowUsageWarning(usage(150, false), true)).toBe(true)
     // Warned today: the push stays off until tomorrow.
-    expect(shouldShowUsageWarning(usage(85, true), true)).toBe(false)
+    expect(shouldShowUsageWarning(usage(75, true), true)).toBe(false)
     expect(shouldShowUsageWarning(usage(100, true), true)).toBe(false)
     // Without the watcher (e.g. the Settings usage screen) there is no warning.
     expect(shouldShowUsageWarning(usage(100, false))).toBe(false)
     expect(shouldShowUsageWarning(usage(100, false), false)).toBe(false)
+  })
+})
+
+describe("weekly usage warning trigger", () => {
+  test("fires at 75% of the week, once per cycle, and never below it or after being warned", () => {
+    const usage = (percent: number, weeklyWarned: boolean): PlanUsage => ({
+      percent: 10,
+      resetsAt: "2026-11-11T03:00:00Z",
+      warnedToday: false,
+      blocked: false,
+      weekly: {
+        percent,
+        resetsAt: "2026-11-16T03:00:00Z",
+        blocked: false,
+        releasesAt: undefined,
+      },
+      weeklyWarned,
+    })
+
+    expect(shouldShowWeeklyUsageWarning(usage(74, false), true)).toBe(false)
+    expect(shouldShowWeeklyUsageWarning(usage(75, false), true)).toBe(true)
+    expect(shouldShowWeeklyUsageWarning(usage(100, false), true)).toBe(true)
+    // Warned this cycle: the push stays off until the next cycle.
+    expect(shouldShowWeeklyUsageWarning(usage(75, true), true)).toBe(false)
+    expect(shouldShowWeeklyUsageWarning(usage(100, true), true)).toBe(false)
+    // Without the watcher there is no warning, and without a weekly
+    // limit there is nothing to warn about.
+    expect(shouldShowWeeklyUsageWarning(usage(100, false))).toBe(false)
+    expect(shouldShowWeeklyUsageWarning(usage(100, false), false)).toBe(false)
+    const noWeekly: PlanUsage = {
+      percent: 10,
+      resetsAt: "2026-11-11T03:00:00Z",
+      warnedToday: false,
+      blocked: false,
+      weeklyWarned: false,
+    }
+    expect(shouldShowWeeklyUsageWarning(noWeekly, true)).toBe(false)
+  })
+})
+
+describe("plan block", () => {
+  test("locks the composer on any spent allowance, with the latest release, and unlocks when all clear", () => {
+    const base: PlanUsage = {
+      percent: 10,
+      resetsAt: "2026-11-11T03:00:00Z",
+      warnedToday: false,
+      blocked: false,
+      weeklyWarned: false,
+    }
+
+    // Nothing spent: no block, the composer stays open.
+    expect(planBlock(base)).toBeUndefined()
+    // Daily spent: the release is midnight.
+    expect(planBlock({ ...base, blocked: true })).toEqual({ releasesAt: "2026-11-11T03:00:00Z" })
+    // Weekly spent: the release is the cooldown end.
+    expect(
+      planBlock({
+        ...base,
+        weekly: {
+          percent: 100,
+          resetsAt: "2026-11-16T03:00:00Z",
+          blocked: true,
+          releasesAt: "2026-11-11T19:00:00Z",
+        },
+      }),
+    ).toEqual({ releasesAt: "2026-11-11T19:00:00Z" })
+    // Monthly spent: the release is the turn of the month.
+    expect(
+      planBlock({
+        ...base,
+        monthly: {
+          percent: 100,
+          resetsAt: "2026-12-01T03:00:00Z",
+          blocked: true,
+          releasesAt: "2026-12-01T03:00:00Z",
+        },
+      }),
+    ).toEqual({ releasesAt: "2026-12-01T03:00:00Z" })
+    // Daily and weekly spent together: the composer unlocks only when
+    // the LATEST release passes (tomorrow's midnight, not today's
+    // cooldown end).
+    expect(
+      planBlock({
+        ...base,
+        resetsAt: "2026-11-12T03:00:00Z",
+        blocked: true,
+        weekly: {
+          percent: 100,
+          resetsAt: "2026-11-16T03:00:00Z",
+          blocked: true,
+          releasesAt: "2026-11-11T19:00:00Z",
+        },
+      }),
+    ).toEqual({ releasesAt: "2026-11-12T03:00:00Z" })
+    // A spent allowance without a release instant falls back to its
+    // own reset (the weekly without a cooldown end).
+    expect(
+      planBlock({
+        ...base,
+        weekly: {
+          percent: 100,
+          resetsAt: "2026-11-16T03:00:00Z",
+          blocked: true,
+          releasesAt: undefined,
+        },
+      }),
+    ).toEqual({ releasesAt: "2026-11-16T03:00:00Z" })
+    // High usage without a block never locks.
+    expect(
+      planBlock({
+        ...base,
+        percent: 99,
+        weekly: {
+          percent: 99,
+          resetsAt: "2026-11-16T03:00:00Z",
+          blocked: false,
+          releasesAt: undefined,
+        },
+      }),
+    ).toBeUndefined()
   })
 })
 
@@ -99,7 +222,13 @@ describe("usage warning push copy", () => {
     ]
 
     for (const dict of [dictEn, dictBr]) {
-      for (const key of ["client.usage.warningPush.title", "client.usage.warningPush.body"] as const) {
+      for (const key of [
+        "client.usage.warningPush.title",
+        "client.usage.warningPush.body",
+        "client.usage.weeklyWarningPush.title",
+        "client.usage.weeklyWarningPush.body",
+        "client.usage.blocked.message",
+      ] as const) {
         const text = dict[key]
 
         expect(text).toBeDefined()

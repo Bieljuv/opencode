@@ -24,15 +24,18 @@ import {
   clearGatewayUrl,
   clearSession,
   clearUsageWarnedDay,
+  clearWeeklyWarnedCycle,
   deviceId,
   loadApiKey,
   loadGatewayUrl,
   loadSession,
   loadUsageWarnedDay,
+  loadWeeklyWarnedCycle,
   saveApiKey,
   saveGatewayUrl,
   saveSession,
   saveUsageWarnedDay,
+  saveWeeklyWarnedCycle,
   updateSession,
 } from "./store"
 
@@ -65,6 +68,8 @@ export type ClientUsage = {
   readonly blocked: boolean
   readonly weekly: Panel.WeeklyUsage | undefined
   readonly monthly: Panel.MonthlyUsage | undefined
+  /** O aviso semanal dos 75% já apareceu neste ciclo? */
+  readonly weeklyWarned: boolean
 }
 
 export type LoginResult =
@@ -126,6 +131,7 @@ function signOutLocally(): void {
   clearApiKey()
   clearGatewayUrl()
   clearUsageWarnedDay()
+  clearWeeklyWarnedCycle()
   clearClientIdentity()
   gatewayConnectedFor = undefined
   usageCache = undefined
@@ -217,6 +223,7 @@ export async function getClientUsage(): Promise<ClientUsage | null> {
     blocked: usage.blocked,
     weekly: usage.weekly,
     monthly: usage.monthly,
+    weeklyWarned: wasWeeklyUsageWarned(),
   }
 }
 
@@ -229,14 +236,41 @@ export async function transcribeAudio(audioDataUrl: string): Promise<Transcribe.
   })
 }
 
-/** O aviso dos 85% já apareceu hoje (America/Sao_Paulo)? */
+/** O aviso dos 75% já apareceu hoje (America/Sao_Paulo)? */
 export function wasUsageWarnedToday(): boolean {
   return loadUsageWarnedDay() === todayInSaoPaulo(Date.now())
 }
 
-/** Marca o aviso dos 85% como mostrado hoje. */
+/** Marca o aviso dos 75% como mostrado hoje. */
 export function markUsageWarnedToday(): void {
   saveUsageWarnedDay(todayInSaoPaulo(Date.now()))
+}
+
+/**
+ * A chave do ciclo semanal corrente: o início do ciclo (o painel
+ * reporta), ou a virada da semana quando o painel não o reporta.
+ * Sem uso semanal (sem limite semanal), não há ciclo — undefined.
+ */
+function weeklyCycleKey(): string | undefined {
+  const weekly = usageCache?.value?.weekly
+
+  if (!weekly) return undefined
+
+  return weekly.cicloInicio ?? weekly.resetsAt
+}
+
+/** O aviso semanal dos 75% já apareceu neste ciclo? */
+export function wasWeeklyUsageWarned(): boolean {
+  const key = weeklyCycleKey()
+
+  return key !== undefined && loadWeeklyWarnedCycle() === key
+}
+
+/** Marca o aviso semanal dos 75% como mostrado neste ciclo. */
+export function markWeeklyUsageWarned(): void {
+  const key = weeklyCycleKey()
+
+  if (key !== undefined) saveWeeklyWarnedCycle(key)
 }
 
 export async function getStatus(): Promise<ClientStatus> {

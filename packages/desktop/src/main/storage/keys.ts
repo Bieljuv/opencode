@@ -25,3 +25,5 @@ export const MANOSTECH_CLIENT_API_KEY_KEY = "manostech.client.apiKey"
 export const MANOSTECH_GATEWAY_URL_KEY = "manostech.gateway.url"
 
 export const MANOSTECH_USAGE_WARNED_KEY = "manostech.client.usageWarned"
+
+export const MANOSTECH_USAGE_WEEKLY_WARNED_KEY = "manostech.client.usageWeeklyWarned"

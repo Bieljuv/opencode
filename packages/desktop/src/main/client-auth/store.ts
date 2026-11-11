@@ -7,6 +7,7 @@ import {
   MANOSTECH_CLIENT_SESSION_KEY,
   MANOSTECH_GATEWAY_URL_KEY,
   MANOSTECH_USAGE_WARNED_KEY,
+  MANOSTECH_USAGE_WEEKLY_WARNED_KEY,
 } from "../storage/keys"
 import { decryptSecret, encryptSecret } from "./secrets"
 import type { SessionData } from "./panel"
@@ -136,6 +137,27 @@ export function saveUsageWarnedDay(day: string): void {
 
 export function clearUsageWarnedDay(): void {
   getStore().delete(MANOSTECH_USAGE_WARNED_KEY)
+}
+
+/**
+ * O ciclo semanal em que a barra avisou dos 75% do uso semanal (a
+ * chave do ciclo: o início dele, ou a virada da semana quando o
+ * painel não reporta o início). O aviso aparece uma vez por ciclo:
+ * sem a chave do ciclo corrente guardada, a barra mostra a linha e
+ * marca; com ela, silencia até o próximo ciclo.
+ */
+export function loadWeeklyWarnedCycle(): string | undefined {
+  const current = getStore().get(MANOSTECH_USAGE_WEEKLY_WARNED_KEY)
+
+  return typeof current === "string" && current.length > 0 ? current : undefined
+}
+
+export function saveWeeklyWarnedCycle(cycle: string): void {
+  getStore().set(MANOSTECH_USAGE_WEEKLY_WARNED_KEY, cycle)
+}
+
+export function clearWeeklyWarnedCycle(): void {
+  getStore().delete(MANOSTECH_USAGE_WEEKLY_WARNED_KEY)
 }
 
 /** Um id estável por instalação; um login novo no mesmo aparelho vence o anterior. */

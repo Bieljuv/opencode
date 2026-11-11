@@ -59,6 +59,7 @@ export type ElectronAPI = {
   cancelClientGoogle(): Promise<void>
   getClientUsage(): Promise<ManosTechClientUsageValue | null>
   markClientUsageWarned(): Promise<void>
+  markWeeklyUsageWarned(): Promise<void>
   transcribeClientAudio(audio: string): Promise<ManosTechClientTranscribeValue>
   onClientChanged(cb: () => void): () => void
   openDirectoryPicker(opts?: DirectoryPickerOptions): Promise<string | string[] | null>
