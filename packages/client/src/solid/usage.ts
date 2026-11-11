@@ -43,6 +43,35 @@ function isAssistantWithTokens(message: SessionMessageInfo): message is Assistan
   return message.type === "assistant" && message.tokens !== undefined
 }
 
+type TokenParts = {
+  input: number
+  output: number
+  reasoning: number
+  cache: { read: number; write: number }
+}
+
+const zeroParts = (): TokenParts => ({ input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } })
+
+/** Sums the token parts of assistant messages that already reported usage. */
+function sumTokenParts(messages: ReadonlyArray<AssistantWithTokens>): TokenParts {
+  return messages.reduce(
+    (acc, message) => ({
+      input: acc.input + message.tokens.input,
+      output: acc.output + message.tokens.output,
+      reasoning: acc.reasoning + message.tokens.reasoning,
+      cache: {
+        read: acc.cache.read + message.tokens.cache.read,
+        write: acc.cache.write + message.tokens.cache.write,
+      },
+    }),
+    zeroParts(),
+  )
+}
+
+function totalOf(parts: TokenParts): number {
+  return parts.input + parts.output + parts.reasoning + parts.cache.read + parts.cache.write
+}
+
 /**
  * Every token spent on one São Paulo day, across every session that
  * reports it: the sum over that day's assistant messages with tokens,
@@ -53,19 +82,28 @@ function isAssistantWithTokens(message: SessionMessageInfo): message is Assistan
  * reported usage) count nothing.
  */
 export function dayUsageTotal(messages: ReadonlyArray<SessionMessageInfo>, day: string): number {
-  return messages
-    .filter(isAssistantWithTokens)
-    .filter((message) => saoPauloDayKey(message.time.created) === day)
-    .reduce(
-      (total, message) =>
-        total +
-        message.tokens.input +
-        message.tokens.output +
-        message.tokens.reasoning +
-        message.tokens.cache.read +
-        message.tokens.cache.write,
-      0,
-    )
+  return dayUsageBreakdown(messages, day).total
+}
+
+/**
+ * Every token spent on one São Paulo day, by kind: the parts of the
+ * day total — input, output, reasoning and cache, summed over that
+ * day's assistant messages with tokens. Same scope as
+ * `dayUsageTotal`: `total` here IS that total, so the parts always
+ * add up to the number the Context tab shows. `input` is the input
+ * that was not served from cache; cached input lives in
+ * `cache.read` (served from cache) and `cache.write` (written to
+ * it), so nothing is counted twice. Same spend rules as
+ * `dayUsageTotal`: no refund on revert or compaction, a message
+ * counts on the day it was created, messages without tokens count
+ * nothing.
+ */
+export function dayUsageBreakdown(messages: ReadonlyArray<SessionMessageInfo>, day: string) {
+  const spent = sumTokenParts(
+    messages.filter(isAssistantWithTokens).filter((message) => saoPauloDayKey(message.time.created) === day),
+  )
+
+  return { ...spent, total: totalOf(spent) }
 }
 
 /**
@@ -79,27 +117,7 @@ export function cumulativeSessionUsage(messages: ReadonlyArray<SessionMessageInf
   const boundaryIndex = boundary ? messages.findIndex((message) => message.id === boundary) : -1
   const end = boundary ? (boundaryIndex === -1 ? 0 : boundaryIndex) : messages.length
 
-  const spent = messages
-    .slice(0, end)
-    .filter(
-      (message): message is SessionMessageAssistant & { tokens: NonNullable<SessionMessageAssistant["tokens"]> } =>
-        message.type === "assistant" && message.tokens !== undefined,
-    )
-    .reduce(
-      (acc, message) => ({
-        input: acc.input + message.tokens.input,
-        output: acc.output + message.tokens.output,
-        reasoning: acc.reasoning + message.tokens.reasoning,
-        cache: {
-          read: acc.cache.read + message.tokens.cache.read,
-          write: acc.cache.write + message.tokens.cache.write,
-        },
-      }),
-      { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    )
+  const spent = sumTokenParts(messages.slice(0, end).filter(isAssistantWithTokens))
 
-  return {
-    ...spent,
-    total: spent.input + spent.output + spent.reasoning + spent.cache.read + spent.cache.write,
-  }
+  return { ...spent, total: totalOf(spent) }
 }

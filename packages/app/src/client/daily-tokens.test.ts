@@ -87,8 +87,38 @@ describe("fetchDailyTokens", () => {
     })
 
     // The session not updated today is never walked, even though it holds tokens.
-    expect(await fetchDailyTokens(source)).toEqual({ total: 350, date: "2026-11-10" })
+    expect(await fetchDailyTokens(source)).toEqual({
+      total: 350,
+      date: "2026-11-10",
+      breakdown: { input: 350, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    })
     expect(source.calls.messages.ses_old).toBeUndefined()
+  })
+
+  test("returns the day's breakdown with the total, in the same scope", async () => {
+    setSystemTime(Date.parse("2026-11-10T15:00:00Z"))
+
+    const spent: SessionMessageInfo = {
+      id: "msg_full",
+      type: "assistant",
+      agent: "build",
+      model: { id: "model", providerID: "provider" },
+      content: [],
+      tokens: { input: 100, output: 20, reasoning: 5, cache: { read: 30, write: 10 } },
+      time: { created: Date.parse("2026-11-10T14:00:00Z") },
+    }
+
+    const source = fakeSource({
+      sessions: [page([sessionInfo("ses_a", "2026-11-10T14:00:00Z")])],
+      messages: { ses_a: [page([spent, assistant("msg_b", "2026-11-10T13:00:00Z", 50)])] },
+    })
+
+    // The parts are the total's own parts: 100+20+5+30+10 + 50 = 215, and they add up to it.
+    expect(await fetchDailyTokens(source)).toEqual({
+      total: 215,
+      date: "2026-11-10",
+      breakdown: { input: 150, output: 20, reasoning: 5, cache: { read: 30, write: 10 } },
+    })
   })
 
   test("pages the session list until the cursor ends", async () => {
@@ -105,7 +135,11 @@ describe("fetchDailyTokens", () => {
       },
     })
 
-    expect(await fetchDailyTokens(source)).toEqual({ total: 30, date: "2026-11-10" })
+    expect(await fetchDailyTokens(source)).toEqual({
+      total: 30,
+      date: "2026-11-10",
+      breakdown: { input: 30, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    })
     expect(source.calls.sessions).toBe(2)
   })
 
@@ -128,7 +162,11 @@ describe("fetchDailyTokens", () => {
       },
     })
 
-    expect(await fetchDailyTokens(source)).toEqual({ total: 40, date: "2026-11-10" })
+    expect(await fetchDailyTokens(source)).toEqual({
+      total: 40,
+      date: "2026-11-10",
+      breakdown: { input: 40, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    })
     expect(source.calls.messages.ses_a).toBe(1)
   })
 
@@ -142,7 +180,11 @@ describe("fetchDailyTokens", () => {
       },
     })
 
-    expect(await fetchDailyTokens(source)).toEqual({ total: 0, date: "2026-11-10" })
+    expect(await fetchDailyTokens(source)).toEqual({
+      total: 0,
+      date: "2026-11-10",
+      breakdown: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    })
     expect(source.calls.messages.ses_old).toBeUndefined()
   })
 
