@@ -6,7 +6,9 @@ import { Persistence } from "@/runtime/persistence/schema"
 /**
  * The multi-agent toggle the user picked in the composer. It travels to the
  * server as prompt metadata (`manostechMultiAgent`); the agent only splits
- * work across parallel subagents while it is on. Off by default.
+ * work across parallel subagents while it is on. On by default: a fresh
+ * client sees the agents working in parallel, and the toggle stays for
+ * anyone who wants it off.
  */
 export const MultiAgentState = Persistence.struct({
   multiAgent: Schema.Boolean,
@@ -21,7 +23,7 @@ export type MultiAgentSelection = {
 /** The global, persisted multi-agent selection. Call once per composer controller; every prompt it sends reads it. */
 export function useMultiAgent(): MultiAgentSelection {
   const [store, setStore, _, ready] = persisted(Persist.global("manostech-multi-agent"), MultiAgentState, {
-    multiAgent: false,
+    multiAgent: true,
   })
 
   return {

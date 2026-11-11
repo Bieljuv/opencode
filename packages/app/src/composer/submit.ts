@@ -829,7 +829,7 @@ async function sendPrompt(
       // The router reads this to pick how much effort the answer gets; "automatico" when no composer chose one.
       manostechEffort: effort?.() ?? "automatico",
       // The router reads this to decide whether the agent may split the work across parallel subagents.
-      manostechMultiAgent: multiAgent?.() ?? false,
+      manostechMultiAgent: multiAgent?.() ?? true,
     },
     prepare: staged ? undefined : () => (committed ??= commit()),
   }
