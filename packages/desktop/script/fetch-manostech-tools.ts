@@ -78,8 +78,24 @@ try {
   await extract(nodeZip, nodeDir)
   await extract(ffmpegZip, ffmpegDir)
 
-  await $`cp -R ${path.join(nodeDir, `node-v${NODE_VERSION}-win-x64`)}/. ${out}/`
-  console.log("Staged the Node distribution (node.exe, npm.cmd, npx.cmd)")
+  // Stage with Node's own cp, not the shell `cp -R`: on the Windows
+  // runner the shell copy exited 0, printed "Staged", and node.exe was
+  // still missing from out/ (build-windows-x64 failed twice with ENOENT
+  // on the verify stat). The ffmpeg copies below already use fs cp and
+  // work; the whole Node distribution goes the same way. Verify the
+  // extraction first so a missing/empty source fails loud here instead
+  // of surfacing later as a missing staged binary.
+  const nodeSrc = path.join(nodeDir, `node-v${NODE_VERSION}-win-x64`)
+  const nodeExeSrc = path.join(nodeSrc, "node.exe")
+
+  if ((await stat(nodeExeSrc)).size === 0) throw new Error(`Extracted node.exe is empty: ${nodeExeSrc}`)
+
+  await cp(nodeSrc, out, { recursive: true })
+  const nodeSize = (await stat(path.join(out, "node.exe"))).size
+
+  if (nodeSize === 0) throw new Error("Staged an empty binary: node.exe")
+
+  console.log(`Staged the Node distribution (node.exe ${(nodeSize / 1024 / 1024).toFixed(1)} MB, npm.cmd, npx.cmd)`)
 
   for (const [inside, name] of FFMPEG_WANTED) {
     const source = path.join(ffmpegDir, inside)
