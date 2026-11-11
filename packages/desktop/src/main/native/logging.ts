@@ -267,7 +267,7 @@ function initCrashReporter(fs: FileSystem.FileSystem, path: Path.Path) {
 
 function writeDebugArchive(fs: FileSystem.FileSystem, path: Path.Path, netLogPath: string | undefined) {
   return Effect.gen(function* () {
-    const output = path.join(app.getPath("downloads"), `opencode-debug-${stamp()}.zip`)
+    const output = path.join(app.getPath("downloads"), `manostech-debug-${stamp()}.zip`)
     yield* Effect.logInfo("exporting debug logs", { output })
 
     const files = [
