@@ -12,7 +12,7 @@ import { useI18n } from "@opencode/ui/context/i18n"
 import { File } from "@opencode/session-ui/file"
 import type { SessionMessageInfo } from "@opencode/client/promise"
 import { cumulativeSessionUsage, lastAssistantWithUsage } from "@opencode/client/solid"
-import { createKeyed, usePlugin, type DailyTokens, type MountedSession } from "@opencode/plugin/gui"
+import { createKeyed, usePlugin, type DailyTokens, type MountedSession, type WeeklyTokens } from "@opencode/plugin/gui"
 import { catalogModel, syncCatalog } from "./catalog"
 import { fetchSessionExport, sanitizeMessageForDisplay, sessionExportFilename } from "./export"
 import { createSessionContextFormatter } from "./format"
@@ -113,8 +113,11 @@ export default function SessionContextTab(props: { session: MountedSession }) {
   // Model switches are hop metadata, not conversation — the raw list omits them, like the export.
   const rawMessages = createMemo(() => messages().filter((message) => message.type !== "model-switched"))
 
-  // The context window now: the latest step after the last compaction. Its usage is the
-  // window gauge (how full the context is), not the session spend.
+  // The context window now: the latest step after the last compaction.
+  // The "Modelo" row reads "Automático" once such a step exists, "—"
+  // before the first answer. The window gauge itself (limit, usage)
+  // is gone from the grid — the app compacts on its own, and the user
+  // never acts on the window.
   const context = createMemo(() => {
     const message = lastAssistantWithUsage(messages(), info()?.revert?.messageID)
 
@@ -148,6 +151,7 @@ export default function SessionContextTab(props: { session: MountedSession }) {
   // data, total and parts both fall back to the session cumulative,
   // so the scopes stay consistent either way.
   const [daily, setDaily] = createSignal<DailyTokens | undefined>(undefined)
+  const [weekly, setWeekly] = createSignal<WeeklyTokens | undefined>(undefined)
 
   const loadDaily = async () => {
     const serverID = props.session.server.id
@@ -166,8 +170,32 @@ export default function SessionContextTab(props: { session: MountedSession }) {
     setDaily(value)
   }
 
+  // The week total, same source as the day total over the week: every
+  // token spent this week across every session on this server. While
+  // it loads (or when the host cannot answer) the stat falls back to
+  // the day total, so the number never blanks and never goes back.
+  const loadWeekly = async () => {
+    const serverID = props.session.server.id
+    const getWeeklyTokens = ctx.weeklyTokens
+
+    if (!getWeeklyTokens) return
+
+    const value = await getWeeklyTokens(serverID).catch(() => undefined)
+
+    if (ctx.signal.aborted) return
+
+    if (!value) return
+
+    if (props.session.server.id !== serverID) return
+
+    setWeekly(value)
+  }
+
   onMount(() => {
-    const timer = setInterval(() => void loadDaily(), 60_000)
+    const timer = setInterval(() => {
+      void loadDaily()
+      void loadWeekly()
+    }, 60_000)
 
     onCleanup(() => clearInterval(timer))
   })
@@ -175,61 +203,53 @@ export default function SessionContextTab(props: { session: MountedSession }) {
   // A server change reloads at once instead of waiting for the next poll.
   createKeyed(
     () => props.session.server.id,
-    () => void loadDaily(),
+    () => {
+      void loadDaily()
+      void loadWeekly()
+    },
   )
 
   const formatter = createMemo(() => createSessionContextFormatter(i18n.locale()))
 
-  const counts = createMemo(() => {
-    const all = messages()
-    const user = all.reduce((count, message) => count + (message.type === "user" ? 1 : 0), 0)
-    const assistant = all.reduce((count, message) => count + (message.type === "assistant" ? 1 : 0), 0)
+  // One line for the router's choice: provider and model both read
+  // "Automático", so the two rows said the same thing. The router
+  // picks the model silently; the user never sees which one answered.
+  const aiLabel = createMemo(() => {
+    if (!context()) return "—"
 
-    return {
-      all: all.length,
-      user,
-      assistant,
-    }
-  })
-
-  const providerLabel = createMemo(() => {
-    const c = context()
-
-    if (!c) return "—"
-
-    // The router picks the model silently; the user never sees which one answered.
     return ctx.t("stats.automatic")
   })
 
-  const modelLabel = createMemo(() => {
-    const c = context()
-
-    if (!c) return "—"
-
-    // The router picks the model silently; the user never sees which one answered.
-    return ctx.t("stats.automatic")
-  })
-
+  // The grid shows what the user can act on: the session, how many
+  // messages it holds, the two totals — today and this week, side by
+  // side — the router's choice, and the day total's own parts. The
+  // message split (user/assistant) is gone: it never added up to the
+  // total, and the total alone says how long the session is.
+  // "Sessão criada" and "Última atividade" are gone: dates the user
+  // never acts on.
   const stats = [
     { label: "stats.session", value: () => info()?.title ?? (props.session.id || "—") },
-    { label: "stats.messages", value: () => counts().all.toLocaleString(i18n.locale()) },
-    { label: "stats.provider", value: providerLabel },
-    { label: "stats.model", value: modelLabel },
-    { label: "stats.limit", value: () => formatter().number(context()?.limit) },
+    { label: "stats.messages", value: () => messages().length.toLocaleString(i18n.locale()) },
     { label: "stats.totalTokens", value: () => formatter().number(daily()?.total ?? cumulative().total) },
-    { label: "stats.usage", value: () => formatter().percent(context()?.usage) },
+    {
+      label: "stats.weekTotal",
+      value: () => formatter().number(weekly()?.total ?? daily()?.total ?? cumulative().total),
+    },
+    { label: "stats.model", value: aiLabel },
     { label: "stats.inputTokens", value: () => formatter().number(daily()?.breakdown.input ?? cumulative().input) },
     { label: "stats.outputTokens", value: () => formatter().number(daily()?.breakdown.output ?? cumulative().output) },
-    { label: "stats.reasoningTokens", value: () => formatter().number(daily()?.breakdown.reasoning ?? cumulative().reasoning) },
+    {
+      label: "stats.reasoningTokens",
+      value: () => formatter().number(daily()?.breakdown.reasoning ?? cumulative().reasoning),
+    },
     {
       label: "stats.cacheTokens",
       value: () =>
-        `${formatter().number(daily()?.breakdown.cache.read ?? cumulative().cache.read)} / ${formatter().number(daily()?.breakdown.cache.write ?? cumulative().cache.write)}`,
+        formatter().number(
+          (daily()?.breakdown.cache.read ?? cumulative().cache.read) +
+            (daily()?.breakdown.cache.write ?? cumulative().cache.write),
+        ),
     },
-    { label: "stats.userMessages", value: () => counts().user.toLocaleString(i18n.locale()) },
-    { label: "stats.assistantMessages", value: () => counts().assistant.toLocaleString(i18n.locale()) },
-    { label: "stats.sessionCreated", value: () => formatter().time(info()?.time.created) },
-    { label: "stats.lastActivity", value: () => formatter().time(context()?.message.time.created) },
   ] satisfies { label: string; value: () => JSX.Element }[]
 
   const [exportState, setExportState] = createSignal(createSessionExportState())
