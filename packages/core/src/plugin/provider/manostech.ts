@@ -11,8 +11,9 @@ import { credentialSettings, metadataSettings } from "./credential-settings.js"
  * ManosTech gateway: the app never holds a provider key. The desktop main
  * connects the client API key (issued by the ManosTech panel, per client)
  * as this integration's key, and the server routes each request across its
- * shared provider keys. The single static model `auto` is the only route
- * the app knows; the server picks the model behind it.
+ * shared provider keys. The static models `auto` (chat) and `auto-image`
+ * (image) are the only routes the app knows; the server picks the model
+ * behind each one.
  *
  * Availability follows the normal rule: the provider record carries
  * integrationID `manostech`, so it only joins `Model.available()` while a
@@ -74,7 +75,22 @@ export const ManosTechGatewayPlugin = define({
             package: "@opencode/ai/providers/manostech",
             integrationID: Integration.ID.make("manostech"),
           },
-          models: [Model.Info.default(providerID, Model.ID.make("auto"))],
+          models: [
+            Model.Info.default(providerID, Model.ID.make("auto")),
+            {
+              ...Model.Info.default(providerID, Model.ID.make("auto-image")),
+              type: "image",
+              package: "@opencode/ai/providers/manostech/images",
+              // The gateway's /v1/images/generations only accepts the
+              // single model id "manostech-auto" (its image contract, like
+              // chat); the app-side id "auto-image" is rewritten to it on
+              // the wire through this body overlay, so the request the
+              // gateway sees carries "manostech-auto". Without the image
+              // model here, models.available(["image"]) is empty and the
+              // image tool never registers in gateway mode.
+              body: { model: "manostech-auto" },
+            },
+          ],
         })
       }
       if (typeof login.settings.baseURL === "string") {
