@@ -116,6 +116,17 @@ describe("provider error classification", () => {
     ).toBe("ProviderInternal")
   })
 
+  test("classifies a degraded provider function as provider internal", () => {
+    // The provider marks a model as degraded and refuses to invoke its
+    // function; the router hops to the next model instead of killing the
+    // session (Gabriel's PDV session, 2026-11-11 14:45:40Z).
+    expect(
+      classifyProviderFailure({
+        message: "Function id 'fd21cc19-b4ff-4949-ba07-90dd663c416a': DEGRADED function cannot be invoked",
+      })._tag,
+    ).toBe("ProviderInternal")
+  })
+
   test("prioritizes specific failures over retryable server text", () => {
     expect(
       [

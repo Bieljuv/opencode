@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import { Effect } from "effect"
+import { AIError, classifyProviderFailure } from "@opencode/ai/effect"
 import { Model, supportsText } from "@opencode/core/model"
 import { decodeSnapshot } from "@opencode/core/models-dev"
 import { Provider } from "@opencode/core/provider"
+import { toSessionError } from "@opencode/core/session/to-session-error"
 import { Token } from "@opencode/core/util/token"
 import { Money } from "@opencode/schema/money"
 import {
@@ -878,6 +880,25 @@ describe("nextHopFor", () => {
       ref("manostech", "auto"),
     )
     expect(nextHopFor(chain, new Set(["openrouter/a-free"]), pool, { type: "provider.internal" }, stepfun)).toEqual(
+      ref("manostech", "auto"),
+    )
+  })
+
+  test("a degraded provider function hops to another provider instead of killing the turn", () => {
+    // Gabriel's PDV session (2026-11-11 14:45:40Z): the provider marked
+    // the model as degraded and refused to invoke its function; the
+    // router did not hop and the session died. The classifier reads a
+    // degraded function as a provider-internal failure, so the session
+    // error is provider.internal — a hop signal — and the router moves
+    // to another provider instead of killing the turn.
+    const reason = classifyProviderFailure({
+      message: "Function id 'fd21cc19-b4ff-4949-ba07-90dd663c416a': DEGRADED function cannot be invoked",
+    })
+    const error = toSessionError(new AIError({ reason }))
+    expect(error.type).toBe("provider.internal")
+    expect(isHopSignal(error)).toBe(true)
+    const stepfun = resolved(free("openrouter", "a-free"))
+    expect(nextHopFor(chain, new Set(["openrouter/a-free"]), pool, error, stepfun)).toEqual(
       ref("manostech", "auto"),
     )
   })
