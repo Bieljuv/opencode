@@ -133,6 +133,12 @@ jobs:
           # shows. Empty until the repo secret exists; the build passes
           # and the button simply stays hidden.
           MANOSTECH_GOOGLE_CLIENT_ID: ${{ secrets.MANOSTECH_GOOGLE_CLIENT_ID }}
+          # Bakes the Google OAuth client secret into the app: the token
+          # endpoint requires it for Desktop clients, and without it the
+          # code exchange fails with 400 invalid_request. Empty until
+          # the repo secret exists; the build passes and the exchange
+          # simply sends no secret, as before.
+          MANOSTECH_GOOGLE_CLIENT_SECRET: ${{ secrets.MANOSTECH_GOOGLE_CLIENT_SECRET }}
       # Stages the bundled video tools (Node + FFmpeg) into
       # packages/desktop/resources/manostech-tools/win32-x64/ so the pack
       # ships them. Without this step the installer still builds, but the

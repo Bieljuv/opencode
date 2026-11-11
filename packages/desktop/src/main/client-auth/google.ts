@@ -14,7 +14,11 @@ import { nativeLocale, nativeT } from "../native/translations"
  *
  * O painel aceita o ID token do Google (POST /api/auth/google), não o
  * código: o app troca o código pelo id_token no endpoint de token do
- * Google e só então chama o painel.
+ * Google e só então chama o painel. O Client ID e o segredo vêm
+ * embutidos no build (MANOSTECH_GOOGLE_CLIENT_ID /
+ * MANOSTECH_GOOGLE_CLIENT_SECRET); sem o ID, o botão não aparece; sem
+ * o segredo, a troca do código é rejeitada (400 invalid_request) — o
+ * endpoint de token exige o segredo para clientes Desktop.
  */
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -111,10 +115,16 @@ export type ExchangeResult =
   | { readonly ok: true; readonly idToken: string }
   | { readonly ok: false; readonly failure: ExchangeFailure }
 
-/** Troca o código da autorização pelo ID token no Google (PKCE, sem segredo). */
+/** Troca o código da autorização pelo ID token no Google (PKCE + o client_secret quando o build tem um). */
 export async function exchangeCodeForIdToken(
   env: Record<string, string | undefined>,
-  input: { clientId: string; code: string; codeVerifier: string; redirectUri: string },
+  input: {
+    clientId: string
+    clientSecret?: string
+    code: string
+    codeVerifier: string
+    redirectUri: string
+  },
 ): Promise<ExchangeResult> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
@@ -122,6 +132,7 @@ export async function exchangeCodeForIdToken(
     client_id: input.clientId,
     code_verifier: input.codeVerifier,
     redirect_uri: input.redirectUri,
+    ...(input.clientSecret ? { client_secret: input.clientSecret } : {}),
   })
 
   let response: Response

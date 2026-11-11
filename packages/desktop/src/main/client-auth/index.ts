@@ -2,7 +2,7 @@ export * as ManosTechClientAuth from "./index"
 
 import { ManosTechClientChanged } from "../../shared/ipc-rpc/events"
 import type { ManosTechClientTranscribeValue } from "../../shared/ipc-rpc/manostech-client"
-import { MANOSTECH_GOOGLE_CLIENT_ID } from "../constants"
+import { MANOSTECH_GOOGLE_CLIENT_ID, MANOSTECH_GOOGLE_CLIENT_SECRET } from "../constants"
 import { openExternalURL } from "../files"
 import { emitIpcEvent } from "../ipc-events"
 import { logMain } from "../native/logging"
@@ -566,6 +566,7 @@ async function finishGoogleLoopback(code: Promise<AuthReturn>, state: string): P
   // O redirect_uri da troca tem que ser o mesmo do authorize.
   const exchange = await exchangeCodeForIdToken(process.env, {
     clientId: MANOSTECH_GOOGLE_CLIENT_ID,
+    clientSecret: MANOSTECH_GOOGLE_CLIENT_SECRET,
     code: result.code,
     codeVerifier: pending.verifier,
     redirectUri: pending.redirectUri,
