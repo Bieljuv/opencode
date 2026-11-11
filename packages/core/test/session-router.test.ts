@@ -913,6 +913,50 @@ describe("nextHopFor", () => {
     )
   })
 
+  test("a degraded provider function with a 4xx status hops to the next model instead of killing the turn", () => {
+    // Gabriel's sessions (2026-11-11 20:22:24Z, 3.4.36): the same
+    // degraded-function refusal came back with a 400 status, and the
+    // classifier ignored server phrasing on 4xx — so the turn died
+    // even though the fix was in the build. A degraded function
+    // refuses the MODEL, not the request, so the session error stays
+    // provider.internal — a hop signal — and the router moves to the
+    // next model in the chain (free models first, paid only as a last
+    // resort) instead of killing the turn.
+    const reason = classifyProviderFailure({
+      message: "Function id 'fd21cc19-b4ff-4949-ba07-90dd663c416a': DEGRADED function cannot be invoked",
+      status: 400,
+    })
+    const error = toSessionError(new AIError({ reason }))
+    expect(error.type).toBe("provider.internal")
+    expect(isHopSignal(error)).toBe(true)
+    const stepfun = resolved(free("openrouter", "a-free"))
+    expect(nextHopFor(chain, new Set(["openrouter/a-free"]), pool, error, stepfun)).toEqual(
+      ref("manostech", "auto"),
+    )
+  })
+
+  test("a retired model hops to the next model instead of killing the turn", () => {
+    // Gabriel's DELIVERY session (2026-11-11 20:25:26Z, 3.4.36): the
+    // provider retired the model and the turn died on the 400 instead
+    // of hopping to the next model in the chain. A retired model
+    // refuses the MODEL, not the request, so the session error is
+    // provider.internal — a hop signal — and the router moves to the
+    // next model in the chain (free models first, paid only as a last
+    // resort) instead of killing the turn.
+    const reason = classifyProviderFailure({
+      message:
+        "This model models/retired-model is no longer available to new users. Please update your code to use models/retired-model for the latest features and improvements.",
+      status: 400,
+    })
+    const error = toSessionError(new AIError({ reason }))
+    expect(error.type).toBe("provider.internal")
+    expect(isHopSignal(error)).toBe(true)
+    const stepfun = resolved(free("openrouter", "a-free"))
+    expect(nextHopFor(chain, new Set(["openrouter/a-free"]), pool, error, stepfun)).toEqual(
+      ref("manostech", "auto"),
+    )
+  })
+
   test("exhaustion takes the next untried model, any provider", () => {
     const stepfun = resolved(free("openrouter", "a-free"))
     expect(
