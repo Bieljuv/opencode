@@ -263,7 +263,10 @@ export function isExhaustionError(error: { readonly type: string }): boolean {
  * the throttle and the mid-task failures fall through to the same-model
  * retry policy instead of failing at once; auth is the exception and
  * fails at once with the generic message, because a dead key never heals
- * with backoff. Content-filter and invalid-request errors never hop:
+ * with backoff. An expired ManosTech client key (`provider.key-expired`)
+ * is never a hop signal at all: every gateway model shares that one key,
+ * so hopping would fail the same way on each model — the runner ends the
+ * turn with the error itself instead. Content-filter and invalid-request errors never hop:
  * they are request problems, not a spent or incapable model.
  */
 export function isHopSignal(error: { readonly type: string }): boolean {

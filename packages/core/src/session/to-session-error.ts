@@ -78,6 +78,25 @@ const CONTEXT_TOO_LONG: SessionError.Error = {
 }
 
 /**
+ * ManosTech gateway: the client's own key expired mid-session (the
+ * gateway answers 401 with code `chave_expirada` when the monthly key
+ * cycle turned over). This is not a provider failure and not a hop
+ * signal: every gateway model shares the same client key, so another
+ * model would fail the same way, and no backoff heals a dead key. The
+ * turn ends at once with this error itself — never folded into the
+ * generic exhaustion message — so the timeline can tell the user what
+ * happened and what to do: the app renews the key on its own (the
+ * account gate revalidates the session), so sending the message again
+ * is enough. The message names no code, key, provider, or model.
+ */
+const KEY_EXPIRED_MESSAGE = "Sua sessão expirou. Envie sua mensagem novamente em instantes."
+
+function hasKeyExpiredSignal(cause: AIError): boolean {
+  const text = [cause.message, cause.reason.body].filter((part) => part !== undefined).join("\n").toLowerCase()
+  return text.includes("chave_expirada")
+}
+
+/**
  * ManosTech router: a limit refusal does not always arrive classified as
  * one. The classifier only recognizes the exact `FreeUsageLimitError` /
  * `GoUsageLimitError` / `BudgetLimitError` codes and a few quota phrases,
@@ -170,6 +189,12 @@ export function toSessionError(cause: unknown): SessionError.Error {
     // The retry hook reads the body to veto retries of token-sharing codes, so it rides along as data.
     if (cause.reason.body?.includes("subscription_sharing_usage_limit_exceeded"))
       return { ...EXHAUSTED, response: { body: cause.reason.body } }
+    // The ManosTech gateway's expired client key: its own type, so the
+    // runner ends the turn with it instead of hopping or retrying — and
+    // the raw body stays off, because it carries the gateway's own code.
+    // No status either: the error is the whole message, like exhaustion.
+    if (hasKeyExpiredSignal(cause))
+      return { type: "provider.key-expired", message: KEY_EXPIRED_MESSAGE }
     if (hasQuotaSignal(cause)) return EXHAUSTED
     if (cause.reason._tag === "InvalidRequest" && cause.reason.classification === "context-overflow")
       return {

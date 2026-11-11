@@ -560,6 +560,21 @@ const layer = Layer.effect(
                   chain: chain.length,
                 })
               }
+              if (error.type === "provider.key-expired") {
+                // The ManosTech client key expired mid-session: no hop
+                // (every gateway model shares that one key) and no
+                // backoff retry (a dead key never heals) — the turn ends
+                // now with the error itself, so the timeline tells the
+                // user to send the message again instead of the generic
+                // exhaustion message.
+                yield* Effect.logWarning("manostech router key expired", {
+                  sessionID,
+                  lastModel: SessionRouter.refKey(loaded.model.ref),
+                  errorType: error.type,
+                  errorStatus: error.status,
+                })
+                return yield* new StepFailedError({ error })
+              }
               return yield* retry.decide({
                 cause,
                 error,
