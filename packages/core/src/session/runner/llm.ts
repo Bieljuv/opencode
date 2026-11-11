@@ -263,6 +263,9 @@ const layer = Layer.effect(
         lastUser?.metadata !== undefined
           ? SessionRouter.effortFromMetadata(lastUser.metadata)
           : SessionRouter.effortFromVariant(first.model.ref.variant)
+      // ManosTech multi-agent: the composer's toggle for this turn, carried
+      // in the same prompt metadata as the effort. Off by default.
+      const multiAgent = SessionRouter.multiAgentFromMetadata(lastUser?.metadata)
       const explicit = configured !== undefined || first.agent.info.model !== undefined
       const complexity = SessionRouter.classifyComplexity(lastUser?.text ?? "")
       // The chain only carries models that fit this turn's real prompt:
@@ -295,6 +298,7 @@ const layer = Layer.effect(
           first.session.model === undefined ? undefined : SessionRouter.refKey(first.session.model),
         complexity,
         effort,
+        multiAgent,
         explicit,
       })
       if (!explicit) {
@@ -351,6 +355,7 @@ const layer = Layer.effect(
           model: loaded.model,
           tools: loaded.tools,
           initial: loaded.initial,
+          multiAgent,
           // ManosTech history packaging: the turn only resends the last 20
           // messages plus a condensed summary of the rest, so a long
           // conversation stops re-sending its whole context on every turn.

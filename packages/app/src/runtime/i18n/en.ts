@@ -107,6 +107,8 @@ export const dict = {
   "composer.effort.fast": "Fast",
   "composer.effort.balanced": "Balanced",
   "composer.effort.deep": "Thorough",
+  "composer.multiAgent.label": "Multi-agent",
+  "composer.multiAgent.hint": "Split the work across agents working in parallel",
   "command.mcp.toggle": "Toggle MCPs",
   "command.mcp.toggle.description": "Toggle MCPs",
   "command.agent.cycle": "Cycle agent",
@@ -740,6 +742,7 @@ export const dict = {
   "session.activity.shell.empty": "No output yet",
   "session.activity.summary": "{{subagents}} · {{shells}}",
   "session.activity.section.subagents": "Subagents",
+  "session.activity.live.title": "Working now",
   "session.activity.section.shells": "Shells",
 
   "session.question.progress": "{{current}} of {{total}} questions",

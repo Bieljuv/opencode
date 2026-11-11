@@ -100,7 +100,8 @@ export type BindingEvent =
       readonly tab: Browser.Tab
       readonly error?: string
     }
-  /** The page's renderer crashed, its debugger detached, or it failed to become ready. */
+  /** The page's renderer crashed, or it failed to become ready. A debugger detach is not a crash: it also fires
+   * when a navigation swaps the renderer process, and the next CDP command re-attaches. */
   | {
       readonly type: "tab.crashed"
       readonly tabID: Browser.TabID

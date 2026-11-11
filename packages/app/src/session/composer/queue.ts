@@ -42,12 +42,15 @@ export function createSessionQueue(input: {
   background: NonNullable<ComposerSession["background"]>
   /** The effort picked for the automatic router; re-admissions carry the current one. */
   effort?: Accessor<RouterEffort>
+  /** The multi-agent toggle; re-admissions carry the current one. */
+  multiAgent?: Accessor<boolean>
 }) {
   const data = useData()
   const server = useServerSDK()
   const location = useWorkspaceLocation()
   const language = useLanguage()
   const effort = () => input.effort?.() ?? "automatico"
+  const multiAgent = () => input.multiAgent?.() ?? false
 
   const queued = createMemo(() =>
     data.session.pending
@@ -309,7 +312,7 @@ export function createSessionQueue(input: {
     // A steered replacement can be delivered before a withdrawal reaches it, so the bound waits for the admission and
     // the edit returns to the composer only if it really did not go out.
     progress.stage = "committed"
-    await data.session.prompt({ ...admission, metadata: { ...admission.metadata, manostechEffort: effort() } })
+    await data.session.prompt({ ...admission, metadata: { ...admission.metadata, manostechEffort: effort(), manostechMultiAgent: multiAgent() } })
     void background?.move()
     dispatch({ type: "mutation.admitted", attempt: operation.attempt })
     // Cancelling is a no-op once the original is gone, so one retry is safe.
@@ -391,7 +394,7 @@ export function createSessionQueue(input: {
               })),
               agents: item.payload.agents,
               skills: item.payload.skills,
-              metadata: { ...item.payload.metadata, manostechEffort: effort() },
+              metadata: { ...item.payload.metadata, manostechEffort: effort(), manostechMultiAgent: multiAgent() },
               delivery: "queue" as const,
               resume: false,
             }

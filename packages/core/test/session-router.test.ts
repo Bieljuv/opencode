@@ -19,6 +19,7 @@ import {
   isFreeModel,
   isHopSignal,
   isRoutable,
+  multiAgentFromMetadata,
   nextHop,
   nextHopFromProvider,
   nextHopWithLargerWindow,
@@ -442,6 +443,16 @@ describe("effortFromMetadata", () => {
     expect(effortFromMetadata({ manostechEffort: "turbo" })).toBe("automatico")
     expect(effortFromMetadata({})).toBe("automatico")
     expect(effortFromMetadata(undefined)).toBe("automatico")
+  })
+})
+
+describe("multiAgentFromMetadata", () => {
+  test("only an explicit true turns multi-agent on", () => {
+    expect(multiAgentFromMetadata({ manostechMultiAgent: true })).toBe(true)
+    expect(multiAgentFromMetadata({ manostechMultiAgent: false })).toBe(false)
+    expect(multiAgentFromMetadata({ manostechMultiAgent: "true" })).toBe(false)
+    expect(multiAgentFromMetadata({})).toBe(false)
+    expect(multiAgentFromMetadata(undefined)).toBe(false)
   })
 })
 

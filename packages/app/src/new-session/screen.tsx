@@ -6,6 +6,7 @@ import { useSearchParams } from "@solidjs/router"
 import { createEffect, createMemo, createResource, on, untrack } from "solid-js"
 import { createComposerModel } from "@/composer/model"
 import { useRouterEffort } from "@/composer/effort"
+import { useMultiAgent } from "@/composer/multi-agent"
 import { useComposerCommands } from "@/composer/commands"
 import { createNewSessionComposerAdapter, createNewSessionStartStore } from "./composer-adapter"
 import { NewSessionView } from "./view"
@@ -52,7 +53,7 @@ export default function NewSessionPage(props: { draftId: string }) {
     start,
   })
 
-  const model = createComposerModel(composer.adapter, { effort: useRouterEffort() })
+  const model = createComposerModel(composer.adapter, { effort: useRouterEffort(), multiAgent: useMultiAgent() })
   useComposerCommands({ model: composer.model })
 
   const project = createPromptProjectController({ controls: composer.project })

@@ -70,6 +70,9 @@ export type Complexity = "simple" | "complex"
 /** Prompt-metadata key carrying the effort (`manostechEffort`). */
 export const EFFORT_METADATA_KEY = "manostechEffort"
 
+/** Prompt-metadata key carrying the multi-agent toggle (`manostechMultiAgent`). */
+export const MULTI_AGENT_METADATA_KEY = "manostechMultiAgent"
+
 /** Kimi K3.1 Pro: paid tier, complex tasks only, only with a Moonshot key. */
 export const KIMI_K3 = { providerID: "moonshotai", id: "kimi-k3.1-pro" } as const
 
@@ -241,6 +244,11 @@ export function effortFromMetadata(metadata: Record<string, unknown> | undefined
   if (value === "rapido" || value === "equilibrado" || value === "aprofundado" || value === "automatico")
     return value
   return "automatico"
+}
+
+/** Multi-agent toggle from prompt metadata; only an explicit true turns it on. */
+export function multiAgentFromMetadata(metadata: Record<string, unknown> | undefined): boolean {
+  return metadata?.[MULTI_AGENT_METADATA_KEY] === true
 }
 
 /** Effort from the session model's reasoning variant, when one is set. */

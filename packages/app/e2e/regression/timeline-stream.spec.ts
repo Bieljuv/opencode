@@ -4,6 +4,7 @@ import { timelinePresets } from "@opencode/session-ui/timeline/detail"
 import { createTwoFilesPatch } from "diff"
 import { readSessionDraftText } from "../utils/drafts"
 import { holdRoute } from "../utils/app"
+import { fileNode } from "../utils/workspace"
 import {
   assistantID,
   assistantMessage,
@@ -1265,6 +1266,126 @@ test.describe("background shortcut", () => {
     await expect(page.getByRole("button", { name: "1 subagent", exact: true })).toBeVisible()
     await timeline.transport.send(status("idle", 1, childID))
     await expect(capsule).toHaveCount(0)
+  })
+
+  test("shows a running subagent live above the composer without opening the menu", async ({ page }) => {
+    const childID = "ses_live_subagent"
+
+    await setupTimeline(page, {
+      settings: { timelineDetail: detailed },
+      sessionMessages: [
+        user,
+        {
+          id: "msg_live_call",
+          type: "assistant",
+          agent: "build",
+          model: { id: "model", providerID: "provider" },
+          content: [
+            {
+              type: "tool",
+              id: "call_live",
+              name: "subagent",
+              state: {
+                status: "running",
+                input: { description: "Foreground task", agent: "explore" },
+                metadata: { sessionID: childID },
+              },
+              time: { created: 4 },
+            },
+          ],
+          time: { created: 4 },
+        },
+      ],
+      sessions: [
+        session(),
+        session({ id: childID, parentID: sessionID, title: "Foreground task", agent: "explore" }),
+      ],
+      sessionStatus: {
+        [sessionID]: { type: "busy" },
+        [childID]: { type: "busy" },
+      },
+    })
+
+    // The live list, not the capsule menu: the agent, its task and its run time are visible with nothing opened.
+    const live = page.locator('[data-slot="session-activity-live-row"]')
+    await expect(page.getByText("Working now", { exact: true })).toBeVisible()
+    await expect(live).toHaveCount(1)
+    await expect(live).toContainText("Explore")
+    await expect(live).toContainText("Foreground task")
+    await expect(live).toContainText(/\d+h \d{2}m/)
+    await expect(page.locator('[data-slot="session-activity-panel"]')).toHaveCount(0)
+    await expect(page.getByRole("button", { name: "1 subagent", exact: true })).toBeVisible()
+  })
+
+  test("mockup: preview open beside the chat while a subagent works live", async ({ page }, testInfo) => {
+    const childID = "ses_live_subagent"
+    const previewHTML = [
+      "<!doctype html>",
+      '<html lang="pt-BR"><head><meta charset="utf-8"><title>Rota do Forte — PDV</title>',
+      "<style>body{margin:0;font-family:sans-serif;background:#f5ead6;color:#2b1d0e}",
+      "header{background:#4a2c14;color:#fff;padding:14px 20px;font-size:20px;font-weight:700}",
+      "main{padding:20px}table{width:100%;border-collapse:collapse;background:#fff}",
+      "th,td{padding:10px 12px;border-bottom:1px solid #e8dcc8;text-align:left}",
+      "th{color:#8a7a5f;font-size:12px;text-transform:uppercase}</style></head>",
+      "<body><header>Rota do Forte — PDV</header><main><h1>Produtos</h1>",
+      "<table><tr><th>Produto</th><th>Preço</th><th>Estoque</th></tr>",
+      "<tr><td>Açaí 500ml</td><td>R$ 25,00</td><td>25 un</td></tr>",
+      "<tr><td>Água 500ml</td><td>R$ 5,00</td><td>46 un</td></tr>",
+      "<tr><td>Cerveja long neck</td><td>R$ 12,00</td><td>60 un</td></tr></table>",
+      "</main></body></html>",
+    ].join("\n")
+
+    await setupTimeline(page, {
+      settings: { timelineDetail: detailed },
+      viewport: { width: 1366, height: 768 },
+      sessionMessages: [
+        user,
+        {
+          id: "msg_live_call",
+          type: "assistant",
+          agent: "build",
+          model: { id: "model", providerID: "provider" },
+          content: [
+            { type: "text", text: "Abrindo o preview do sistema: [index.html](index.html)" },
+            {
+              type: "tool",
+              id: "call_live",
+              name: "subagent",
+              state: {
+                status: "running",
+                input: { description: "Foreground task", agent: "explore" },
+                metadata: { sessionID: childID },
+              },
+              time: { created: 4 },
+            },
+          ],
+          time: { created: 4, completed: 5 },
+        },
+      ],
+      sessions: [
+        session(),
+        session({ id: childID, parentID: sessionID, title: "Foreground task", agent: "explore" }),
+      ],
+      sessionStatus: {
+        [sessionID]: { type: "busy" },
+        [childID]: { type: "busy" },
+      },
+      fileList: (path) => (path ? [] : [fileNode(directory, "index.html")]),
+      fileContent: (path) => (path === "index.html" ? previewHTML : ""),
+    })
+
+    // The live list is visible with nothing opened.
+    await expect(page.getByText("Working now", { exact: true })).toBeVisible()
+    await expect(page.locator('[data-slot="session-activity-live-row"]')).toHaveCount(1)
+
+    // The preview opens by itself beside the chat: the browser pane is off here, so the HTML file the Build message
+    // links opens as an artifact tab without anyone clicking the link.
+    const panel = page.locator("#review-panel")
+    await expect(panel.getByRole("tab", { name: "index.html" })).toHaveAttribute("aria-selected", "true")
+    await expect(panel.locator("iframe")).toBeVisible()
+    await expect(panel.frameLocator("iframe").getByText("Rota do Forte")).toBeVisible()
+
+    await page.screenshot({ path: testInfo.outputPath("multi-agentes-preview.png") })
   })
 
   test("separates blocking and already-backgrounded work into two rows", async ({ page }) => {
