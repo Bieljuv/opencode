@@ -487,17 +487,32 @@ it.effect("auto compaction estimates current content against the buffered prompt
 
     const interrupted = { ...assistant, id: SessionMessage.ID.create(), tokens: undefined }
     expect(SessionCompaction.estimateContext({ ...grown, messages: [...grown.messages, interrupted] })).toBe(90_001)
-    // Without provider usage, include 234 tokens for the system prompt, instructions, tool definition, token economy, and identity masking.
-    expect(SessionCompaction.estimateContext({ ...grown, messages: [interrupted] })).toBe(235)
+    // Without provider usage, the estimate includes the whole system prompt and tool definition, not just the
+    // message. The parts are named here, not pinned as a number: editing a rule's wording leaves the expectation
+    // alone, while adding or removing a rule moves it — and this list must follow baseTranscript. Today it is
+    // 1,122 tokens (agent system 7, instructions 5, token economy 62, identity masking 300, direct reply 214,
+    // failed tool retry 96, mandatory token saving 235, arena auto 195, read tool 8), plus the one "Done" token.
+    const systemTokens =
+      Token.estimate("You are a helpful assistant.") +
+      Token.estimate("Project instructions.") +
+      Token.estimate(SessionModelRequest.TOKEN_ECONOMY) +
+      Token.estimate(SessionModelRequest.HIDE_MODEL_IDENTITY) +
+      Token.estimate(SessionModelRequest.DIRECT_REPLY) +
+      Token.estimate(SessionModelRequest.FAILED_TOOL_RETRY) +
+      Token.estimate(SessionModelRequest.MANDATORY_TOKEN_SAVING) +
+      Token.estimate(SessionModelRequest.ARENA_AUTO) +
+      // Mirrors estimateTool: name + description + input schema.
+      Token.estimate("read" + "Read files" + JSON.stringify({ type: "object" }))
+    expect(SessionCompaction.estimateContext({ ...grown, messages: [interrupted] })).toBe(systemTokens + 1)
     // Another provider's usage is not trusted either.
     const foreign = { ...assistant, model: { ...assistant.model, providerID: Provider.ID.make("other") } }
-    expect(SessionCompaction.estimateContext({ ...grown, messages: [foreign] })).toBe(235)
+    expect(SessionCompaction.estimateContext({ ...grown, messages: [foreign] })).toBe(systemTokens + 1)
     expect(
       SessionCompaction.estimateContext({
         ...grown,
         messages: [{ ...interrupted, tokens: input(0, contextLimited).messages[0].tokens }],
       }),
-    ).toBe(235)
+    ).toBe(systemTokens + 1)
 
     const media = [
       { type: "file", mime: "image/png", uri: `data:image/png;base64,${"a".repeat(100_000)}` },
@@ -525,7 +540,7 @@ it.effect("auto compaction estimates current content against the buffered prompt
         model: { ...grown.model, capabilities: { ...grown.model.capabilities, input: modalities } },
       }
       expect(SessionCompaction.estimateContext({ ...selected, messages: [...messages, user] })).toBe(tokens)
-      expect(SessionCompaction.estimateContext({ ...selected, messages: [user] })).toBe(fallback + 234)
+      expect(SessionCompaction.estimateContext({ ...selected, messages: [user] })).toBe(fallback + systemTokens)
     }
 
     const checkpoint = Schema.decodeUnknownSync(SessionMessage.CompactionCompleted)({
@@ -805,12 +820,15 @@ it.effect("summary compaction past the ceiling keeps the conversation unchanged 
   Effect.gen(function* () {
     requests = []
     const session = yield* insertSession(Session.ID.make("ses_compaction_near_window"))
-    // About 182k estimated tokens: past the 170k ceiling, within the 184k left after reserving room for the summary.
+    // About 181k estimated tokens: past the 170k ceiling, within the 184k left after reserving room for the
+    // summary. The band is narrow — the estimate must stay above 180k or the summary's output limit rises past
+    // 20k, and below ~183k or the conversation no longer fits unchanged — so the size tracks the system prompt:
+    // 360k characters per message leaves about 2k of headroom on both sides at the current system size.
     const messages = ["first", "second"].map((label) =>
       SessionMessage.User.make({
         id: SessionMessage.ID.create(),
         type: "user",
-        text: `${label} ${"x".repeat(364_000)}`,
+        text: `${label} ${"x".repeat(360_000)}`,
         time: { created: DateTime.makeUnsafe(0) },
       }),
     )
