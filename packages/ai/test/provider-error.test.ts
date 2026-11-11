@@ -127,6 +127,34 @@ describe("provider error classification", () => {
     ).toBe("ProviderInternal")
   })
 
+  test("classifies a degraded provider function with a 4xx status as provider internal", () => {
+    // The live case (Gabriel's sessions, 2026-11-11 20:22:24Z): the
+    // provider returns the degraded-function refusal with a 400 status,
+    // and the classifier ignored server phrasing on 4xx — so the turn
+    // died instead of hopping. A degraded function refuses the MODEL,
+    // not the request, so it stays a hop signal even with a status.
+    expect(
+      classifyProviderFailure({
+        message: "Function id 'fd21cc19-b4ff-4949-ba07-90dd663c416a': DEGRADED function cannot be invoked",
+        status: 400,
+      })._tag,
+    ).toBe("ProviderInternal")
+  })
+
+  test("classifies a retired model as provider internal even with a 4xx status", () => {
+    // The provider retired the model ("no longer available to new
+    // users"); the router hops to the next model instead of killing
+    // the turn (Gabriel's DELIVERY session, 2026-11-11 20:25:26Z).
+    // The model id below is illustrative — the live log scrubs it.
+    expect(
+      classifyProviderFailure({
+        message:
+          "This model models/retired-model is no longer available to new users. Please update your code to use models/retired-model for the latest features and improvements. We recommend you to use the Interactions API (https://aistudio.google.com/docs/get-started).",
+        status: 400,
+      })._tag,
+    ).toBe("ProviderInternal")
+  })
+
   test("prioritizes specific failures over retryable server text", () => {
     expect(
       [

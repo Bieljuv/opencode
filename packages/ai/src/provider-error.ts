@@ -158,6 +158,14 @@ const CONTENT_POLICY_TEXT =
 // to the next model instead of killing the session.
 const SERVER_ERROR_TEXT =
   /\b(?:try again|(?:please |you can )?retry (?:the |this |your )?request|try (?:the |this |your )?request again|(?:currently |temporarily )?at capacity|overloaded|degraded|temporarily unavailable|service[-_\s]?unavailable|(?:server|internal)[-_\s]?error|server (?:is )?busy|provider returned (?:an )?error|resource[-_\s]?exhausted|upstream (?:connect|connection|request)|request buffer limit while retrying upstream)\b/i
+// Provider-side refusals that stay hop signals even with a 4xx status.
+// `degraded` is a provider marking a model/function degraded and refusing
+// to invoke it; "no longer available" is a retired model. Both refuse the
+// MODEL, not the request, so the next model in the chain may work — the
+// router hops to the next model instead of killing the turn. The general
+// server phrasing above still needs no contradicting 4xx status; only
+// these two signals bypass that gate.
+const PROVIDER_REFUSAL_TEXT = /\b(?:degraded|no longer available)\b/i
 
 const Message = Schema.String.check(Schema.isPattern(/\S/))
 
@@ -267,6 +275,15 @@ export function classifyProviderFailure(input: ProviderFailure): AIError["reason
       ...details,
       retryAfterMs: input.retryAfterMs,
       rateLimit: input.rateLimit,
+    })
+  // A provider-side refusal stays a hop signal even with a 4xx status (see
+  // PROVIDER_REFUSAL_TEXT): the provider refuses the MODEL, not the
+  // request, so the router hops to the next model in the chain — free
+  // models first, paid only as a last resort — instead of killing the turn.
+  if (PROVIDER_REFUSAL_TEXT.test(text))
+    return new ProviderInternalError({
+      ...details,
+      retryAfterMs: input.retryAfterMs,
     })
   if (
     input.status === 408 ||
