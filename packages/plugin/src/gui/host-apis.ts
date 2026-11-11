@@ -1234,6 +1234,22 @@ export interface DailyTokens {
   }
 }
 
+/**
+ * Tokens spent this week (America/Sao_Paulo) across every session on
+ * one server, from the server's own session data — the real week
+ * accumulation, whatever answered. The week runs Monday 00:00 to
+ * Sunday 23:59 in São Paulo and the total persists all week,
+ * resetting only at the week turn. Only the total and the week reach
+ * the interface — never which model or provider answered, and never a
+ * limit or a quota.
+ */
+export interface WeeklyTokens {
+  /** Tokens spent this week across every session on the server. */
+  readonly total: number
+  /** The week the total covers, as the `YYYY-MM-DD` (America/Sao_Paulo) of its Monday. */
+  readonly week: string
+}
+
 /** What `Desktop.pick` asks for. */
 export interface PickOptions {
   /** Picks folders instead of files. Defaults to false. */

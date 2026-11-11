@@ -15,7 +15,7 @@ import {
   sessionHref,
 } from "../utils/app"
 import { openFileLauncher, reviewTabs } from "../utils/side-panel"
-import { setupTimeline } from "../utils/timeline"
+import { setupTimeline, session as timelineSession } from "../utils/timeline"
 import { mockServers } from "../utils/mock-server"
 import { fixture, mockStressTimeline } from "../utils/session-fixture"
 import { fileNode, mockWorkspace, openSession } from "../utils/workspace"
@@ -2285,4 +2285,87 @@ test("mockup: Context tab without the System Prompt section", async ({ page }, t
   await expect(panel.getByText("Prompt do sistema", { exact: true })).toHaveCount(0)
 
   await page.screenshot({ path: testInfo.outputPath("mascara-prompt-sistema.png") })
+})
+
+test("mockup: Context tab with the week total and plain labels", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  // Monday midday in São Paulo of the current week: the Monday message
+  // counts for the week total but not for the day total.
+  const now = Date.now()
+  const todayKey = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(now))
+  const [year, month, date] = todayKey.split("-").map(Number)
+  const weekday = new Date(Date.UTC(year, month - 1, date)).getUTCDay()
+  const monday = new Date(Date.UTC(year, month - 1, date - ((weekday + 6) % 7), 15))
+
+  await setupTimeline(page, {
+    sessions: [timelineSession({ time: { created: now, updated: now } })],
+    sessionMessages: [
+      {
+        id: "msg_user",
+        type: "user",
+        text: "Crie um PDV para quiosque de praia.",
+        time: { created: monday.getTime() },
+      },
+      {
+        id: "msg_monday",
+        type: "assistant",
+        agent: "build",
+        model: { id: "model", providerID: "provider" },
+        content: [{ type: "text", text: "Rascunho de segunda." }],
+        tokens: { input: 500, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        time: { created: monday.getTime(), completed: monday.getTime() + 1000 },
+      },
+      {
+        id: "msg_today",
+        type: "assistant",
+        agent: "build",
+        model: { id: "model", providerID: "provider" },
+        content: [{ type: "text", text: "PDV criado." }],
+        tokens: { input: 1000, output: 200, reasoning: 50, cache: { read: 30, write: 10 } },
+        time: { created: now, completed: now + 1000 },
+      },
+    ],
+  })
+
+  const panel = page.locator("#review-panel")
+  await page.getByRole("button", { name: "Toggle session context" }).click()
+  await expect(panel.getByRole("tab", { name: "Context", exact: true })).toHaveAttribute("aria-selected", "true")
+
+  // The two totals, side by side: today counts only today's message (1,290),
+  // the week counts both (1,790). The parts are the day total's own parts,
+  // and the cache reads and writes collapse into one reused number (40).
+  await expect(panel.getByText("Total Tokens", { exact: true })).toBeVisible()
+  await expect(panel.getByText("1,290", { exact: true })).toBeVisible()
+  await expect(panel.getByText("Week total", { exact: true })).toBeVisible()
+  await expect(panel.getByText("1,790", { exact: true })).toBeVisible()
+  await expect(panel.getByText("Input", { exact: true })).toBeVisible()
+  await expect(panel.getByText("1,000", { exact: true })).toBeVisible()
+  await expect(panel.getByText("Output", { exact: true })).toBeVisible()
+  await expect(panel.getByText("200", { exact: true })).toBeVisible()
+  await expect(panel.getByText("Thinking", { exact: true })).toBeVisible()
+  await expect(panel.getByText("50", { exact: true })).toBeVisible()
+  await expect(panel.getByText("Reused", { exact: true })).toBeVisible()
+  await expect(panel.getByText("40", { exact: true })).toBeVisible()
+  await expect(panel.getByText("Model", { exact: true })).toBeVisible()
+  await expect(panel.getByText("Automatic", { exact: true })).toBeVisible()
+  await expect(panel.getByText("Messages", { exact: true })).toBeVisible()
+  await expect(panel.getByText("3", { exact: true })).toBeVisible()
+
+  // The window gauge, the provider row, the message split and the
+  // session dates are gone.
+  await expect(panel.getByText("Context Limit", { exact: true })).toHaveCount(0)
+  await expect(panel.getByText("Usage", { exact: true })).toHaveCount(0)
+  await expect(panel.getByText("Provider", { exact: true })).toHaveCount(0)
+  await expect(panel.getByText("User Messages", { exact: true })).toHaveCount(0)
+  await expect(panel.getByText("Assistant Messages", { exact: true })).toHaveCount(0)
+  await expect(panel.getByText("Session Created", { exact: true })).toHaveCount(0)
+  await expect(panel.getByText("Last Activity", { exact: true })).toHaveCount(0)
+
+  await page.screenshot({ path: testInfo.outputPath("melhorias-aba-contexto.png") })
 })

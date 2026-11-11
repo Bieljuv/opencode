@@ -38,6 +38,7 @@ import {
 import { BuiltinPanel, type BuiltinStoreFrom, type BuiltinStoreOptions } from "@opencode/plugin/gui/builtin"
 import { usePlatform } from "@/runtime/platform/platform"
 import { fetchDailyTokens } from "@/client/daily-tokens"
+import { fetchWeeklyTokens } from "@/client/weekly-tokens"
 import { same } from "@/runtime/persistence/equality"
 import { Persist, persisted, removePersisted } from "@/runtime/persistence/storage"
 import { useGlobal, type ServerCtx } from "@/runtime/server/runtime"
@@ -378,6 +379,20 @@ export function createHostApis() {
         if (!server) return undefined
 
         return fetchDailyTokens(server.client).catch(() => undefined)
+      }
+    },
+    // ManosTech: tokens spent this week across every session on a
+    // server, from the server's own session data — the same local
+    // accumulation as the day total, over the week. Undefined on the
+    // web and when the server cannot answer; the plugin falls back
+    // to the day total then.
+    weeklyTokens: () => {
+      return async (serverID: string) => {
+        const server = current()?.server(serverID)
+
+        if (!server) return undefined
+
+        return fetchWeeklyTokens(server.client).catch(() => undefined)
       }
     },
     app: () => ({
