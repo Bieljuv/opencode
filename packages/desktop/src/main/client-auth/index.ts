@@ -1,6 +1,7 @@
 export * as ManosTechClientAuth from "./index"
 
 import { ManosTechClientChanged } from "../../shared/ipc-rpc/events"
+import type { ManosTechClientTranscribeValue } from "../../shared/ipc-rpc/manostech-client"
 import { MANOSTECH_GOOGLE_CLIENT_ID } from "../constants"
 import { openExternalURL } from "../files"
 import { emitIpcEvent } from "../ipc-events"
@@ -57,6 +58,8 @@ export type ClientStatus =
       readonly client: { name: string; email: string }
       readonly trialEndsAt: string | null
       readonly gatewayActive: boolean
+      /** Fim do ciclo mensal da chave (`api_key_renews_at`); null = sem chave. */
+      readonly apiKeyRenewsAt: string | null
     }
   | { readonly state: "must-change"; readonly client: { name: string; email: string } }
   | { readonly state: "trial-expired"; readonly trialEndsAt: string | null }
@@ -96,7 +99,7 @@ let usageCache: { at: number; value: Panel.DailyUsage | undefined } | undefined
 
 const USAGE_CACHE_MS = 60_000
 
-function statusFromSession(session: Panel.SessionData): ClientStatus {
+function statusFromSession(session: Panel.SessionData, apiKeyRenewsAt: string | null = null): ClientStatus {
   if (session.mustChange) return { state: "must-change", client: { name: session.client.name, email: session.client.email } }
   if (Panel.trialStatus(session.trial_ends_at, Date.now()) === "trial-expired")
     return { state: "trial-expired", trialEndsAt: session.trial_ends_at }
@@ -106,6 +109,7 @@ function statusFromSession(session: Panel.SessionData): ClientStatus {
     client: { name: session.client.name, email: session.client.email },
     trialEndsAt: session.trial_ends_at,
     gatewayActive: gatewayActive(),
+    apiKeyRenewsAt,
   }
 }
 
@@ -123,6 +127,8 @@ function storedStatus(nowMs: number): ClientStatus {
     client: { name: stored.client.name, email: stored.client.email },
     trialEndsAt: stored.trial_ends_at,
     gatewayActive: gatewayActive(),
+    // Sem rede não há data de renovação: a próxima validação a traz.
+    apiKeyRenewsAt: null,
   }
 }
 
@@ -228,12 +234,33 @@ export async function getClientUsage(): Promise<ClientUsage | null> {
 }
 
 /** Transcreve uma fatia de áudio do microfone no gateway, com a chave guardada. */
-export async function transcribeAudio(audioDataUrl: string): Promise<Transcribe.TranscribeAudioResult> {
-  return Transcribe.transcribeSlice({
-    apiKey: loadApiKey(),
-    gatewayUrl: resolvedGatewayUrl(),
-    audioDataUrl,
-  })
+export async function transcribeAudio(audioDataUrl: string): Promise<ManosTechClientTranscribeValue> {
+  const slice = () =>
+    Transcribe.transcribeSlice({
+      apiKey: loadApiKey(),
+      gatewayUrl: resolvedGatewayUrl(),
+      audioDataUrl,
+    })
+
+  // A tag "key-expired" é sinal interno do main e nunca cruza o IPC:
+  // para o renderer ela é só uma falha simples.
+  const toIpc = (result: Transcribe.TranscribeAudioResult): ManosTechClientTranscribeValue => {
+    if (result.ok) return result
+    if (result.error === "key-expired") return { ok: false, error: "failed" }
+    return result
+  }
+
+  const first = await slice()
+
+  // A chave expirou no meio da sessão: renova com a sessão guardada e
+  // tenta a fatia de novo com a chave nova — o microfone segue
+  // funcionando sem o usuário fazer nada.
+  if (!first.ok && first.error === "key-expired") {
+    await refreshStoredApiKey(true)
+    return toIpc(await slice())
+  }
+
+  return toIpc(first)
 }
 
 /** O aviso dos 75% já apareceu hoje (America/Sao_Paulo)? */
@@ -273,6 +300,29 @@ export function markWeeklyUsageWarned(): void {
   if (key !== undefined) saveWeeklyWarnedCycle(key)
 }
 
+/**
+ * Renova a chave API do cliente com a sessão guardada (o painel só
+ * devolve a chave em claro quando gera uma nova) e reconecta o gateway
+ * com ela. Usado pela validação da sessão e pela renovação em voo do
+ * microfone quando o gateway responde que a chave expirou. Fail-open:
+ * sem sessão ou sem painel, nada muda e a próxima validação tenta de
+ * novo.
+ */
+async function refreshStoredApiKey(renewsDue: boolean): Promise<void> {
+  const stored = loadSession()
+
+  if (!stored) return
+
+  const fresh = await Panel.ensureApiKey(Panel.panelBaseUrl(process.env), {
+    token: stored.token,
+    storedApiKey: loadApiKey(),
+    renewsDue,
+  })
+
+  if (fresh) saveApiKey(fresh)
+  await refreshGatewayCredential()
+}
+
 export async function getStatus(): Promise<ClientStatus> {
   const stored = loadSession()
 
@@ -304,24 +354,22 @@ export async function getStatus(): Promise<ClientStatus> {
     // guardada, ou com o ciclo mensal vencido, busca uma em
     // /api/auth/cliente/api-key; com a chave corrente ainda válida o painel
     // devolve null e a guardada continua valendo.
-    const fresh = await Panel.ensureApiKey(Panel.panelBaseUrl(process.env), {
-      token: stored.token,
-      storedApiKey: loadApiKey(),
-      renewsDue: info.apiKeyRenewsAt !== null && Date.parse(info.apiKeyRenewsAt) <= Date.now(),
-    })
+    await refreshStoredApiKey(
+      info.apiKeyRenewsAt !== null && Date.parse(info.apiKeyRenewsAt) <= Date.now(),
+    )
 
-    if (fresh) saveApiKey(fresh)
-    await refreshGatewayCredential()
-
-    return statusFromSession({
-      token: stored.token,
-      mustChange: info.mustChange,
-      client: info.client,
-      trial_ends_at: stored.trial_ends_at,
-      expires_at: info.expires_at,
-      apiKey: info.apiKey,
-      gatewayUrl: info.gatewayUrl,
-    })
+    return statusFromSession(
+      {
+        token: stored.token,
+        mustChange: info.mustChange,
+        client: info.client,
+        trial_ends_at: stored.trial_ends_at,
+        expires_at: info.expires_at,
+        apiKey: info.apiKey,
+        gatewayUrl: info.gatewayUrl,
+      },
+      info.apiKeyRenewsAt,
+    )
   }
 
   if (result.error.tag === "invalid-credentials") {

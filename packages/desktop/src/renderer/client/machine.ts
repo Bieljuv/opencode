@@ -33,6 +33,8 @@ export type ClientGateState =
   | {
       readonly status: "ready"
       readonly trialEndsAt: string | null
+      /** Fim do ciclo mensal da chave; null = sem chave (ou sem rede). */
+      readonly apiKeyRenewsAt: string | null
       /**
        * A revalidação em andamento: a conta segue pronta na tela enquanto o
        * status é conferido de novo — a tela de "Verificando sua conta…" só
@@ -97,7 +99,10 @@ function fromStatus(status: ManosTechClientStatusValue): ClientGateTransition {
   if (status.state === "trial-expired")
     return { state: { status: "trial-expired", trialEndsAt: status.trialEndsAt }, effects: [] }
 
-  return { state: { status: "ready", trialEndsAt: status.trialEndsAt }, effects: [{ type: "schedule-revalidation" }] }
+  return {
+    state: { status: "ready", trialEndsAt: status.trialEndsAt, apiKeyRenewsAt: status.apiKeyRenewsAt ?? null },
+    effects: [{ type: "schedule-revalidation" }],
+  }
 }
 
 function to(state: ClientGateState, effects: readonly ClientGateEffect[] = []): ClientGateTransition {
@@ -161,7 +166,10 @@ export function transitionClientGate(state: ClientGateState, event: ClientGateEv
     // pronta e a próxima revalidação tenta de novo. Nunca derruba o
     // usuário para o login por uma falha transitória.
     if (state.status === "ready" && state.revalidating)
-      return to({ status: "ready", trialEndsAt: state.trialEndsAt }, [{ type: "schedule-revalidation" }])
+      return to(
+        { status: "ready", trialEndsAt: state.trialEndsAt, apiKeyRenewsAt: state.apiKeyRenewsAt },
+        [{ type: "schedule-revalidation" }],
+      )
 
     return unchanged(state)
   }

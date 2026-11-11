@@ -46,7 +46,19 @@ describe("status.settled", () => {
   test("a valid session is ready and schedules revalidation", () => {
     const next = transitionClientGate({ status: "checking" }, { type: "status.settled", status: ready })
 
-    expect(next.state).toEqual({ status: "ready", trialEndsAt: null })
+    expect(next.state).toEqual({ status: "ready", trialEndsAt: null, apiKeyRenewsAt: null })
+    expect(next.effects).toEqual([{ type: "schedule-revalidation" }])
+  })
+
+  test("a valid session carries the key renewal date into ready", () => {
+    const withRenewal = { ...ready, apiKeyRenewsAt: "2026-12-01T03:00:00Z" } as const
+    const next = transitionClientGate({ status: "checking" }, { type: "status.settled", status: withRenewal })
+
+    expect(next.state).toEqual({
+      status: "ready",
+      trialEndsAt: null,
+      apiKeyRenewsAt: "2026-12-01T03:00:00Z",
+    })
     expect(next.effects).toEqual([{ type: "schedule-revalidation" }])
   })
 })
@@ -142,7 +154,7 @@ describe("google", () => {
       { type: "status.settled", status: ready },
     )
 
-    expect(next.state).toEqual({ status: "ready", trialEndsAt: null })
+    expect(next.state).toEqual({ status: "ready", trialEndsAt: null, apiKeyRenewsAt: null })
     expect(next.effects).toEqual([{ type: "schedule-revalidation" }])
   })
 
@@ -242,19 +254,24 @@ describe("forgot-password", () => {
 
 describe("client.changed and revalidate", () => {
   test("a change in another window re-checks silently while ready, unless already checking", () => {
-    const readyState: ClientGateState = { status: "ready", trialEndsAt: null }
+    const readyState: ClientGateState = { status: "ready", trialEndsAt: null, apiKeyRenewsAt: "2026-12-01T03:00:00Z" }
     const next = transitionClientGate(readyState, { type: "client.changed" })
 
-    expect(next.state).toEqual({ status: "ready", trialEndsAt: null, revalidating: true })
+    expect(next.state).toEqual({
+      status: "ready",
+      trialEndsAt: null,
+      apiKeyRenewsAt: "2026-12-01T03:00:00Z",
+      revalidating: true,
+    })
     expect(next.effects).toEqual([{ type: "check-status" }])
     expect(transitionClientGate({ status: "checking" }, { type: "client.changed" }).effects).toEqual([])
   })
 
   test("revalidation only runs from ready, and stays on the ready screen", () => {
-    const readyState: ClientGateState = { status: "ready", trialEndsAt: null }
+    const readyState: ClientGateState = { status: "ready", trialEndsAt: null, apiKeyRenewsAt: null }
     const next = transitionClientGate(readyState, { type: "revalidate" })
 
-    expect(next.state).toEqual({ status: "ready", trialEndsAt: null, revalidating: true })
+    expect(next.state).toEqual({ status: "ready", trialEndsAt: null, apiKeyRenewsAt: null, revalidating: true })
     expect(next.effects).toEqual([{ type: "check-status" }])
 
     const login: ClientGateState = { status: "login", googleAvailable: true, error: undefined, busy: false }
@@ -262,15 +279,15 @@ describe("client.changed and revalidate", () => {
   })
 
   test("a settled revalidation returns to ready and schedules the next one", () => {
-    const revalidating: ClientGateState = { status: "ready", trialEndsAt: null, revalidating: true }
+    const revalidating: ClientGateState = { status: "ready", trialEndsAt: null, apiKeyRenewsAt: null, revalidating: true }
     const next = transitionClientGate(revalidating, { type: "status.settled", status: ready })
 
-    expect(next.state).toEqual({ status: "ready", trialEndsAt: null })
+    expect(next.state).toEqual({ status: "ready", trialEndsAt: null, apiKeyRenewsAt: null })
     expect(next.effects).toEqual([{ type: "schedule-revalidation" }])
   })
 
   test("a revalidation that finds the session logged out shows the login", () => {
-    const revalidating: ClientGateState = { status: "ready", trialEndsAt: null, revalidating: true }
+    const revalidating: ClientGateState = { status: "ready", trialEndsAt: null, apiKeyRenewsAt: null, revalidating: true }
     const next = transitionClientGate(revalidating, { type: "status.settled", status: loggedOut })
 
     expect(next.state).toEqual({ status: "login", googleAvailable: undefined, error: undefined, busy: false })
@@ -278,10 +295,10 @@ describe("client.changed and revalidate", () => {
   })
 
   test("a failed revalidation stays ready and retries at the next revalidation", () => {
-    const revalidating: ClientGateState = { status: "ready", trialEndsAt: null, revalidating: true }
+    const revalidating: ClientGateState = { status: "ready", trialEndsAt: null, apiKeyRenewsAt: null, revalidating: true }
     const next = transitionClientGate(revalidating, { type: "status.failed" })
 
-    expect(next.state).toEqual({ status: "ready", trialEndsAt: null })
+    expect(next.state).toEqual({ status: "ready", trialEndsAt: null, apiKeyRenewsAt: null })
     expect(next.effects).toEqual([{ type: "schedule-revalidation" }])
   })
 })

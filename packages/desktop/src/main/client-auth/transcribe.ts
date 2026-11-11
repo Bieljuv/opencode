@@ -17,6 +17,7 @@ const MAX_AUDIO_B64 = 5_000_000 // ~3,7 MB por fatia (fatia de 4 s tem ~40 KB) �
 export type TranscribeAudioResult =
   | { readonly ok: true; readonly text: string }
   | { readonly ok: false; readonly error: "unavailable" | "failed" }
+  | { readonly ok: false; readonly error: "key-expired" }
 
 const TranscriptionResponse = Schema.Struct({ text: Schema.String })
 
@@ -71,9 +72,16 @@ export async function transcribeSlice(input: {
   }
 
   if (!response.ok) {
+    // A chave do cliente expirou no meio da sessão (401 com o código do
+    // gateway): o chamador renova a chave com a sessão e tenta a fatia
+    // de novo — sem isto o microfone morre até a próxima validação da
+    // sessão. Qualquer outra falha continua sendo só "failed".
+    const keyExpired =
+      response.status === 401 &&
+      (await response.text().catch(() => "")).includes("chave_expirada")
     console.warn("[manostech] transcribe slice failed", response.status)
 
-    return { ok: false, error: "failed" }
+    return { ok: false, error: keyExpired ? "key-expired" : "failed" }
   }
 
   const json: unknown = await response.json().catch(() => undefined)
