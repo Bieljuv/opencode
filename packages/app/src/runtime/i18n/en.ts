@@ -992,6 +992,18 @@ export const dict = {
   "settings.extensions.tab.mcps": "MCPs",
   "settings.extensions.tab.skills": "Skills",
   "settings.extensions.availableAll": "Available to all projects",
+  "settings.extensions.skills.description": "Call a skill in chat with /name — some join on their own when the request calls for it.",
+  "settings.extensions.skills.descriptions.arena":
+    "When the answer was not good enough: several agents try the same task and only the best solution comes back.",
+  "settings.extensions.skills.descriptions.graphify":
+    "Project map: understands where everything lives in the code before answering.",
+  "settings.extensions.skills.descriptions.hyperframes":
+    "Creates videos from the project's screens, frame by frame.",
+  "settings.extensions.skills.descriptions.openverse":
+    "Finds sounds and music with an open license for the video.",
+  "settings.extensions.skills.descriptions.ponytail":
+    "Lean changes: the smallest change that solves it, without overcomplicating.",
+  "settings.extensions.skills.descriptions.real-sfx": "Puts real sound on the exact video frame.",
   "settings.extensions.manageConfig": "Manage in the ManosTech.AI configuration file",
   "settings.extensions.plugins.loadFailed": "Could not load plugins",
   "project.settings.title": "Edit project",

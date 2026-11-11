@@ -839,6 +839,17 @@ export const dict = {
   "settings.extensions.tab.mcps": "MCP",
   "settings.extensions.tab.skills": "Habilidades",
   "settings.extensions.availableAll": "Disponível para todos os projetos",
+  "settings.extensions.skills.description": "Chame uma habilidade no chat com /nome — algumas entram sozinhas quando o pedido pede.",
+  "settings.extensions.skills.descriptions.arena":
+    "Quando a resposta não ficou boa: vários agentes tentam a mesma tarefa e só a melhor solução volta.",
+  "settings.extensions.skills.descriptions.graphify":
+    "Mapa do projeto: entende onde fica cada coisa no código antes de responder.",
+  "settings.extensions.skills.descriptions.hyperframes":
+    "Cria vídeos a partir das telas do projeto, quadro a quadro.",
+  "settings.extensions.skills.descriptions.openverse": "Acha sons e músicas com licença aberta para o vídeo.",
+  "settings.extensions.skills.descriptions.ponytail":
+    "Mudanças enxutas: a menor alteração que resolve, sem complicar.",
+  "settings.extensions.skills.descriptions.real-sfx": "Coloca som de verdade no frame exato do vídeo.",
   "settings.extensions.manageConfig": "Gerenciar no arquivo de configuração do ManosTech.AI",
   "project.settings.extensions.description": "Ver extensões disponíveis para este projeto",
   "project.settings.extensions.tab.lsps": "LSPs",

@@ -89,6 +89,28 @@ export const SettingsExtensions: Component<{
   })
   const skills = () => data.location.skill.list() ?? []
 
+  // Discovery: the shipped skills get a short plain-language "when to
+  // use" line; anything else falls back to its own description, cut at
+  // the trigger list, which is agent-facing, not user-facing.
+  const skillDescription = (name: string, description?: string) => {
+    switch (name) {
+      case "arena":
+        return language.t("settings.extensions.skills.descriptions.arena")
+      case "graphify":
+        return language.t("settings.extensions.skills.descriptions.graphify")
+      case "hyperframes":
+        return language.t("settings.extensions.skills.descriptions.hyperframes")
+      case "openverse":
+        return language.t("settings.extensions.skills.descriptions.openverse")
+      case "ponytail":
+        return language.t("settings.extensions.skills.descriptions.ponytail")
+      case "real-sfx":
+        return language.t("settings.extensions.skills.descriptions.real-sfx")
+      default:
+        return description?.split("Gatilhos:")[0]?.split("Triggers:")[0]?.trim() ?? ""
+    }
+  }
+
   return (
     <>
       <div class="settings-tab-header">
@@ -227,13 +249,25 @@ export const SettingsExtensions: Component<{
                   {language.t("settings.extensions.availableAll")}
                 </span>
               </div>
+              <p class="text-11-regular text-v2-text-text-muted">
+                {language.t("settings.extensions.skills.description")}
+              </p>
               <SettingsList variant="catalog">
                 <For each={skills()}>
                   {(skill) => (
                     <div class="settings-extension-row">
                       <div class="settings-extension-lead">
                         <Icon name="post-skill" class="text-v2-icon-icon-muted shrink-0" />
-                        <span class="settings-extension-name truncate">{skill.name}</span>
+                        <div class="flex min-w-0 flex-col gap-0.5">
+                          <span class="settings-extension-name truncate">{skill.name}</span>
+                          <TruncatedText
+                            text={skillDescription(skill.name, skill.description)}
+                            class="text-11-regular text-v2-text-text-muted"
+                          />
+                        </div>
+                      </div>
+                      <div class="settings-extension-trailing">
+                        <span class="text-11-regular text-v2-text-text-muted">/{skill.name}</span>
                       </div>
                     </div>
                   )}
