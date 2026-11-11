@@ -64,6 +64,21 @@ describe("ManosTechGatewayPlugin", () => {
     }),
   )
 
+  it.effect("registers the image model while a credential is connected", () =>
+    Effect.gen(function* () {
+      yield* connectStoredKey("https://gw.exemplo/v1")
+      yield* addPlugin()
+      const models = yield* Model.Service
+      const image = (yield* models.available(["image"])).find(
+        (model) => model.providerID === providerID && model.id === "auto-image",
+      )
+      expect(image?.package).toBe("@opencode/ai/providers/manostech/images")
+      expect(image?.body).toEqual({ model: "manostech-auto" })
+      // Image models never join the chat list, so session defaults are untouched.
+      expect((yield* models.available()).some((model) => model.id === "auto-image")).toBe(false)
+    }),
+  )
+
   it.effect("keeps an explicitly configured default over the gateway model", () =>
     Effect.gen(function* () {
       const models = yield* Model.Service

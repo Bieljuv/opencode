@@ -9,9 +9,10 @@ import { toConfig } from "./settings.js"
  * ManosTech gateway: the app never holds a provider key. The client API key
  * (issued by the ManosTech panel, per client, renewed monthly) authenticates
  * the app against the ManosTech server, and the server routes each request
- * across its shared provider keys — free first, paid when needed. The single
- * static model `auto` is the only route the app knows; the server picks the
- * model behind it, so no model, provider, or tier ever surfaces in the app.
+ * across its shared provider keys — free first, paid when needed. The two
+ * static models `auto` (chat) and `auto-image` (image) are the only routes
+ * the app knows; the server picks the model behind each one, so no model,
+ * provider, or tier ever surfaces in the app.
  *
  * baseURL precedence: provider settings (the panel-reported gateway URL,
  * delivered by the core plugin from the connected credential) > the
@@ -30,6 +31,9 @@ export const id = ProviderID.make("manostech")
 
 /** The single route the app knows. The panel confirms the id when the gateway goes live. */
 export const MODEL_ID = "auto"
+
+/** The image route the app knows. The gateway only accepts "manostech-auto" on /v1/images/generations, so the catalog model carries a body overlay that rewrites this id on the wire (see the core plugin). */
+export const MODEL_IMAGE_ID = "auto-image"
 
 export type Config = Omit<RequestOptions, "providerOptions"> &
   ProviderAuthOption<"optional"> & {
@@ -56,5 +60,11 @@ export const provider = configure()
 
 export const model: ProviderPackage.Model<Settings, OpenAIProviderOptionsInput> = (modelID, settings) =>
   configure(toConfig(settings)).model(modelID)
+
+/** Image entrypoint: same OpenAI-compatible images protocol, through the gateway's own configure so the provider stays "manostech" and the base URL stays the panel's /v1. */
+export const imageModel = (modelID: string, settings: Settings) => {
+  const input = toConfig(settings)
+  return configure(input).image(modelID, input.providerOptions)
+}
 
 export * as ManosTech from "./manostech.js"
