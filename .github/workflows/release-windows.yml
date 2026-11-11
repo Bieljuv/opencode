@@ -139,6 +139,14 @@ jobs:
           # simply stays silent.
           MANOSTECH_INGEST_SECRET: ${{ secrets.MANOSTECH_INGEST_SECRET }}
 
+      # Stages the bundled video tools (Node + FFmpeg) into
+      # packages/desktop/resources/manostech-tools/win32-x64/ so the pack
+      # ships them. Without this step the installer still builds, but the
+      # video flow reports the tools missing instead of rendering.
+      - name: Fetch bundled video tools
+        working-directory: packages/desktop
+        run: bun run script/fetch-manostech-tools.ts
+
       # Packs the unpacked app into dist/desktop/app (no installer yet).
       # Also writes resources/app-update.yml with the github feed, which the
       # installed app reads to find its updates.

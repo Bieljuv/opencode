@@ -78,6 +78,30 @@
       height: 48px;
       padding: 0 10px;
     }
+
+    &[data-type="video"] {
+      width: min(420px, 100%);
+      align-items: stretch;
+    }
+  }
+
+  [data-slot="user-message-attachment-video"] {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    display: block;
+    background: #000;
+  }
+
+  [data-slot="user-message-attachment-open"] {
+    width: 100%;
+    padding: 6px 10px;
+    text-align: start;
+    color: var(--v2-text-text-muted);
+    font-size: var(--font-size-small);
+    line-height: var(--line-height-large);
+    background: transparent;
+    border: none;
+    cursor: pointer;
   }
 
   [data-slot="user-message-attachment-image"] {

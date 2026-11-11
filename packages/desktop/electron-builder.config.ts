@@ -106,7 +106,17 @@ const getBase = (appId: string): Configuration => {
       {
         from: "resources/",
         to: "",
-        filter: ["opencode-cli", "opencode-cli.exe", "opencode-cli.version"],
+        filter: [
+          "opencode-cli",
+          "opencode-cli.exe",
+          "opencode-cli.version",
+          // ManosTech: the bundled video tools (Node + FFmpeg) ship only
+          // when the build machine staged them under
+          // resources/manostech-tools/<platform>-<arch>/ (git-ignored,
+          // restored by script/fetch-manostech-tools.ts). A build without
+          // them still packs — the skill then reports the missing tools.
+          "manostech-tools/**",
+        ],
       },
     ],
     afterPack: async (context) => {
@@ -126,6 +136,29 @@ const getBase = (appId: string): Configuration => {
       const version = path.join(path.dirname(cli), "opencode-cli.version")
 
       if ((await stat(version)).size === 0) throw new Error(`Bundled CLI version must be a non-empty file: ${version}`)
+
+      // ManosTech: when the build machine staged the video tools, every
+      // staged platform directory must hold the full set (ffmpeg, ffprobe,
+      // node) — a half-staged directory would fail the render at runtime
+      // instead of at pack time. When nothing was staged the build still
+      // packs and only warns: dev and CI machines do not stage them.
+      const toolsRoot = path.join(resources, "manostech-tools")
+      const staged = await readdir(toolsRoot, { withFileTypes: true }).catch(() => [])
+      const stagedDirs = staged.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+
+      if (stagedDirs.length === 0) {
+        console.warn("Bundled video tools missing: manostech-tools/ was not staged for this build")
+      } else {
+        for (const dir of stagedDirs) {
+          const exe = dir.startsWith("win32") ? ".exe" : ""
+          const required = ["ffmpeg", "ffprobe", "node"].map((name) => `${name}${exe}`)
+          const present = await readdir(path.join(toolsRoot, dir)).catch(() => [])
+          const missing = required.filter((name) => !present.includes(name))
+
+          if (missing.length > 0)
+            throw new Error(`Bundled video tools incomplete in manostech-tools/${dir}: missing ${missing.join(", ")}`)
+        }
+      }
 
       // With an Icon Composer mac.icon, electron-builder bundles the ICNS that actool generates as the pre-macOS 26
       // fallback. That one tops out at 256px and draws a light ring around the squircle, so ship ours instead.

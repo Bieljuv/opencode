@@ -193,3 +193,38 @@ describe("transitionAttachmentMedia", () => {
     expect(transitionAttachmentMedia(readyA, DISPOSED_ATTACHMENT_MEDIA_EVENT).effects).toEqual([])
   })
 })
+
+describe("resolveAttachmentMediaTarget for video", () => {
+  test("a video reference reads through the host like an image", () => {
+    const target = resolveAttachmentMediaTarget(media(hashA, "video/mp4"), reader)
+
+    expect(target).toEqual({ kind: "remote", key: `video/mp4:${hashA}`, uri: hashA, mime: "video/mp4" })
+    const next = transitionAttachmentMedia(INITIAL_ATTACHMENT_MEDIA_STATE, { type: "target.synced", target })
+
+    expect(next.effects).toEqual([
+      { type: "read", attempt: 1, uri: hashA, mime: "video/mp4", timeoutMs: ATTACHMENT_MEDIA_TIMEOUT_MS },
+    ])
+    expect(viewAttachmentMedia(next.state, target)).toMatchObject({ status: "loading", placeholder: true })
+  })
+
+  test("a video URI source plays direct", () => {
+    const direct: PromptAttachment = {
+      mime: "video/mp4",
+      source: { type: "uri", uri: "file:///tmp/video.mp4" },
+      uri: "file:///tmp/video.mp4",
+    }
+
+    expect(resolveAttachmentMediaTarget(direct, reader)).toEqual({ kind: "direct", src: "file:///tmp/video.mp4" })
+  })
+
+  // A base64 data URI of an MP4 would be megabytes of text in the message:
+  // a video with only inline data has no playable URL here, so it falls
+  // back to the file card instead of a broken player.
+  test("a video with only inline data is unreadable, while an image stays direct", () => {
+    const video: PromptAttachment = { mime: "video/mp4", source: { type: "inline" }, data: "AAAA" }
+    const image: PromptAttachment = { mime: "image/png", source: { type: "inline" }, data: "AAAA" }
+
+    expect(resolveAttachmentMediaTarget(video, reader)).toEqual({ kind: "unreadable" })
+    expect(resolveAttachmentMediaTarget(image, reader)).toEqual({ kind: "direct", src: "data:image/png;base64,AAAA" })
+  })
+})

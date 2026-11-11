@@ -10,8 +10,10 @@ import { BackgroundServiceMachine } from "./background-service-machine"
 import { cleanStages } from "./cli-stages"
 import { keptStages, serviceVersion, shouldAdoptProbedService, shouldRetryEnsure } from "./cli-version"
 import { DesktopCli } from "./desktop-cli"
+import { manostechToolsEnv, resolveManostechTools } from "./manostech-tools"
 import { SidecarCredentials } from "./sidecar-credentials"
 import { takeSidecarProbe } from "./sidecar-probe"
+import { DesktopPaths } from "../paths"
 
 export * as BackgroundService from "./background-service"
 
@@ -92,6 +94,10 @@ const ensure = Effect.fn("BackgroundService.ensure")(function* (mode: Background
       env: {
         MANOSTECH_CLIENT_FILE: clientFilePath(),
         ...(MANOSTECH_INGEST_SECRET ? { MANOSTECH_INGEST_SECRET } : {}),
+        // ManosTech: the bundled video tools (Node + FFmpeg) go on the
+        // sidecar's PATH so the agent's shell finds them without installing
+        // anything. Nothing is added when the build did not stage them.
+        ...manostechToolsEnv(setup.tools, process.env.PATH),
       },
       onStart: (reason, previousVersion) =>
         runFork(Effect.logInfo("v2 CLI background service starting", { reason, previousVersion })),
@@ -128,6 +134,15 @@ const prepare = Effect.fn("BackgroundService.prepare")(function* (mode: Backgrou
   const cli = yield* desktopCli.resolve
   const version = serviceVersion({ channel: CHANNEL, isolated, mode, version: cli.version })
 
+  const desktopPaths = yield* DesktopPaths.resolve
+  const tools = yield* Effect.sync(() =>
+    resolveManostechTools({
+      resourcesRoot: app.isPackaged ? process.resourcesPath : desktopPaths.developmentResourcesRoot,
+    }),
+  )
+
+  if (tools) yield* Effect.logInfo("bundled video tools resolved", { dir: tools.dir })
+
   if (isolated) process.env.XDG_STATE_HOME = app.getPath("userData")
   const client = yield* Effect.promise(() => import("@opencode/client/service"))
 
@@ -140,7 +155,7 @@ const prepare = Effect.fn("BackgroundService.prepare")(function* (mode: Backgrou
         )
       : undefined
 
-  return { cli, client, file, isolated, version }
+  return { cli, client, file, isolated, tools, version }
 })
 
 const adopt = Effect.fn("BackgroundService.adopt")(function* (

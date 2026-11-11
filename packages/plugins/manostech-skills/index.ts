@@ -6,6 +6,7 @@ import { Schema } from "effect"
 import matter from "gray-matter"
 import skillMd from "./skills/arena/SKILL.md" with { type: "text" }
 import graphifyMd from "./skills/graphify/SKILL.md" with { type: "text" }
+import hyperframesMd from "./skills/hyperframes/SKILL.md" with { type: "text" }
 import openverseMd from "./skills/openverse/SKILL.md" with { type: "text" }
 import ponytailMd from "./skills/ponytail/SKILL.md" with { type: "text" }
 import realSfxMd from "./skills/real-sfx/SKILL.md" with { type: "text" }
@@ -52,12 +53,26 @@ import { runArena } from "./src/bracket.ts"
  * no bundled sound library; when FFmpeg is not available the agent still
  * finds the moments and the sounds and leaves the exact mix commands ready,
  * without ever asking the user to install anything.
+ *
+ * HyperFrames: video as code, as the `skill://hyperframes` virtual skill.
+ * There is no `/hyperframes` command of its own: the entry point is the
+ * `/video` command, which loads hyperframes, real-sfx and openverse together
+ * and runs the single flow — write the composition, check it, show the
+ * preview for approval, render the MP4, add real sound, deliver the file
+ * with a player page the preview opens beside the chat. The skill is adapted
+ * from the workspace HyperFrames skill: it keeps the contract, the house
+ * rules and the work cycle, but the environment section is rewritten for
+ * this app — Node and FFmpeg come bundled with the installer (on the
+ * server's PATH), never assumed from the user's machine, and the first
+ * render still downloads the browser once.
  */
 
 export const ARENA_SKILL_ID = "arena"
 export const ARENA_SKILL_PATH = "skill://arena/SKILL.md"
 export const GRAPHIFY_SKILL_ID = "graphify"
 export const GRAPHIFY_SKILL_PATH = "skill://graphify/SKILL.md"
+export const HYPERFRAMES_SKILL_ID = "hyperframes"
+export const HYPERFRAMES_SKILL_PATH = "skill://hyperframes/SKILL.md"
 export const OPENVERSE_SKILL_ID = "openverse"
 export const OPENVERSE_SKILL_PATH = "skill://openverse/SKILL.md"
 export const PONYTAIL_SKILL_ID = "ponytail"
@@ -100,6 +115,18 @@ export function buildGraphifySkill(): Skill.Info {
     description: parsed.data.description,
     autoinvoke: parsed.data["disable-model-invocation"] !== true,
     path: Skill.Info.fields.path.make(GRAPHIFY_SKILL_PATH),
+    content: parsed.content,
+  })
+}
+
+export function buildHyperframesSkill(): Skill.Info {
+  const parsed = matter(hyperframesMd)
+  return Skill.Info.make({
+    id: Skill.ID.make(HYPERFRAMES_SKILL_ID),
+    name: Skill.Name.make("HyperFrames"),
+    description: parsed.data.description,
+    autoinvoke: parsed.data["disable-model-invocation"] !== true,
+    path: Skill.Info.fields.path.make(HYPERFRAMES_SKILL_PATH),
     content: parsed.content,
   })
 }
@@ -310,6 +337,31 @@ export function buildRealSfxCommand(session: Pick<SessionDomain, "prompt">) {
   }
 }
 
+export function videoCommandText(args: string): string {
+  const trimmed = args.trim()
+  return [
+    "Faça o vídeo do projeto com o fluxo único da skill \"hyperframes\": escreva a composição, confira com lint e check, mostre o preview para aprovar, renderize o MP4, sonorize com a skill \"real-sfx\" (sons pela skill \"openverse\") e entregue o arquivo com a página de exibição. Primeiro carregue as skills \"hyperframes\", \"real-sfx\" e \"openverse\" com a ferramenta skill e siga as instruções delas à risca, sem pular passos — a sonorização e a entrega fazem parte do fluxo, não são opcionais.",
+    "",
+    `O que o vídeo mostra: ${trimmed ? trimmed : "(nenhum — use o que a conversa pede.)"}`,
+  ].join("\n")
+}
+
+export function buildVideoCommand(session: Pick<SessionDomain, "prompt">) {
+  return {
+    name: "video",
+    description: "Vídeo: cria, sonoriza e entrega o vídeo do projeto — do roteiro ao arquivo pronto",
+    execute: async (input: CommandInvocation) => {
+      await session.prompt({
+        ...input.prompt,
+        sessionID: input.sessionID,
+        text: videoCommandText(input.prompt.text),
+        skills: [{ id: HYPERFRAMES_SKILL_ID }, { id: REAL_SFX_SKILL_ID }, { id: OPENVERSE_SKILL_ID }],
+        delivery: input.delivery,
+      })
+    },
+  }
+}
+
 export default Plugin.define({
   id: "manostech.skills",
   async setup(ctx) {
@@ -321,6 +373,8 @@ export default Plugin.define({
       if (!editor.get(ponytail.id)) editor.add(ponytail)
       const graphify = buildGraphifySkill()
       if (!editor.get(graphify.id)) editor.add(graphify)
+      const hyperframes = buildHyperframesSkill()
+      if (!editor.get(hyperframes.id)) editor.add(hyperframes)
       const openverse = buildOpenverseSkill()
       if (!editor.get(openverse.id)) editor.add(openverse)
       const realSfx = buildRealSfxSkill()
@@ -348,6 +402,7 @@ export default Plugin.define({
       editor.add(buildGraphifyCommand(ctx.session))
       editor.add(buildOpenverseCommand(ctx.session))
       editor.add(buildRealSfxCommand(ctx.session))
+      editor.add(buildVideoCommand(ctx.session))
     })
   },
 })
