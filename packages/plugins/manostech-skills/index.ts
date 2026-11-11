@@ -6,7 +6,9 @@ import { Schema } from "effect"
 import matter from "gray-matter"
 import skillMd from "./skills/arena/SKILL.md" with { type: "text" }
 import graphifyMd from "./skills/graphify/SKILL.md" with { type: "text" }
+import openverseMd from "./skills/openverse/SKILL.md" with { type: "text" }
 import ponytailMd from "./skills/ponytail/SKILL.md" with { type: "text" }
+import realSfxMd from "./skills/real-sfx/SKILL.md" with { type: "text" }
 import { runArena } from "./src/bracket.ts"
 
 /**
@@ -32,14 +34,36 @@ import { runArena } from "./src/bracket.ts"
  * the system prompt makes consulting the map mandatory, and when the CLI is
  * not installed the agent builds a lightweight map with its own tools —
  * nobody is ever asked to install Python or anything else.
+ *
+ * Openverse: the open-license sound search, as the `skill://openverse`
+ * virtual skill and the `/openverse` command. The skill is written here
+ * (there is no upstream skill): it tells the agent to search the Openverse
+ * audio API (api.openverse.org/v1/audio/) for a sound, effect, music or
+ * ambience, pick the best result, download the direct file and record the
+ * license and the attribution line. No key, no login, nothing to install.
+ *
+ * Real SFX: real sound on the exact video frame, as the `skill://real-sfx`
+ * virtual skill and the `/real-sfx` command. The skill is adapted from the
+ * upstream Real SFX skill (Clipwing, MIT): it keeps the rules, the moment
+ * kinds, the levels and the taste rules, but the upstream's own Python
+ * scripts are NOT bundled — the agent finds the moments (project cue list,
+ * HyperFrames data-start timeline or frame analysis), picks real recordings
+ * (user library or Openverse) and mixes them with FFmpeg directly. There is
+ * no bundled sound library; when FFmpeg is not available the agent still
+ * finds the moments and the sounds and leaves the exact mix commands ready,
+ * without ever asking the user to install anything.
  */
 
 export const ARENA_SKILL_ID = "arena"
 export const ARENA_SKILL_PATH = "skill://arena/SKILL.md"
 export const GRAPHIFY_SKILL_ID = "graphify"
 export const GRAPHIFY_SKILL_PATH = "skill://graphify/SKILL.md"
+export const OPENVERSE_SKILL_ID = "openverse"
+export const OPENVERSE_SKILL_PATH = "skill://openverse/SKILL.md"
 export const PONYTAIL_SKILL_ID = "ponytail"
 export const PONYTAIL_SKILL_PATH = "skill://ponytail/SKILL.md"
+export const REAL_SFX_SKILL_ID = "real-sfx"
+export const REAL_SFX_SKILL_PATH = "skill://real-sfx/SKILL.md"
 
 /** Commands that write under `.arena/` and therefore need edit permission first. */
 const MUTATING_COMMANDS = new Set(["init", "prompts", "record", "collect", "advance"])
@@ -76,6 +100,30 @@ export function buildGraphifySkill(): Skill.Info {
     description: parsed.data.description,
     autoinvoke: parsed.data["disable-model-invocation"] !== true,
     path: Skill.Info.fields.path.make(GRAPHIFY_SKILL_PATH),
+    content: parsed.content,
+  })
+}
+
+export function buildOpenverseSkill(): Skill.Info {
+  const parsed = matter(openverseMd)
+  return Skill.Info.make({
+    id: Skill.ID.make(OPENVERSE_SKILL_ID),
+    name: Skill.Name.make("Openverse"),
+    description: parsed.data.description,
+    autoinvoke: parsed.data["disable-model-invocation"] !== true,
+    path: Skill.Info.fields.path.make(OPENVERSE_SKILL_PATH),
+    content: parsed.content,
+  })
+}
+
+export function buildRealSfxSkill(): Skill.Info {
+  const parsed = matter(realSfxMd)
+  return Skill.Info.make({
+    id: Skill.ID.make(REAL_SFX_SKILL_ID),
+    name: Skill.Name.make("Real SFX"),
+    description: parsed.data.description,
+    autoinvoke: parsed.data["disable-model-invocation"] !== true,
+    path: Skill.Info.fields.path.make(REAL_SFX_SKILL_PATH),
     content: parsed.content,
   })
 }
@@ -212,6 +260,56 @@ export function buildGraphifyCommand(session: Pick<SessionDomain, "prompt">) {
   }
 }
 
+export function openverseCommandText(args: string): string {
+  const trimmed = args.trim()
+  return [
+    "Ache um som com a skill \"openverse\". Primeiro carregue a skill \"openverse\" com a ferramenta skill (id \"openverse\") e siga as instruções dela à risca, sem pular passos.",
+    "",
+    `O que procurar: ${trimmed ? trimmed : "(nenhum — use o que a conversa pede.)"}`,
+  ].join("\n")
+}
+
+export function buildOpenverseCommand(session: Pick<SessionDomain, "prompt">) {
+  return {
+    name: "openverse",
+    description: "Openverse: acha sons, efeitos e músicas com licença aberta para o vídeo",
+    execute: async (input: CommandInvocation) => {
+      await session.prompt({
+        ...input.prompt,
+        sessionID: input.sessionID,
+        text: openverseCommandText(input.prompt.text),
+        skills: [{ id: OPENVERSE_SKILL_ID }],
+        delivery: input.delivery,
+      })
+    },
+  }
+}
+
+export function realSfxCommandText(args: string): string {
+  const trimmed = args.trim()
+  return [
+    "Coloque som real no vídeo com a skill \"real-sfx\". Primeiro carregue a skill \"real-sfx\" com a ferramenta skill (id \"real-sfx\") e siga as instruções dela à risca, sem pular passos.",
+    "",
+    `Argumentos: ${trimmed ? trimmed : "(nenhum — use o vídeo da conversa.)"}`,
+  ].join("\n")
+}
+
+export function buildRealSfxCommand(session: Pick<SessionDomain, "prompt">) {
+  return {
+    name: "real-sfx",
+    description: "Real SFX: som real no frame exato do vídeo, mantendo música e voz",
+    execute: async (input: CommandInvocation) => {
+      await session.prompt({
+        ...input.prompt,
+        sessionID: input.sessionID,
+        text: realSfxCommandText(input.prompt.text),
+        skills: [{ id: REAL_SFX_SKILL_ID }],
+        delivery: input.delivery,
+      })
+    },
+  }
+}
+
 export default Plugin.define({
   id: "manostech.skills",
   async setup(ctx) {
@@ -223,6 +321,10 @@ export default Plugin.define({
       if (!editor.get(ponytail.id)) editor.add(ponytail)
       const graphify = buildGraphifySkill()
       if (!editor.get(graphify.id)) editor.add(graphify)
+      const openverse = buildOpenverseSkill()
+      if (!editor.get(openverse.id)) editor.add(openverse)
+      const realSfx = buildRealSfxSkill()
+      if (!editor.get(realSfx.id)) editor.add(realSfx)
     })
     await ctx.tool.transform((editor) => {
       if (editor.get("arena")) return
@@ -244,6 +346,8 @@ export default Plugin.define({
       editor.add(buildArenaCommand(ctx.session))
       editor.add(buildPonytailCommand(ctx.session))
       editor.add(buildGraphifyCommand(ctx.session))
+      editor.add(buildOpenverseCommand(ctx.session))
+      editor.add(buildRealSfxCommand(ctx.session))
     })
   },
 })
