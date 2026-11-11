@@ -15,6 +15,7 @@ import {
   sessionHref,
 } from "../utils/app"
 import { openFileLauncher, reviewTabs } from "../utils/side-panel"
+import { setupTimeline } from "../utils/timeline"
 import { mockServers } from "../utils/mock-server"
 import { fixture, mockStressTimeline } from "../utils/session-fixture"
 import { fileNode, mockWorkspace, openSession } from "../utils/workspace"
@@ -2227,3 +2228,61 @@ async function mockGaveUpPermission(page: Page, tabLayout: "horizontal" | "inbox
     attempts: () => attempts.count,
   }
 }
+
+test("mockup: Context tab without the System Prompt section", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  // The session carries a system message with the raw Code Mode catalog —
+  // the text that used to leak through the "Prompt do sistema" section.
+  const catalog = [
+    "The Code Mode tool catalog has changed. This catalog supersedes the previous Code Mode tool catalog.",
+    "",
+    "Code Mode",
+    "",
+    "The tools listed below, and search, cannot be called directly: they only work as JavaScript inside the execute tool.",
+    "",
+    "opencode (17 tools, 10 shown) // Tools for managing OpenCode itself, such as working with sessions and worktrees, searching the available models, and reading MCP resources.",
+    "tools.opencode.artifact_delete({ id: string }): Promise<{ id: string, deleted: boolean }> // Delete an artifact and remove its stored copy.",
+  ].join("\n")
+
+  await setupTimeline(page, {
+    sessionMessages: [
+      {
+        id: "msg_catalog",
+        type: "system",
+        text: catalog,
+        description: "Instructions updated: core/codemode",
+        metadata: { notice: "instructions", instructionSources: ["core/codemode"] },
+        time: { created: 1 },
+      },
+      {
+        id: "msg_user",
+        type: "user",
+        text: "Crie um PDV para quiosque de praia.",
+        time: { created: 2 },
+      },
+      {
+        id: "msg_assistant",
+        type: "assistant",
+        agent: "build",
+        model: { id: "model", providerID: "provider" },
+        content: [{ type: "text", text: "PDV criado." }],
+        tokens: { input: 1000, output: 200, reasoning: 0, cache: { read: 0, write: 0 } },
+        time: { created: 3, completed: 4 },
+      },
+    ],
+  })
+
+  const panel = page.locator("#review-panel")
+  await page.getByRole("button", { name: "Toggle session context" }).click()
+  await expect(panel.getByRole("tab", { name: "Context", exact: true })).toHaveAttribute("aria-selected", "true")
+
+  // The stats grid still renders...
+  await expect(panel.getByText("Total Tokens", { exact: true })).toBeVisible()
+
+  // ...but the System Prompt section is gone, even though the session carries a system message.
+  await expect(panel.getByText("System Prompt", { exact: true })).toHaveCount(0)
+  await expect(panel.getByText("Prompt do sistema", { exact: true })).toHaveCount(0)
+
+  await page.screenshot({ path: testInfo.outputPath("mascara-prompt-sistema.png") })
+})
