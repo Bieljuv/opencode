@@ -128,6 +128,22 @@ export const FileSystemGroup = HttpApiGroup.make("server.fs")
         }),
       ),
   )
+  .add(
+    HttpApiEndpoint.get("fs.downloadProject", "/api/experimental/fs/download-project", {
+      query: LocationQuery,
+      success: Schema.Uint8Array.pipe(HttpApiSchema.asUint8Array()),
+      error: FileNotFoundError,
+    })
+      .annotateMerge(locationQueryOpenApi)
+      .annotateMerge(
+        OpenApi.annotations({
+          identifier: "experimental.fs.downloadProject",
+          summary: "Download project",
+          description:
+            "Experimental: may change without compatibility guarantees. Download the requested location as one ZIP file: source files only — version control, dependencies, build output and secret files stay out. The user keeps a copy of their own project to publish from.",
+        }),
+      ),
+  )
   .annotateMerge(
     OpenApi.annotations({
       title: "filesystem",

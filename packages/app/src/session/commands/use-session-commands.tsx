@@ -13,6 +13,8 @@ import { formatServerError } from "@/runtime/server/errors"
 import { projectSettingsKey, useSettings } from "@/settings/model"
 import { showToast } from "@/shell/notifications/toast"
 import { useSessionExporter } from "@/session/commands/export-session"
+import { downloadProjectZip, projectDownloadFilename } from "@/session/commands/download-project"
+import { useWorkspaceLocation } from "@/workspaces/location"
 import { usePlatform } from "@/runtime/platform/platform"
 import type { SessionModel } from "@/session/model"
 import type { SessionRevert } from "@/session/revert"
@@ -97,6 +99,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const settings = useSettings()
   const platform = usePlatform()
   const exporter = useSessionExporter()
+  const workspace = useWorkspaceLocation()
   const pluginScoped = usePluginScoped()
   const pluginClaims = usePluginClaims()
 
@@ -432,6 +435,84 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const undo = actions.revert.undo
   const redo = actions.revert.redo
 
+  // ManosTech: publish is a guided conversation, not a silent action — the
+  // /publicar command walks the user through the steps one by one.
+  const publishProject = () => {
+    const sessionID = actions.session.identity.params.id
+
+    if (!sessionID) return
+    serverSDK.api.session
+      .command({ sessionID, name: "publicar", text: "" })
+      .catch((cause: unknown) => {
+        console.error("[session.commands] publish failed", cause)
+        showToast({
+          variant: "error",
+          title: language.t("toast.publish.failed.title"),
+          description: language.t("toast.publish.failed.description"),
+        })
+      })
+  }
+
+  // ManosTech: undo one file edit (audit I-30) — only that file moves, the
+  // rest of the turn stays as it is. A null result means there was nothing
+  // left to undo, which is a plain answer, not an error.
+  const undoLastEdit = () => {
+    const sessionID = actions.session.identity.params.id
+
+    if (!sessionID) return
+    serverSDK.api.experimental.session.revert
+      .undoLastEdit({ sessionID })
+      .then((undone) => {
+        if (!undone) {
+          showToast({
+            title: language.t("toast.undoLastEdit.empty.title"),
+            description: language.t("toast.undoLastEdit.empty.description"),
+          })
+
+          return
+        }
+        showToast({
+          variant: "success",
+          icon: "circle-check",
+          title: language.t("toast.undoLastEdit.done.title"),
+          description: language.t("toast.undoLastEdit.done.description", { file: undone.file }),
+        })
+      })
+      .catch((cause: unknown) => {
+        console.error("[session.commands] undo last edit failed", cause)
+        showToast({
+          variant: "error",
+          title: language.t("toast.undoLastEdit.failed.title"),
+          description: language.t("toast.undoLastEdit.failed.description"),
+        })
+      })
+  }
+
+  // ManosTech: the project download (publish step 1) — the whole project as
+  // one file, without version control, dependencies or secrets.
+  const downloadProject = () => {
+    const directory = workspace().directory
+    serverSDK.api.experimental.file
+      .downloadProject({ location: { directory } })
+      .then((bytes) => {
+        downloadProjectZip(projectDownloadFilename(directory), bytes)
+        showToast({
+          variant: "success",
+          icon: "circle-check",
+          title: language.t("toast.download.done.title"),
+          description: language.t("toast.download.done.description"),
+        })
+      })
+      .catch((cause: unknown) => {
+        console.error("[session.commands] project download failed", cause)
+        showToast({
+          variant: "error",
+          title: language.t("toast.download.failed.title"),
+          description: language.t("toast.download.failed.description"),
+        })
+      })
+  }
+
   const compact = () => {
     const sessionID = actions.session.identity.params.id
 
@@ -503,6 +584,22 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       title: language.t("command.session.copyID"),
       disabled: !actions.session.identity.params.id,
       onSelect: copySessionID,
+    }),
+    sessionCommand({
+      id: "session.publish",
+      title: language.t("command.session.publish"),
+      description: language.t("command.session.publish.description"),
+      slash: "publicar",
+      disabled: !actions.session.identity.params.id,
+      onSelect: publishProject,
+    }),
+    sessionCommand({
+      id: "session.undoLastEdit",
+      title: language.t("command.session.undoLastEdit"),
+      description: language.t("command.session.undoLastEdit.description"),
+      slash: "desfazer-ultima-edicao",
+      disabled: !actions.session.identity.params.id,
+      onSelect: undoLastEdit,
     }),
   ]
 
@@ -591,6 +688,14 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       title: language.t("command.project.copyID"),
       disabled: !actions.session.data.info()?.projectID,
       onSelect: copyProjectID,
+    }),
+    projectCommand({
+      id: "project.download",
+      title: language.t("command.project.download"),
+      description: language.t("command.project.download.description"),
+      slash: "baixar-projeto",
+      disabled: !actions.session.data.info()?.projectID,
+      onSelect: downloadProject,
     }),
   ]
 

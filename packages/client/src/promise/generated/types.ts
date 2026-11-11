@@ -454,6 +454,8 @@ export type SessionMessageCompactionRunning = {
   summary: string
 }
 
+export type SessionUndoEdit = { messageID: SessionMessageID; file: string }
+
 export type UsageLimitsBudgetModel = { providerID: ProviderID; modelID: string; name: string; spent?: MoneyUSD }
 
 export type FileSystemEntry = { path: RelativePath; type: "file" | "directory" }
@@ -3870,6 +3872,18 @@ export type ExperimentalSessionWaitInput = { readonly sessionID: string }
 
 export type ExperimentalSessionWaitOutput = void
 
+export type ExperimentalSessionRevertUndoEditInput = {
+  readonly sessionID: string
+  readonly messageID: string
+  readonly file: string
+}
+
+export type ExperimentalSessionRevertUndoEditOutput = { data: SessionUndoEdit | null }["data"]
+
+export type ExperimentalSessionRevertUndoLastEditInput = { readonly sessionID: string }
+
+export type ExperimentalSessionRevertUndoLastEditOutput = { data: SessionUndoEdit | null }["data"]
+
 export type ExperimentalSessionInstructionsEntryListInput = { readonly sessionID: string }
 
 export type ExperimentalSessionInstructionsEntryListOutput = { data: Array<InstructionEntryInfo> }["data"]
@@ -4314,6 +4328,12 @@ export type ExperimentalFileUnwatchInput = {
 }
 
 export type ExperimentalFileUnwatchOutput = void
+
+export type ExperimentalFileDownloadProjectInput = {
+  readonly location?: { readonly directory?: string | undefined } | undefined
+}
+
+export type ExperimentalFileDownloadProjectOutput = globalThis.Uint8Array
 
 export type CommandListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
 
@@ -4887,6 +4907,18 @@ export type SessionWaitInput = ExperimentalSessionWaitInput
 /** @deprecated Use `ExperimentalSessionWaitOutput`. Removed in the next minor. */
 export type SessionWaitOutput = ExperimentalSessionWaitOutput
 
+/** @deprecated Use `ExperimentalSessionRevertUndoEditInput`. Removed in the next minor. */
+export type SessionRevertUndoEditInput = ExperimentalSessionRevertUndoEditInput
+
+/** @deprecated Use `ExperimentalSessionRevertUndoEditOutput`. Removed in the next minor. */
+export type SessionRevertUndoEditOutput = ExperimentalSessionRevertUndoEditOutput
+
+/** @deprecated Use `ExperimentalSessionRevertUndoLastEditInput`. Removed in the next minor. */
+export type SessionRevertUndoLastEditInput = ExperimentalSessionRevertUndoLastEditInput
+
+/** @deprecated Use `ExperimentalSessionRevertUndoLastEditOutput`. Removed in the next minor. */
+export type SessionRevertUndoLastEditOutput = ExperimentalSessionRevertUndoLastEditOutput
+
 /** @deprecated Use `ExperimentalSessionInstructionsEntryListInput`. Removed in the next minor. */
 export type SessionInstructionsEntryListInput = ExperimentalSessionInstructionsEntryListInput
 
@@ -4991,6 +5023,12 @@ export type FileUnwatchInput = ExperimentalFileUnwatchInput
 
 /** @deprecated Use `ExperimentalFileUnwatchOutput`. Removed in the next minor. */
 export type FileUnwatchOutput = ExperimentalFileUnwatchOutput
+
+/** @deprecated Use `ExperimentalFileDownloadProjectInput`. Removed in the next minor. */
+export type FileDownloadProjectInput = ExperimentalFileDownloadProjectInput
+
+/** @deprecated Use `ExperimentalFileDownloadProjectOutput`. Removed in the next minor. */
+export type FileDownloadProjectOutput = ExperimentalFileDownloadProjectOutput
 
 /** @deprecated Use `ExperimentalMigrationV1StatusOutput`. Removed in the next minor. */
 export type MigrationV1StatusOutput = ExperimentalMigrationV1StatusOutput

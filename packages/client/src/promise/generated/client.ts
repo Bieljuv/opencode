@@ -95,6 +95,10 @@ import type {
   ExperimentalSessionSkillOutput,
   ExperimentalSessionWaitInput,
   ExperimentalSessionWaitOutput,
+  ExperimentalSessionRevertUndoEditInput,
+  ExperimentalSessionRevertUndoEditOutput,
+  ExperimentalSessionRevertUndoLastEditInput,
+  ExperimentalSessionRevertUndoLastEditOutput,
   ExperimentalSessionInstructionsEntryListInput,
   ExperimentalSessionInstructionsEntryListOutput,
   ExperimentalSessionInstructionsEntryPutInput,
@@ -203,6 +207,8 @@ import type {
   ExperimentalFileWatchOutput,
   ExperimentalFileUnwatchInput,
   ExperimentalFileUnwatchOutput,
+  ExperimentalFileDownloadProjectInput,
+  ExperimentalFileDownloadProjectOutput,
   CommandListInput,
   CommandListOutput,
   SkillListInput,
@@ -1119,6 +1125,31 @@ export function make(options: ClientOptions) {
             },
             requestOptions,
           ),
+        revert: {
+          undoEdit: (input: ExperimentalSessionRevertUndoEditInput, requestOptions?: RequestOptions) =>
+            request<{ readonly data: ExperimentalSessionRevertUndoEditOutput }>(
+              {
+                method: "POST",
+                path: `/api/experimental/session/${encodeURIComponent(input.sessionID)}/revert/undo-edit`,
+                body: { messageID: input["messageID"], file: input["file"] },
+                successStatus: 200,
+                declaredStatuses: [400, 401, 404, 409, 500],
+                empty: false,
+              },
+              requestOptions,
+            ).then((value) => value.data),
+          undoLastEdit: (input: ExperimentalSessionRevertUndoLastEditInput, requestOptions?: RequestOptions) =>
+            request<{ readonly data: ExperimentalSessionRevertUndoLastEditOutput }>(
+              {
+                method: "POST",
+                path: `/api/experimental/session/${encodeURIComponent(input.sessionID)}/revert/undo-last-edit`,
+                successStatus: 200,
+                declaredStatuses: [400, 401, 404, 409, 500],
+                empty: false,
+              },
+              requestOptions,
+            ).then((value) => value.data),
+        },
         instructions: {
           entry: {
             list: (input: ExperimentalSessionInstructionsEntryListInput, requestOptions?: RequestOptions) =>
@@ -1364,6 +1395,19 @@ export function make(options: ClientOptions) {
               successStatus: 204,
               declaredStatuses: [400, 401, 404],
               empty: true,
+            },
+            requestOptions,
+          ),
+        downloadProject: (input?: ExperimentalFileDownloadProjectInput, requestOptions?: RequestOptions) =>
+          request<ExperimentalFileDownloadProjectOutput>(
+            {
+              method: "GET",
+              path: `/api/experimental/fs/download-project`,
+              query: { location: input?.["location"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 404],
+              empty: false,
+              binary: true,
             },
             requestOptions,
           ),
@@ -2703,6 +2747,13 @@ export function make(options: ClientOptions) {
       skill: client.experimental.session.skill,
       /** @deprecated Use `client.experimental.session.wait`. Removed in the next minor. */
       wait: client.experimental.session.wait,
+      revert: {
+        ...client.session.revert,
+        /** @deprecated Use `client.experimental.session.revert.undoEdit`. Removed in the next minor. */
+        undoEdit: client.experimental.session.revert.undoEdit,
+        /** @deprecated Use `client.experimental.session.revert.undoLastEdit`. Removed in the next minor. */
+        undoLastEdit: client.experimental.session.revert.undoLastEdit,
+      },
       /** @deprecated Use `client.experimental.session.instructions`. Removed in the next minor. */
       instructions: {
         /** @deprecated Use `client.experimental.session.instructions.entry`. Removed in the next minor. */
@@ -2766,6 +2817,8 @@ export function make(options: ClientOptions) {
       watch: client.experimental.file.watch,
       /** @deprecated Use `client.experimental.file.unwatch`. Removed in the next minor. */
       unwatch: client.experimental.file.unwatch,
+      /** @deprecated Use `client.experimental.file.downloadProject`. Removed in the next minor. */
+      downloadProject: client.experimental.file.downloadProject,
     },
     /** @deprecated Use `client.experimental.migration`. Removed in the next minor. */
     migration: {

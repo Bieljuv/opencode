@@ -14,6 +14,7 @@ import { useLanguage } from "@/runtime/i18n/language"
 import { type McpController, useMcpController } from "@/providers/connect/mcp"
 import { mcpDetailAttempt, mcpDetailView, mcpRowView } from "@/providers/connect/mcp-machine"
 import { usePlatform } from "@/runtime/platform/platform"
+import { maskConnectorDisplayName } from "@/providers/connect/display-name"
 import { showToast } from "@/shell/notifications/toast"
 import "@/shell/commands/dialog.css"
 import "@/shell/search-list.css"
@@ -113,7 +114,10 @@ export function McpDialog(props: {
   }
 
   const copy = (current: { attempt: number; name: string; error: string }) => {
-    const details = language.t("dialog.mcp.error.details", { name: current.name, error: current.error })
+    const details = language.t("dialog.mcp.error.details", {
+      name: maskConnectorDisplayName(current.name),
+      error: current.error,
+    })
 
     return (platform.writeClipboardText?.(details) ?? navigator.clipboard.writeText(details))
       .then(() => props.mcp.dispatch({ type: "detail.copied", attempt: current.attempt, error: current.error }))
@@ -198,7 +202,7 @@ export function McpDialog(props: {
                 <DialogTitleGroup
                   title={
                     <span dir="auto" class="[overflow-wrap:anywhere]">
-                      {current().name}
+                      {maskConnectorDisplayName(current().name)}
                     </span>
                   }
                   description={language.t("dialog.mcp.error.status")}
@@ -266,7 +270,7 @@ export function McpDialog(props: {
                     <span class="mcp-dialog-status" aria-hidden="true">
                       <span class="mcp-status-dot" data-status={status()?.status} />
                     </span>
-                    <TruncatedText text={item().name} class="mcp-dialog-name" />
+                    <TruncatedText text={maskConnectorDisplayName(item().name)} class="mcp-dialog-name" />
                   </span>
                   <div class="mcp-trailing" onClick={(event) => event.stopPropagation()}>
                     <Show when={error()}>
@@ -274,7 +278,9 @@ export function McpDialog(props: {
                         size="small"
                         variant="ghost-muted"
                         class="mcp-status-action"
-                        aria-label={language.t("dialog.mcp.error.viewLabel", { name: item().name })}
+                        aria-label={language.t("dialog.mcp.error.viewLabel", {
+                          name: maskConnectorDisplayName(item().name),
+                        })}
                         onClick={() => select(item().name)}
                       >
                         {language.t("dialog.mcp.error.view")}
@@ -290,7 +296,7 @@ export function McpDialog(props: {
                           class="[&_[data-slot=switch-description]]:sr-only"
                           onChange={(enabled) => toggle(item().name, enabled)}
                         >
-                          <span class="sr-only">{item().name}</span>
+                          <span class="sr-only">{maskConnectorDisplayName(item().name)}</span>
                         </Switch>
                       }
                     >
