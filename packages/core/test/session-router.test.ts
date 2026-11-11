@@ -494,12 +494,14 @@ describe("effortFromMetadata", () => {
 })
 
 describe("multiAgentFromMetadata", () => {
-  test("only an explicit true turns multi-agent on", () => {
+  test("multi-agent is on unless explicitly turned off", () => {
     expect(multiAgentFromMetadata({ manostechMultiAgent: true })).toBe(true)
     expect(multiAgentFromMetadata({ manostechMultiAgent: false })).toBe(false)
-    expect(multiAgentFromMetadata({ manostechMultiAgent: "true" })).toBe(false)
-    expect(multiAgentFromMetadata({})).toBe(false)
-    expect(multiAgentFromMetadata(undefined)).toBe(false)
+    // A prompt with no toggle — CLI, ACP, schedules, child sessions — runs
+    // multi-agent, exactly like a composer prompt with the toggle on.
+    expect(multiAgentFromMetadata({ manostechMultiAgent: "true" })).toBe(true)
+    expect(multiAgentFromMetadata({})).toBe(true)
+    expect(multiAgentFromMetadata(undefined)).toBe(true)
   })
 })
 

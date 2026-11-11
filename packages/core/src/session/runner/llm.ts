@@ -264,7 +264,9 @@ const layer = Layer.effect(
           ? SessionRouter.effortFromMetadata(lastUser.metadata)
           : SessionRouter.effortFromVariant(first.model.ref.variant)
       // ManosTech multi-agent: the composer's toggle for this turn, carried
-      // in the same prompt metadata as the effort. Off by default.
+      // in the same prompt metadata as the effort. On by default: a prompt
+      // without the metadata — CLI, ACP, schedules, child sessions — runs
+      // multi-agent, and only an explicit false turns it off.
       const multiAgent = SessionRouter.multiAgentFromMetadata(lastUser?.metadata)
       const explicit = configured !== undefined || first.agent.info.model !== undefined
       const complexity = SessionRouter.classifyComplexity(lastUser?.text ?? "")

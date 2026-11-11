@@ -179,9 +179,12 @@ describe("Agent", () => {
       const agents = yield* agent.list()
       expect(agents.map((item) => String(item.id)).sort()).toEqual([
         "build",
+        "builder",
         "compaction",
         "explore",
         "general",
+        "planner",
+        "reviewer",
         "summary",
         "title",
       ])
@@ -228,7 +231,7 @@ describe("Agent", () => {
     }),
   )
 
-  it.effect("denies the subagent tool for built-in subagents", () =>
+  it.effect("denies the subagent tool for the read-only leaf agents", () =>
     Effect.gen(function* () {
       const agent = yield* Agent.Service
       yield* AgentPlugin.Plugin.effect(
@@ -237,7 +240,10 @@ describe("Agent", () => {
         }),
       )
 
-      yield* Effect.forEach(["general", "explore"], (id) =>
+      // Explore and reviewer are leaves: a read-only search and a review
+      // never spawn another agent. Planner, builder, and general delegate,
+      // so the pipeline can nest one level deep.
+      yield* Effect.forEach(["explore", "reviewer"], (id) =>
         Effect.gen(function* () {
           const info = yield* agent.get(Agent.ID.make(id))
           if (!info) throw new Error(`expected built-in agent: ${id}`)
@@ -246,6 +252,42 @@ describe("Agent", () => {
           expect(Permission.evaluate("subagent", "*", info.permissions).effect).toBe("deny")
         }),
       )
+      yield* Effect.forEach(["general", "planner", "builder"], (id) =>
+        Effect.gen(function* () {
+          const info = yield* agent.get(Agent.ID.make(id))
+          if (!info) throw new Error(`expected built-in agent: ${id}`)
+          expect(info.mode).toBe("subagent")
+          expect(Permission.evaluate("subagent", "*", info.permissions).effect).toBe("allow")
+        }),
+      )
+    }),
+  )
+
+  it.effect("gives the pipeline roles their read and write boundaries", () =>
+    Effect.gen(function* () {
+      const agent = yield* Agent.Service
+      yield* AgentPlugin.Plugin.effect(
+        host({
+          agent: agentHost(agent),
+        }),
+      )
+
+      const planner = yield* agent.get(Agent.ID.make("planner"))
+      expect(planner?.system).toContain("You are a planner")
+      expect(Permission.evaluate("edit", "src/index.ts", planner?.permissions ?? []).effect).toBe("deny")
+      expect(Permission.evaluate("shell.mutate", "rm -rf foo", planner?.permissions ?? []).effect).toBe("deny")
+      expect(Permission.evaluate("read", "src/index.ts", planner?.permissions ?? []).effect).toBe("allow")
+      expect(Permission.evaluate("read", ".env", planner?.permissions ?? []).effect).toBe("ask")
+
+      const builder = yield* agent.get(Agent.ID.make("builder"))
+      expect(builder?.system).toContain("You are a builder")
+      expect(Permission.evaluate("edit", "src/index.ts", builder?.permissions ?? []).effect).toBe("ask")
+      expect(Permission.evaluate("question", "*", builder?.permissions ?? []).effect).toBe("deny")
+
+      const reviewer = yield* agent.get(Agent.ID.make("reviewer"))
+      expect(reviewer?.system).toContain("You are a reviewer")
+      expect(Permission.evaluate("edit", "src/index.ts", reviewer?.permissions ?? []).effect).toBe("deny")
+      expect(Permission.evaluate("read", "src/index.ts", reviewer?.permissions ?? []).effect).toBe("allow")
     }),
   )
 })

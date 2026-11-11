@@ -4,6 +4,35 @@ import { define } from "@opencode/plugin/effect/plugin"
 import { Effect } from "effect"
 import { Agent } from "../agent.js"
 
+const PROMPT_PLANNER = `You are a planner. You turn a request into a build plan and nothing else.
+
+Guidelines:
+- Your role is EXCLUSIVELY to plan: study the request and the codebase, then write the plan
+- NEVER create, modify, delete, move, or copy files, including temporary files and reports
+- Shell commands MUST be read-only. NEVER run commands that write files or change system state
+- A plan names the steps in order, the files each step touches, and which fronts are independent enough to run in parallel
+- Fronts that depend on each other run in order, not in parallel; two fronts never edit the same files
+- When the territory is wide, send the explore subagent to map a front and report back instead of reading everything yourself
+- End with the plan itself: steps, files, and order. Do not build anything — building is the builder's job.`
+
+const PROMPT_BUILDER = `You are a builder. You build exactly the front you were given, and nothing else.
+
+Guidelines:
+- Implement the assigned front: create and edit the files it needs, following the project's existing patterns
+- Only touch the files your front owns. Never edit files another front owns, and never re-plan the work
+- When the project has a build, typecheck, or test command for what you touched, run it and fix what it reports
+- Report what you changed (file paths) and the check results when you finish, so the reviewer can verify your work.`
+
+const PROMPT_REVIEWER = `You are a reviewer. You check finished work and report every issue — you never fix anything yourself.
+
+Guidelines:
+- Your role is EXCLUSIVELY to review: read the changed files and judge them
+- NEVER create, modify, delete, move, or copy files, including temporary files and reports
+- Shell commands MUST be read-only. NEVER run commands that write files or change system state
+- Check for errors, inconsistencies, missing pieces, and work that contradicts the plan or the request
+- Report each issue with the file path and line, or confirm the work is sound when you find nothing wrong
+- Never edit the files you review: fixing them is the builder's job.`
+
 const PROMPT_EXPLORE = `You are a file search specialist. You excel at thoroughly navigating and exploring codebases.
 
 Guidelines:
@@ -65,9 +94,67 @@ export const Plugin = define({
         item.description =
           "General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel."
         item.mode = "subagent"
+        // General delegates: a multi-step task splits into fronts of its own,
+        // so it keeps the subagent tool. The depth limit still caps nesting.
+        item.permissions.push({ action: "question", resource: "*", effect: "deny" })
+      })
+
+      editor.update(Agent.ID.make("planner"), (item) => {
+        item.name = Agent.Name.make("Planner")
+        item.description =
+          "Plans a build before it starts: steps, files, and which fronts are independent. Use this agent to plan a multi-step task."
+        item.system = PROMPT_PLANNER
+        item.mode = "subagent"
+        // Read-only like explore, but it may send explore subagents to map a
+        // front instead of reading everything itself.
         item.permissions.push(
-          { action: "question", resource: "*", effect: "deny" },
+          { action: "*", resource: "*", effect: "deny" },
+          { action: "shell", resource: "*", effect: "allow" },
+          { action: "grep", resource: "*", effect: "allow" },
+          { action: "glob", resource: "*", effect: "allow" },
+          { action: "webfetch", resource: "*", effect: "allow" },
+          { action: "websearch", resource: "*", effect: "allow" },
+          { action: "read", resource: "*", effect: "allow" },
+          { action: "read", resource: "*.env", effect: "ask" },
+          { action: "read", resource: "*.env.*", effect: "ask" },
+          { action: "read", resource: "*.env.example", effect: "allow" },
+          { action: "subagent", resource: "*", effect: "allow" },
+          { action: "external_directory", resource: "*", effect: "allow" },
+        )
+      })
+
+      editor.update(Agent.ID.make("builder"), (item) => {
+        item.name = Agent.Name.make("Builder")
+        item.description =
+          "Builds one front of a plan: writes the files and checks the result. Use this agent for a front that changes files."
+        item.system = PROMPT_BUILDER
+        item.mode = "subagent"
+        // Write-capable like the primary agent, and it may split its own
+        // front into subagents; the depth limit still caps nesting.
+        item.permissions.push({ action: "question", resource: "*", effect: "deny" })
+      })
+
+      editor.update(Agent.ID.make("reviewer"), (item) => {
+        item.name = Agent.Name.make("Reviewer")
+        item.description =
+          "Reviews finished work: reads the changed files and lists every issue. Use this agent to check a build before delivering it."
+        item.system = PROMPT_REVIEWER
+        item.mode = "subagent"
+        // Read-only like explore, and a leaf: a review never spawns another
+        // agent, so a review can never review itself.
+        item.permissions.push(
+          { action: "*", resource: "*", effect: "deny" },
+          { action: "shell", resource: "*", effect: "allow" },
+          { action: "grep", resource: "*", effect: "allow" },
+          { action: "glob", resource: "*", effect: "allow" },
+          { action: "webfetch", resource: "*", effect: "allow" },
+          { action: "websearch", resource: "*", effect: "allow" },
+          { action: "read", resource: "*", effect: "allow" },
+          { action: "read", resource: "*.env", effect: "ask" },
+          { action: "read", resource: "*.env.*", effect: "ask" },
+          { action: "read", resource: "*.env.example", effect: "allow" },
           { action: "subagent", resource: "*", effect: "deny" },
+          { action: "external_directory", resource: "*", effect: "allow" },
         )
       })
 

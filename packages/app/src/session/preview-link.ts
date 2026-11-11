@@ -1,4 +1,4 @@
-import type { SessionMessageInfo } from "@opencode/client/promise"
+import type { SessionInfo, SessionMessageInfo } from "@opencode/client/promise"
 import { Option, Schema } from "effect"
 
 /**
@@ -9,6 +9,12 @@ export type BuildPreview = {
   readonly href: string
   readonly messageID: string
 }
+
+// Agents that never build: the planning and read-only roles, and the
+// internal agents that only name or summarize a conversation. Every other
+// agent — Build and the builder and general subagents that do its work —
+// opens a preview for the HTML it links or writes.
+const NON_BUILDING_AGENTS = new Set(["plan", "explore", "planner", "reviewer", "title", "summary", "compaction"])
 
 const decodeString = Schema.decodeUnknownOption(Schema.String)
 
@@ -78,18 +84,20 @@ function findWrittenHtml(message: SessionMessageInfo): string | undefined {
 }
 
 /**
- * The preview the latest Build message links or just wrote, if any. Only a
- * Build turn opens a preview: a question, a Plan turn or any other agent
- * never does. A finished message's link is the entry point it chose; while
- * it streams, a finished write or edit of a local HTML file is the entry
- * point instead, so the preview opens as soon as the file exists. A write
- * still streaming or running does not count — the file may not exist yet.
+ * The preview the latest build-like message links or just wrote, if any.
+ * Only a build opens a preview: a question, a Plan turn, or a read-only
+ * agent never does — but a builder or general subagent does, exactly like
+ * Build, so delegating the work no longer hides the preview. A finished
+ * message's link is the entry point it chose; while it streams, a finished
+ * write or edit of a local HTML file is the entry point instead, so the
+ * preview opens as soon as the file exists. A write still streaming or
+ * running does not count — the file may not exist yet.
  */
 export function latestBuildPreview(messages: readonly SessionMessageInfo[]): BuildPreview | undefined {
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index]
 
-    if (message.type !== "assistant" || message.agent !== "build") continue
+    if (message.type !== "assistant" || NON_BUILDING_AGENTS.has(message.agent)) continue
 
     if (message.time.completed !== undefined) {
       const href = findPreviewHref(
@@ -108,4 +116,31 @@ export function latestBuildPreview(messages: readonly SessionMessageInfo[]): Bui
   }
 
   return undefined
+}
+
+/**
+ * The messages a preview scan reads: the session's own messages plus the
+ * messages of every session below it, merged in time order. A subagent
+ * writes its HTML in its own session, so scanning only the parent misses
+ * exactly the work delegation produces. Cycles in the parent chain (a
+ * session listed as its own ancestor) stop the walk instead of looping.
+ */
+export function collectPreviewMessages(
+  sessionID: string,
+  sessions: readonly SessionInfo[],
+  listMessages: (id: string) => readonly SessionMessageInfo[],
+): SessionMessageInfo[] {
+  const parents = new Map(sessions.map((session) => [session.id, session.parentID]))
+  const descends = (id: string) => {
+    const seen = new Set<string>()
+    let parentID = parents.get(id)
+    while (parentID && !seen.has(parentID)) {
+      if (parentID === sessionID) return true
+      seen.add(parentID)
+      parentID = parents.get(parentID)
+    }
+    return false
+  }
+  const ids = [sessionID, ...sessions.filter((session) => descends(session.id)).map((session) => session.id)]
+  return ids.flatMap((id) => listMessages(id)).sort((a, b) => a.time.created - b.time.created)
 }

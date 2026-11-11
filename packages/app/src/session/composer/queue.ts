@@ -50,7 +50,7 @@ export function createSessionQueue(input: {
   const location = useWorkspaceLocation()
   const language = useLanguage()
   const effort = () => input.effort?.() ?? "automatico"
-  const multiAgent = () => input.multiAgent?.() ?? false
+  const multiAgent = () => input.multiAgent?.() ?? true
 
   const queued = createMemo(() =>
     data.session.pending

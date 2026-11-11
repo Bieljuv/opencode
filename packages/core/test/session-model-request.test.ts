@@ -330,10 +330,15 @@ describe("SessionModelRequest.FAILED_TOOL_RETRY", () => {
 describe("SessionModelRequest.MULTI_AGENT", () => {
   test("independent fronts run in parallel subagents and join at the end", () => {
     for (const topic of [
-      "split it and run each front in its own parallel subagent in the background",
+      "run each front in its own parallel subagent in the background",
       "Fronts that depend on each other run in order, not in parallel",
       "Give each front a short label of a few words saying what it does",
       "a single small question or a single-file change is done directly, without subagents",
+      // The fixed pipeline: explore, then plan, then parallel builders, then review.
+      "send the planner subagent first",
+      "use the builder subagent for fronts that write files",
+      "send the reviewer subagent to check the files the builders changed",
+      "Never give two fronts the same files to edit",
     ]) {
       expect(MULTI_AGENT).toContain(topic)
     }
@@ -396,6 +401,12 @@ describe("SessionModelRequest.baseTranscript direct reply", () => {
     expect(withToggle.system.map((part) => part.text).join("\n")).toContain(
       "run each front in its own parallel subagent in the background",
     )
+    // The pipeline names real roles with their own subagents: plan first,
+    // build in parallel fronts, review before delivering.
+    const joined = withToggle.system.map((part) => part.text).join("\n")
+    expect(joined).toContain("planner subagent")
+    expect(joined).toContain("builder subagent")
+    expect(joined).toContain("reviewer subagent")
     const withoutToggle = baseTranscript({
       agent: Agent.Info.default(Agent.ID.make("build")),
       model,
