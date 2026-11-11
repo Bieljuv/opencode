@@ -192,6 +192,7 @@ function TouchComposer(props: { state: State }) {
     model: { selection, paid: true, loading: false },
     effort: { current: () => "automatico" as const, set: () => undefined, ready: () => true },
     multiAgent: { current: () => false, set: () => undefined, ready: () => true },
+    planBlocked: () => undefined,
   } satisfies ComposerModel
 
   onMount(() => props.state === "suggestions" && editor.openCommands())

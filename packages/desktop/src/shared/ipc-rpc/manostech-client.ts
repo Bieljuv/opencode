@@ -51,6 +51,7 @@ const ClientUsage = Schema.Struct({
   blocked: Schema.Boolean,
   weekly: Schema.optional(WeeklyUsage),
   monthly: Schema.optional(MonthlyUsage),
+  weeklyWarned: Schema.Boolean,
 })
 
 const ClientError = Schema.Struct({
@@ -111,6 +112,8 @@ export const ManosTechClientUsage = Rpc.make("ManosTechClientUsage", {
 
 export const ManosTechClientUsageWarned = Rpc.make("ManosTechClientUsageWarned")
 
+export const ManosTechClientWeeklyUsageWarned = Rpc.make("ManosTechClientWeeklyUsageWarned")
+
 export const ManosTechClientTranscribe = Rpc.make("ManosTechClientTranscribe", {
   payload: { audio: Schema.String },
   success: Schema.Union([
@@ -133,6 +136,7 @@ export const ManosTechClientRpcs = RpcGroup.make(
   ManosTechClientGoogleCancel,
   ManosTechClientUsage,
   ManosTechClientUsageWarned,
+  ManosTechClientWeeklyUsageWarned,
   ManosTechClientTranscribe,
 )
 

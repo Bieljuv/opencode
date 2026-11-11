@@ -21,6 +21,10 @@ export const manosTechClientHandlers = ManosTechClientRpcs.toLayer(
         promise(() => {
           ManosTechClientAuth.markUsageWarnedToday()
         }),
+      ManosTechClientWeeklyUsageWarned: () =>
+        promise(() => {
+          ManosTechClientAuth.markWeeklyUsageWarned()
+        }),
       ManosTechClientTranscribe: ({ audio }) => promise(() => ManosTechClientAuth.transcribeAudio(audio)),
     })
   }),

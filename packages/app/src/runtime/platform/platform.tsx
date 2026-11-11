@@ -159,6 +159,7 @@ type PlatformBase = {
         blocked: boolean
         weekly?: WeeklyUsage
         monthly?: MonthlyUsage
+        weeklyWarned: boolean
       }
     | undefined
   >
@@ -166,8 +167,11 @@ type PlatformBase = {
   /** Transcreve uma fatia de áudio no gateway do painel (desktop only). */
   transcribeClientAudio?(audioDataUrl: string): Promise<ClientTranscribeResult>
 
-  /** Mark the 85% daily-usage warning as shown today (desktop only) */
+  /** Mark the 75% daily-usage warning as shown today (desktop only) */
   markClientUsageWarned?(): Promise<void>
+
+  /** Mark the 75% weekly-usage warning as shown this cycle (desktop only) */
+  markWeeklyUsageWarned?(): Promise<void>
 
   /** Listen for client account changes (desktop only) */
   onClientChanged?(cb: () => void): () => void

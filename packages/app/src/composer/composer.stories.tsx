@@ -64,6 +64,8 @@ function ComposerStory(props: {
   manyHistory?: boolean
   /** File search waits for the story's "Return files" button, like a slow server. */
   fileSearch?: boolean
+  /** The plan is blocked: the composer locks and shows only the generic message plus the release time. */
+  planBlocked?: boolean
   suggestionBoundary?: () => HTMLElement | undefined
 }) {
   const [fileSearch, setFileSearch] = createStore<{ pending?: string }>({})
@@ -283,6 +285,9 @@ function ComposerStory(props: {
     model: { selection: modelSelection, paid: true, loading: false },
     effort: { current: () => "automatico" as const, set: () => undefined, ready: () => true },
     multiAgent: { current: () => false, set: () => undefined, ready: () => true },
+    // A fixed midnight release, so the lock notice reads the same on
+    // every run (the real release comes from the panel's /api/uso).
+    planBlocked: () => (props.planBlocked ? { releasesAt: "2026-11-12T03:00:00Z" } : undefined),
   } satisfies ComposerModel
 
   const suggest = (kind: typeof props.suggestions) => {
@@ -372,6 +377,7 @@ type FlowArgs = {
   failure: boolean
   label: string
   suggestions: "command" | "context" | "none"
+  planBlocked: boolean
 }
 
 export default {
@@ -379,7 +385,7 @@ export default {
   component: Composer,
   parameters: { layout: "centered" },
   // States that only change the composer's props share this render, so moving between them keeps one composer.
-  args: { working: false, stopping: false, failure: false, label: "Ready", suggestions: "none" },
+  args: { working: false, stopping: false, failure: false, label: "Ready", suggestions: "none", planBlocked: false },
   argTypes: { suggestions: { control: "select", options: ["none", "command", "context"] } },
   render: (args: FlowArgs) => <ComposerStory {...args} />,
 }
@@ -506,6 +512,15 @@ export const RunningAndStopping = { args: { working: true, stopping: true, label
 export const SteeringFollowUp = { args: { prompt: text("Use this correction at the next boundary"), working: true } }
 
 export const FailedSubmissionRestoration = { args: { prompt: text("Preserve this draft on failure"), failure: true } }
+
+export const PlanBlocked = {
+  args: { planBlocked: true, label: "Plan blocked" },
+  render: () => (
+    <div class="w-[min(640px,calc(100vw-32px))]">
+      <ComposerStory planBlocked />
+    </div>
+  ),
+}
 
 export const NewSessionFirstPrompt = {
   args: { prompt: text("Create the Session and implement the change"), label: "New Session draft" },

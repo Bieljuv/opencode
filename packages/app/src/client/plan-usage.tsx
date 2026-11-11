@@ -15,10 +15,16 @@ import { usePlatform } from "@/runtime/platform/platform"
  * Configurações. A tira persistente do rodapé da sessão saiu: ela media
  * só o uso do gateway contra o limite diário, e marcava 0% com milhões
  * de tokens gastos nos modelos diretos — o número certo é o total do
- * dia, que a aba Contexto mostra. O aviso dos 85% continua: um
+ * dia, que a aba Contexto mostra. O aviso dos 75% continua: um
  * observador sem interface na raiz do app (PlanUsageWatcher) dispara o
- * push do sistema uma vez por dia, no mesmo gatilho de antes — o main
- * guarda o dia avisado e o push só sai enquanto ele não foi marcado.
+ * push do sistema uma vez por dia (e o aviso semanal, uma vez por
+ * ciclo), no mesmo gatilho de antes — o main guarda o dia avisado (e o
+ * ciclo avisado) e o push só sai enquanto ele não foi marcado.
+ *
+ * A trava do compositor lê o mesmo estado: `planBlock` devolve o
+ * bloqueio ativo (diário, semanal ou mensal) com a liberação mais
+ * distante — o compositor trava enquanto houver qualquer bloqueio e
+ * destrava no próximo poll (60s) quando todos limparem.
  */
 
 export type PlanUsage = {
@@ -31,6 +37,30 @@ export type PlanUsage = {
   readonly weekly?: WeeklyUsage
   /** O uso mensal, quando o painel o reporta; ausente = sem limite mensal. */
   readonly monthly?: MonthlyUsage
+  /** O aviso semanal dos 75% já apareceu neste ciclo (o main guarda o ciclo avisado). */
+  readonly weeklyWarned: boolean
+}
+
+/**
+ * O bloqueio ativo do plano, quando há um: diário, semanal ou mensal.
+ * `releasesAt` é a liberação MAIS DISTANTE entre os bloqueios ativos —
+ * o compositor só destrava quando todos limparem. Undefined = nenhum
+ * bloqueio, o compositor segue normal.
+ */
+export type PlanBlock = {
+  readonly releasesAt: string
+}
+
+export function planBlock(usage: PlanUsage): PlanBlock | undefined {
+  const releases = [
+    usage.blocked ? usage.resetsAt : undefined,
+    usage.weekly?.blocked ? (usage.weekly.releasesAt ?? usage.weekly.resetsAt) : undefined,
+    usage.monthly?.blocked ? (usage.monthly.releasesAt ?? usage.monthly.resetsAt) : undefined,
+  ].filter((at): at is string => at !== undefined)
+
+  if (releases.length === 0) return undefined
+
+  return { releasesAt: releases.reduce((latest, at) => (at > latest ? at : latest), releases[0]) }
 }
 
 export type PlanUsageTone = "ok" | "warn" | "danger"
@@ -80,11 +110,18 @@ export function planUsageToneClass(tone: PlanUsageTone): string {
   return "bg-v2-state-fg-success"
 }
 
-const WARNING_PERCENT = 85
+const WARNING_PERCENT = 75
 
-/** O aviso dos 85% dispara: no observador (showWarning), com uso >= 85% e sem aviso hoje. */
+/** O aviso dos 75% dispara: no observador (showWarning), com uso >= 75% e sem aviso hoje. */
 export function shouldShowUsageWarning(usage: PlanUsage, showWarning?: boolean): boolean {
   return showWarning === true && usage.percent >= WARNING_PERCENT && !usage.warnedToday
+}
+
+/** O aviso semanal dos 75% dispara: no observador, com o uso da semana >= 75% e sem aviso neste ciclo. */
+export function shouldShowWeeklyUsageWarning(usage: PlanUsage, showWarning?: boolean): boolean {
+  const weekly = usage.weekly
+
+  return showWarning === true && weekly !== undefined && weekly.percent >= WARNING_PERCENT && !usage.weeklyWarned
 }
 
 export function PlanUsageBar(props: { usage: PlanUsage }) {
@@ -159,13 +196,16 @@ export function useClientUsage() {
 }
 
 /**
- * O aviso dos 85% sem interface: montado uma vez na raiz do app, observa
- * o uso do plano (a mesma consulta de 60s da tira antiga) e dispara o
- * push do sistema uma vez por dia, quando o uso cruza os 85%. O push só
- * aparece com a janela desfocada; focada, nada mostra — a barra da
- * seção Conta segue como o lugar onde o % pode ser conferido. Uma vez
- * por dia: o push só sai enquanto warnedToday é falso, e a marcação
- * abaixo desliga o aviso no próximo carregamento.
+ * Os avisos dos 75% sem interface: montado uma vez na raiz do app,
+ * observa o uso do plano (a mesma consulta de 60s da tira antiga) e
+ * dispara o push do sistema uma vez por dia (diário) e uma vez por
+ * ciclo (semanal), quando o uso cruza os 75%. O push só aparece com
+ * a janela desfocada; focada, nada mostra — a barra da seção Conta
+ * segue como o lugar onde o % pode ser conferido. Uma vez por dia /
+ * por ciclo: o push só sai enquanto warnedToday / weeklyWarned é
+ * falso, e a marcação abaixo desliga o aviso no próximo carregamento.
+ * O mensal não tem push para o cliente: o aviso mensal é do admin,
+ * no Dashboard do painel.
  */
 export function PlanUsageWatcher() {
   const platform = usePlatform()
@@ -181,6 +221,20 @@ export function PlanUsageWatcher() {
     void platform.notify(
       language.t("client.usage.warningPush.title"),
       language.t("client.usage.warningPush.body", { percent: String(Math.round(value.percent)) }),
+    )
+  })
+
+  createEffect(() => {
+    const value = usage()
+
+    if (!value || !shouldShowWeeklyUsageWarning(value, true)) return
+
+    void platform.markWeeklyUsageWarned?.()
+    void platform.notify(
+      language.t("client.usage.weeklyWarningPush.title"),
+      language.t("client.usage.weeklyWarningPush.body", {
+        percent: String(Math.round(value.weekly?.percent ?? 0)),
+      }),
     )
   })
 

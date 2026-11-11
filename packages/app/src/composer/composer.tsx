@@ -20,10 +20,30 @@ export function Composer(props: {
   const command = useCommand()
   const language = useLanguage()
 
+  // ManosTech: the plan block locks the composer. The notice shows only
+  // the generic message plus the release time (America/Sao_Paulo) — never
+  // a model, provider, tier, quota, limit or routing detail.
+  const releaseLabel = (releasesAt: string) =>
+    new Intl.DateTimeFormat(language.intl(), {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "America/Sao_Paulo",
+    }).format(new Date(releasesAt))
+
   return (
     <div class="flex flex-col gap-3">
+      <Show when={props.model.planBlocked()}>
+        {(block) => (
+          <p class="text-center text-[13px] leading-[var(--line-height-compact)] text-muted" role="status">
+            {language.t("client.usage.blocked.message", { time: releaseLabel(block().releasesAt) })}
+          </p>
+        )}
+      </Show>
       <ComposerEditor
         controller={props.model}
+        disabled={props.model.planBlocked() !== undefined}
         borderUnderlay={props.borderUnderlay}
         readOnly={props.readOnly}
         class={props.class}

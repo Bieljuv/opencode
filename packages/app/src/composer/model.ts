@@ -33,6 +33,7 @@ import type { PromptHistoryComment } from "./history/entry"
 import { createComposerHistory } from "./history/store"
 import { createComposerSubmit } from "./submit"
 import { composerSubmitView } from "./machine"
+import { planBlock, useClientUsage, type PlanBlock } from "@/client/plan-usage"
 import type { RouterEffortSelection } from "./effort"
 import type { MultiAgentSelection } from "./multi-agent"
 import { useAttachmentDestination } from "./attachments/destination"
@@ -44,6 +45,8 @@ export type ComposerModel = ComposerEditorModel & {
   readonly effort: RouterEffortSelection
   /** The global multi-agent toggle, shown beside the effort dropdown. */
   readonly multiAgent: MultiAgentSelection
+  /** The active plan block (daily, weekly or monthly), if any — the composer locks while one is active. */
+  readonly planBlocked: () => PlanBlock | undefined
 }
 
 const sendFailedTitle = {
@@ -355,6 +358,17 @@ export function createComposerModel(
 
   const submitView = createMemo(() => composerSubmitView(submission.state()))
 
+  // ManosTech: the plan block locks the composer — no new message while
+  // the daily, weekly or monthly allowance is spent. The usage polls
+  // every 60s, so the composer unlocks on the next poll after the block
+  // clears. No usage (logged out, no limit configured) = no lock.
+  const clientUsage = useClientUsage()
+  const planBlockState = createMemo(() => {
+    const usage = clientUsage()
+
+    return usage ? planBlock(usage) : undefined
+  })
+
   const controller = createComposerEditor({
     store: prompt.store,
     history: {
@@ -538,7 +552,7 @@ export function createComposerModel(
         stopping,
         held: () => submitView().held,
         busy: () => submitView().busy,
-        canSubmit: () => submitView().canSubmit,
+        canSubmit: () => submitView().canSubmit && planBlockState() === undefined,
         working: adapter.working,
         queue: options.queue,
         quote:
@@ -554,7 +568,7 @@ export function createComposerModel(
               }
             : undefined,
         onSubmit: (submitOptions) => {
-          if (!available()) return
+          if (!available() || planBlockState()) return
           const queue = options.queue
 
           if (queue?.undoing()) return
@@ -578,6 +592,7 @@ export function createComposerModel(
   Object.defineProperty(controller, "model", { get: () => adapter.controls().model })
   Object.defineProperty(controller, "effort", { get: () => options.effort })
   Object.defineProperty(controller, "multiAgent", { get: () => options.multiAgent })
+  Object.defineProperty(controller, "planBlocked", { get: () => planBlockState })
 
   command.register("composer-editor", () => [
     {

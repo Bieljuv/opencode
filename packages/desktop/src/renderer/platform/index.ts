@@ -57,6 +57,7 @@ export function createDesktopPlatform(api: ElectronAPI, windowState: DesktopWind
       return usage ?? undefined
     },
     markClientUsageWarned: () => api.markClientUsageWarned(),
+    markWeeklyUsageWarned: () => api.markWeeklyUsageWarned(),
     transcribeClientAudio: (audioDataUrl) => api.transcribeClientAudio(audioDataUrl),
     onClientChanged: (callback) => api.onClientChanged(callback),
     onDragCancel: (callback) => {
