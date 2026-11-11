@@ -358,7 +358,13 @@ export function createHostApis() {
 
         if (!usage) return undefined
 
-        return { percent: usage.percent, resetsAt: usage.resetsAt, weekly: usage.weekly }
+        return {
+          percent: usage.percent,
+          resetsAt: usage.resetsAt,
+          blocked: usage.blocked,
+          weekly: usage.weekly,
+          monthly: usage.monthly,
+        }
       }
     },
     // ManosTech: tokens spent today across every session on a server, from

@@ -55,6 +55,7 @@ describe("usage warning trigger", () => {
       percent,
       resetsAt: "2026-11-11T03:00:00Z",
       warnedToday,
+      blocked: false,
     })
 
     expect(shouldShowUsageWarning(usage(84, false), true)).toBe(false)

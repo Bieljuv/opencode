@@ -62,7 +62,9 @@ export type ClientUsage = {
   readonly percent: number
   readonly resetsAt: string
   readonly warnedToday: boolean
+  readonly blocked: boolean
   readonly weekly: Panel.WeeklyUsage | undefined
+  readonly monthly: Panel.MonthlyUsage | undefined
 }
 
 export type LoginResult =
@@ -212,7 +214,9 @@ export async function getClientUsage(): Promise<ClientUsage | null> {
     percent: usage.percent,
     resetsAt: usage.resetsAt,
     warnedToday: wasUsageWarnedToday(),
+    blocked: usage.blocked,
     weekly: usage.weekly,
+    monthly: usage.monthly,
   }
 }
 

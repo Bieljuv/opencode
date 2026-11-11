@@ -344,6 +344,9 @@ describe("fetchDailyUsage", () => {
     expect(await fetchDailyUsage(base, "key-1")).toEqual({
       percent: 85,
       resetsAt: "2026-11-10T03:00:00Z",
+      blocked: false,
+      weekly: undefined,
+      monthly: undefined,
     })
   })
 
@@ -375,10 +378,77 @@ describe("fetchDailyUsage", () => {
       expect(await fetchDailyUsage(`http://127.0.0.1:${weekly.port}`, "key-1")).toEqual({
         percent: 40,
         resetsAt: "2026-11-10T03:00:00Z",
+        blocked: false,
         weekly: { percent: 87, resetsAt: "2026-11-17T03:00:00Z", blocked: false, releasesAt: undefined },
+        monthly: undefined,
       })
     } finally {
       weekly.stop()
+    }
+  })
+
+  test("a blocked day and a monthly object come back with the daily one", async () => {
+    const monthly = Bun.serve({
+      port: 0,
+      fetch: () =>
+        Response.json({
+          usado_percentual: 100,
+          reseta_em: "2026-11-12T03:00:00Z",
+          bloqueado: true,
+          mensal: {
+            limite_tokens: 10_000_000,
+            usado_tokens: 10_662_512,
+            usado_percentual: 100,
+            bloqueado: true,
+            liberacao_em: "2026-12-01T03:00:00Z",
+            reseta_em: "2026-12-01T03:00:00Z",
+          },
+        }),
+    })
+
+    try {
+      expect(await fetchDailyUsage(`http://127.0.0.1:${monthly.port}`, "key-1")).toEqual({
+        percent: 100,
+        resetsAt: "2026-11-12T03:00:00Z",
+        blocked: true,
+        weekly: undefined,
+        monthly: {
+          percent: 100,
+          resetsAt: "2026-12-01T03:00:00Z",
+          blocked: true,
+          releasesAt: "2026-12-01T03:00:00Z",
+        },
+      })
+    } finally {
+      monthly.stop()
+    }
+  })
+
+  test("no monthly limit, or a malformed monthly object, hides only the monthly state", async () => {
+    const malformed = Bun.serve({
+      port: 0,
+      fetch: () =>
+        Response.json({
+          usado_percentual: 40,
+          reseta_em: "2026-11-10T03:00:00Z",
+          mensal: {
+            limite_tokens: 10_000_000,
+            usado_tokens: 0,
+            usado_percentual: 150,
+            bloqueado: false,
+            liberacao_em: null,
+            reseta_em: "2026-12-01T03:00:00Z",
+          },
+        }),
+    })
+
+    try {
+      const usage = await fetchDailyUsage(`http://127.0.0.1:${malformed.port}`, "key-1")
+
+      expect(usage?.percent).toBe(40)
+      expect(usage?.monthly).toBeUndefined()
+    } finally {
+      malformed.stop()
     }
   })
 
