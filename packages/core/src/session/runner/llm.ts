@@ -35,7 +35,7 @@ import { SessionStep } from "./step.js"
 import { ToolOutput } from "../../tool-output.js"
 import { Plugin } from "../../plugin.js"
 import { PluginHooks } from "../../plugin/hooks.js"
-import { MAX_STEPS_PROMPT } from "./max-steps.js"
+import { MAX_STEPS_PROMPT, resolveStepLimit } from "./max-steps.js"
 
 const CONTINUE_AFTER_INCOMPLETE_STREAM =
   "The previous response was interrupted. Continue from where you left off without repeating completed content."
@@ -409,7 +409,9 @@ const layer = Layer.effect(
           continue
         }
         yield* compaction.precompute(Effect.succeed(loaded), estimate)
-        const stepLimitReached = loaded.agent.info.steps !== undefined && step >= loaded.agent.info.steps
+        // ManosTech: the cap always applies — an agent without an explicit
+        // `steps` value resolves to the shared default (audit C-04).
+        const stepLimitReached = step >= resolveStepLimit(loaded.agent.info)
         const transcript = SessionModelRequest.baseTranscript({
           agent: loaded.agent.info,
           model: loaded.model,
