@@ -285,6 +285,31 @@ const layer = Layer.effect(
         rotateAfter,
       })
       const tried = new Set<string>()
+      // Fall back to the session model once per step: when the chain is
+      // exhausted, the session keeps the model it was on instead of dying.
+      // The switch is published like any hop, so the loop below
+      // re-resolves the new model; the user never sees the change.
+      let sessionFallbackUsed = false
+      const fallbackToSessionModel = (currentRef: Model.Ref) =>
+        Effect.gen(function* () {
+          const target = SessionRouter.sessionFallback(first.session.model, currentRef, sessionFallbackUsed)
+          if (target === undefined) return false
+          sessionFallbackUsed = true
+          tried.add(SessionRouter.refKey(target))
+          yield* Effect.logInfo("manostech router fallback to session model", {
+            sessionID,
+            from: SessionRouter.refKey(currentRef),
+            to: SessionRouter.refKey(target),
+            tried: tried.size,
+            chain: chain.length,
+          })
+          yield* bus.publish(SessionEvent.ModelSelected, {
+            sessionID,
+            model: target,
+            previous: currentRef,
+          })
+          return true
+        })
       // Diagnostic log only, never the screen: the next failure has to
       // show whether the chain was born short (providers connected but
       // absent from `available()`, gateway credential not connected) or
@@ -345,7 +370,40 @@ const layer = Layer.effect(
         initial = undefined
         const estimate = SessionCompaction.estimatePrompt(loaded)
         const compacted = yield* compaction.compact({ reason: "auto", context: loaded, estimate })
-        if (compacted.status === "failed") return yield* new StepFailedError({ error: compacted.error })
+        if (compacted.status === "failed") {
+          // A compaction that fails because its model is down must not
+          // kill the step: the compaction model is a model like any
+          // other, so a hop-signal failure hops to the next model in the
+          // chain and the step retries with it — the same hop the step's
+          // own model call makes. Only a failure that is not a hop
+          // signal (the compaction itself cannot run) still fails the
+          // step, and only after the chain and the session model are
+          // exhausted does the step fail — with the generic message,
+          // never the provider's own error.
+          if (!SessionRouter.isHopSignal(compacted.error))
+            return yield* new StepFailedError({ error: compacted.error })
+          const next = SessionRouter.nextHopFor(chain, tried, available, compacted.error, loaded.model)
+          if (next !== undefined) {
+            tried.add(SessionRouter.refKey(next))
+            yield* Effect.logInfo("manostech router hop", {
+              sessionID,
+              from: SessionRouter.refKey(loaded.model.ref),
+              to: SessionRouter.refKey(next),
+              errorType: compacted.error.type,
+              errorStatus: compacted.error.status,
+              tried: tried.size,
+              chain: chain.length,
+            })
+            yield* bus.publish(SessionEvent.ModelSelected, {
+              sessionID,
+              model: next,
+              previous: loaded.session.model,
+            })
+            continue
+          }
+          if (yield* fallbackToSessionModel(loaded.model.ref)) continue
+          return yield* new StepFailedError({ error: SessionRouter.CASCADE_EXHAUSTED })
+        }
         if (compacted.status === "completed") {
           assistantMessageID = SessionMessage.ID.create()
           continue
@@ -421,26 +479,25 @@ const layer = Layer.effect(
               // hold hops to a bigger window, never to a smaller one. The
               // switch is published as ModelSelected, so the retry
               // re-resolves the new model; the user never sees the hop.
-              // When the whole chain is exhausted, an exhaustion error
-              // fails at once with the generic message: falling through
-              // would let the retry policy burn its same-model attempts
-              // (a rate-limit-shaped exhaustion is retryable) and only
-              // then fail — with the original error, not the generic one.
-              // An auth error with no hop left fails at once the same
-              // way: retrying the same model would fail the same way,
-              // and the per-model auth error must never reach the user.
-              // A throttle or a mid-task failure with no hop left falls
-              // through to the same-model retry instead.
+              // When the whole chain is exhausted, the turn goes back to
+              // the session model — the one the session was on — and
+              // tries it once more instead of failing: a key that just
+              // failed on another model may still answer on it. Only
+              // after that does an exhaustion error fail at once with
+              // the generic message: falling through would let the retry
+              // policy burn its same-model attempts (a rate-limit-shaped
+              // exhaustion is retryable) and only then fail — with the
+              // original error, not the generic one. An auth error with
+              // no hop left and no session model to fall back to fails
+              // at once the same way: retrying the same model would fail
+              // the same way, and the per-model auth error must never
+              // reach the user. A throttle or a mid-task failure with no
+              // hop left falls through to the same-model retry instead.
               // Diagnostic log only, never the screen: each hop records
               // which model was tried and why the chain stopped.
               if (SessionRouter.isHopSignal(error)) {
                 const exhausted = SessionRouter.isExhaustionError(error)
-                const tooLong = error.type === SessionRouter.CONTEXT_OVERFLOW_TYPE
-                const next = exhausted
-                  ? SessionRouter.nextHop(chain, tried)
-                  : tooLong
-                    ? SessionRouter.nextHopWithLargerWindow(available, chain, tried, loaded.model)
-                    : SessionRouter.nextHopFromProvider(chain, tried, loaded.model.ref.providerID)
+                const next = SessionRouter.nextHopFor(chain, tried, available, error, loaded.model)
                 if (next !== undefined) {
                   tried.add(SessionRouter.refKey(next))
                   yield* Effect.logInfo("manostech router hop", {
@@ -457,6 +514,12 @@ const layer = Layer.effect(
                     model: next,
                     previous: loaded.session.model,
                   })
+                  return { retry: true as const, attempt: (retryAttempt ?? 1) + 1, delay: 0 }
+                }
+                // The chain is exhausted. Keep trying: go back to the
+                // session model — the one the session was on — and try it
+                // once more instead of failing the turn.
+                if (yield* fallbackToSessionModel(loaded.model.ref)) {
                   return { retry: true as const, attempt: (retryAttempt ?? 1) + 1, delay: 0 }
                 }
                 if (exhausted) {
