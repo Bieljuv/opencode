@@ -554,7 +554,6 @@ export const dict = {
   "dialog.project.edit.worktree.startup": "Worktree startup script",
   "dialog.project.edit.worktree.startup.placeholder": "e.g. bun install",
 
-  "dialog.usageExceeded.dontShowAgain": "Don't show again",
 
   "toast.permissions.autoaccept.on.title": "Auto-accepting permissions",
   "toast.permissions.autoaccept.on.description": "Permission requests will be automatically approved",
@@ -704,11 +703,6 @@ export const dict = {
   "session.background.moveRunning": "Move to background",
   "session.background.moveInline": "Press {{keybind}} to move running work to the background",
   "command.session.background": "Move to background",
-  "session.goLimit.title": "Go usage limit reached.",
-  "session.goLimit.titleNamed": "Go {{name}} usage limit reached.",
-  "session.goLimit.reset": "It resets at {{time}}.",
-  "session.goLimit.extraUsage": "Turn on Extra Usage",
-  "session.goLimit.switchFree": "Switch to a free model",
   "session.queue.count.one": "{{count}} queued",
   "session.queue.count.other": "{{count}} queued",
   "session.queue.steer": "Steer",

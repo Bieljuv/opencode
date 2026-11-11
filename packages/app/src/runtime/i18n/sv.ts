@@ -213,7 +213,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Växla terminal",
   "desktop.menu.toggleFileTree": "Växla filträdet",
   "desktop.menu.reload": "Läs in igen",
-  "desktop.menu.toggleDeveloperTools": "Växla utvecklarverktyg",
   "desktop.menu.actualSize": "Verklig storlek",
   "desktop.menu.zoomIn": "Zooma in",
   "desktop.menu.zoomOut": "Zooma ut",
@@ -429,7 +428,6 @@ export const dict = {
   "dialog.project.edit.color.select": "Välj färgen {{color}}",
   "dialog.project.edit.worktree.startup": "Startskript för arbetsyta",
   "dialog.project.edit.worktree.startup.placeholder": "t.ex. bun install",
-  "dialog.usageExceeded.dontShowAgain": "Visa inte igen",
 
   "toast.permissions.autoaccept.on.title": "Autoaccepterar behörigheter",
   "toast.permissions.autoaccept.on.description": "Behörighetsförfrågningar kommer att godkännas automatiskt",

@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Εναλλαγή τερματικού",
   "desktop.menu.toggleFileTree": "Εναλλαγή δέντρου αρχείου",
   "desktop.menu.reload": "Επανάληψη φόρτωσης",
-  "desktop.menu.toggleDeveloperTools": "Εναλλαγή εργαλείων προγραμματιστή",
   "desktop.menu.actualSize": "Πραγματικό μέγεθος",
   "desktop.menu.zoomIn": "Μεγέθυνση",
   "desktop.menu.zoomOut": "Σμίκρυνση",
@@ -574,7 +573,6 @@ export const dict = {
   "workspace.status.dirty": "Εντοπίστηκαν μη συγχωνευμένες αλλαγές σε αυτόν τον χώρο εργασίας.",
   "workspace.delete.confirm": 'Διαγραφή χώρου εργασίας "{{name}}";',
   "workspace.delete.button": "Διαγραφή χώρου εργασίας",
-  "dialog.usageExceeded.dontShowAgain": "Να μην εμφανιστεί ξανά",
   "provider.disconnect.toast.noCredentials.description":
     "Δεν βρέθηκαν διαπιστευτήρια που μπορούν να αφαιρεθούν για τον πάροχο {{provider}}.",
   "provider.disconnect.toast.failed.description": "Αποτυχία αποσύνδεσης του παρόχου {{provider}}.",

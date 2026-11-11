@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Bật/tắt terminal",
   "desktop.menu.toggleFileTree": "Bật/tắt cây tệp",
   "desktop.menu.reload": "Tải lại",
-  "desktop.menu.toggleDeveloperTools": "Bật/tắt công cụ dành cho nhà phát triển",
   "desktop.menu.actualSize": "Kích thước thực",
   "desktop.menu.zoomIn": "Phóng to",
   "desktop.menu.zoomOut": "Thu nhỏ",
@@ -254,7 +253,6 @@ export const dict = {
   "dialog.project.edit.color.select": "Chọn màu {{color}}",
   "dialog.project.edit.worktree.startup": "Tập lệnh khởi động không gian làm việc",
   "dialog.project.edit.worktree.startup.placeholder": "ví dụ: bun install",
-  "dialog.usageExceeded.dontShowAgain": "Không hiển thị lại",
 
   "toast.permissions.autoaccept.on.title": "Tự động chấp nhận quyền",
   "toast.permissions.autoaccept.on.description": "Yêu cầu quyền sẽ được tự động phê duyệt",

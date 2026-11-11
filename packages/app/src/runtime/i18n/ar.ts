@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "إظهار المحطة الطرفية أو إخفاؤها",
   "desktop.menu.toggleFileTree": "إظهار شجرة الملفات أو إخفاؤها",
   "desktop.menu.reload": "إعادة التحميل",
-  "desktop.menu.toggleDeveloperTools": "إظهار أدوات المطور أو إخفاؤها",
   "desktop.menu.actualSize": "الحجم الفعلي",
   "desktop.menu.zoomIn": "تكبير",
   "desktop.menu.zoomOut": "تصغير",
@@ -252,7 +251,6 @@ export const dict = {
   "dialog.project.edit.color.select": "اختر لون {{color}}",
   "dialog.project.edit.worktree.startup": "برنامج نصي لبدء تشغيل مساحة العمل",
   "dialog.project.edit.worktree.startup.placeholder": "مثال: bun install",
-  "dialog.usageExceeded.dontShowAgain": "عدم الإظهار مرة أخرى",
 
   "toast.permissions.autoaccept.on.title": "يتم قبول الأذونات تلقائيًا",
   "toast.permissions.autoaccept.on.description": "ستتم الموافقة على طلبات الأذونات تلقائيًا",

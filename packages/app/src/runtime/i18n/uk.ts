@@ -49,7 +49,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Перемкнути термінал",
   "desktop.menu.toggleFileTree": "Перемкнути дерево файлів",
   "desktop.menu.reload": "Перезавантажити",
-  "desktop.menu.toggleDeveloperTools": "Перемкнути інструменти розробника",
   "desktop.menu.actualSize": "Фактичний розмір",
   "desktop.menu.zoomIn": "Збільшити",
   "desktop.menu.zoomOut": "Зменшити",
@@ -295,7 +294,6 @@ export const dict = {
   "dialog.project.edit.worktree.startup": "Скрипт запуску робочої області",
   "dialog.project.edit.worktree.startup.placeholder": "напр. bun install",
 
-  "dialog.usageExceeded.dontShowAgain": "Більше не показувати",
 
   "toast.permissions.autoaccept.on.title": "Автоматичне прийняття дозволів",
   "toast.permissions.autoaccept.on.description": "Запити дозволів будуть автоматично схвалюватися",

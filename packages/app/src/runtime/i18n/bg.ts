@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Превключване на терминала",
   "desktop.menu.toggleFileTree": "Превключване на файловото дърво",
   "desktop.menu.reload": "Презареди",
-  "desktop.menu.toggleDeveloperTools": "Превключване на инструментите за разработчици",
   "desktop.menu.actualSize": "Действителен размер",
   "desktop.menu.zoomIn": "Увеличете",
   "desktop.menu.zoomOut": "Намаляване",
@@ -541,7 +540,6 @@ export const dict = {
   "workspace.status.dirty": "Открити са необединени промени в това работно пространство.",
   "workspace.delete.confirm": "Да се ​​изтрие ли работното пространство „{{name}}“?",
   "workspace.delete.button": "Изтриване на работното пространство",
-  "dialog.usageExceeded.dontShowAgain": "Не показвай отново",
   "provider.disconnect.toast.noCredentials.description":
     "Няма намерени подвижни идентификационни данни за {{provider}}.",
   "provider.disconnect.toast.failed.description": "Неуспешно прекъсване на връзката {{provider}}.",

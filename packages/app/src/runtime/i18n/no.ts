@@ -212,7 +212,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Vis eller skjul terminal",
   "desktop.menu.toggleFileTree": "Vis eller skjul filtreet",
   "desktop.menu.reload": "Last inn på nytt",
-  "desktop.menu.toggleDeveloperTools": "Vis eller skjul utviklerverktøy",
   "desktop.menu.actualSize": "Faktisk størrelse",
   "desktop.menu.zoomIn": "Zoom inn",
   "desktop.menu.zoomOut": "Zoom ut",
@@ -447,7 +446,6 @@ export const dict = {
   "dialog.project.edit.worktree.startup": "Oppstartsskript for arbeidsområde",
   "dialog.project.edit.worktree.startup.placeholder": "f.eks. bun install",
 
-  "dialog.usageExceeded.dontShowAgain": "Ikke vis igjen",
 
   "toast.permissions.autoaccept.on.title": "Aksepterer tillatelser automatisk",
   "toast.permissions.autoaccept.on.description": "Forespørsler om tillatelse vil bli godkjent automatisk",

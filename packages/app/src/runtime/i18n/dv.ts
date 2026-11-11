@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "ޓާމިނަލް ޓޮގްލް ކުރުން",
   "desktop.menu.toggleFileTree": "ޓޮގްލް ފައިލް ޓްރީ",
   "desktop.menu.reload": "ރީލޯޑް",
-  "desktop.menu.toggleDeveloperTools": "ޑިވެލޮޕަރ ޓޫލްސް ޓޮގްލް ކުރުން",
   "desktop.menu.actualSize": "އަސްލު ސައިޒެވެ",
   "desktop.menu.zoomIn": "ޒޫމް އިން",
   "desktop.menu.zoomOut": "ޒޫމް އައުޓް",
@@ -554,7 +553,6 @@ export const dict = {
   "workspace.status.dirty": "މި ވޯކްސްޕޭސްގައި ފާހަގަ ނުކުރެވި ހުރި ބަދަލުތައް.",
   "workspace.delete.confirm": 'ވޯކްސްޕޭސް "\u2068{{name}}\u2069" ފުހެލަންތަ؟',
   "workspace.delete.button": "ވޯކްސްޕޭސް ފުހެލުން",
-  "dialog.usageExceeded.dontShowAgain": "އަލުން ނުދައްކާ",
   "provider.disconnect.toast.noCredentials.description":
     "\u2068{{provider}}\u2069 އަށް ނައްތާލެވޭ އެއްވެސް ކްރެޑެންޝަލެއް ނުފެނުނެވެ.",
   "provider.disconnect.toast.failed.description": "\u2068{{provider}}\u2069 ޑިސްކަނެކްޓް ނުކުރެވުނެވެ.",

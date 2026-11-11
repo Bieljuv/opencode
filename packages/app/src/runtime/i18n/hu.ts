@@ -584,7 +584,6 @@ export const dict = {
   "workspace.status.dirty": "Nem egyesített változtatásokat észleltünk ezen a munkaterületen.",
   "workspace.delete.confirm": 'Delete munkaterület "{{name}}"?',
   "workspace.delete.button": "Delete munkaterület",
-  "dialog.usageExceeded.dontShowAgain": "Ne jelenjen meg újra",
   "provider.disconnect.toast.noCredentials.description":
     "Nem találhatók eltávolítható hitelesítő adatok a következőhöz: {{provider}}.",
   "provider.disconnect.toast.failed.description": "Nem sikerült leválasztani a következőt: {{provider}}.",

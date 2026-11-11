@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Skift terminal",
   "desktop.menu.toggleFileTree": "Skift fílutræ",
   "desktop.menu.reload": "Endurlesa",
-  "desktop.menu.toggleDeveloperTools": "Skift forritaratól",
   "desktop.menu.actualSize": "Verulig stødd",
   "desktop.menu.zoomIn": "Zooma inn",
   "desktop.menu.zoomOut": "Zooma út",
@@ -565,7 +564,6 @@ export const dict = {
   "workspace.status.dirty": "Ósamanlagdar broytingar funnar í hesum workspace.",
   "workspace.delete.confirm": 'Strika workspace "{{name}}"?',
   "workspace.delete.button": "Strika workspace",
-  "dialog.usageExceeded.dontShowAgain": "Vís ikki aftur",
   "provider.disconnect.toast.noCredentials.description":
     "Eingi trúnaðarupplýsingar, ið kunnu strikast, funnar fyri {{provider}}.",
   "provider.disconnect.toast.failed.description": "Tað eydnaðist ikki at slíta sambandið við {{provider}}.",

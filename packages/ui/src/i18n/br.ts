@@ -117,10 +117,6 @@ export const dict = {
   "ui.sessionTurn.error.freeUsageExceeded": "Limite de uso gratuito excedido",
   "ui.sessionTurn.error.addCredits": "Adicionar créditos",
 
-  "dialog.usageExceeded.freeTier.title": "Limite gratuito atingido",
-  "dialog.usageExceeded.freeTier.description":
-    "Assine o OpenCode Go por $10/mês para ter acesso confiável aos melhores modelos de código aberto.",
-  "dialog.usageExceeded.freeTier.actionLabel": "Assinar",
 
   "ui.sessionTurn.status.delegating": "Delegando trabalho",
   "ui.sessionTurn.status.planning": "Planejando próximos passos",
@@ -282,7 +278,6 @@ export const dict = {
   "ui.messagePart.context.updates": "Atualizações",
   "ui.promptInput.cancelUpload": "Cancelar envio",
   "ui.promptInput.uploading": "{{percent}}%",
-  "dialog.usageExceeded.freeTier.reset": "Suas mensagens grátis são renovadas às {{time}}.",
   "ui.commentCard.addComment": "Adicionar comentário",
   "ui.commentCard.editComment": "Editar comentário",
   "ui.commentCard.quote": "Citar",

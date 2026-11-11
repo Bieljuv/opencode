@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Togol Terminal",
   "desktop.menu.toggleFileTree": "Togol Pokok Fail",
   "desktop.menu.reload": "Muat Semula",
-  "desktop.menu.toggleDeveloperTools": "Togol Alat Pembangun",
   "desktop.menu.actualSize": "Saiz Sebenar",
   "desktop.menu.zoomIn": "Zum Masuk",
   "desktop.menu.zoomOut": "Kecilkan Zum",
@@ -598,7 +597,6 @@ export const dict = {
   "workspace.status.error": "Tidak dapat mengesahkan status git.",
   "workspace.status.dirty": "Perubahan belum digabungkan dikesan dalam ruang kerja ini.",
   "workspace.delete.button": "Padam ruang kerja",
-  "dialog.usageExceeded.dontShowAgain": "Jangan tunjukkan lagi",
   "desktop.menu.installCli": "Pasang CLI...",
   "desktop.cli.installed.title": "CLI Dipasang",
   "desktop.cli.installed.message":

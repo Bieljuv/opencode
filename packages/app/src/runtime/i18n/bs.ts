@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Prikaži ili sakrij terminal",
   "desktop.menu.toggleFileTree": "Prikaži ili sakrij stablo datoteka",
   "desktop.menu.reload": "Ponovo učitaj",
-  "desktop.menu.toggleDeveloperTools": "Prikaži ili sakrij alate za programere",
   "desktop.menu.actualSize": "Stvarna veličina",
   "desktop.menu.zoomIn": "Uvećaj",
   "desktop.menu.zoomOut": "Umanji",
@@ -268,7 +267,6 @@ export const dict = {
   "dialog.project.edit.worktree.startup": "Skripta za pokretanje radnog prostora",
   "dialog.project.edit.worktree.startup.placeholder": "npr. bun install",
 
-  "dialog.usageExceeded.dontShowAgain": "Nemoj više prikazivati",
 
   "toast.permissions.autoaccept.on.title": "Automatsko prihvatanje dozvola",
   "toast.permissions.autoaccept.on.description": "Zahtjevi za dozvole će biti automatski odobreni",

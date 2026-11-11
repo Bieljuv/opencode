@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "ターミナルの表示を切り替える",
   "desktop.menu.toggleFileTree": "ファイルツリーの表示を切り替える",
   "desktop.menu.reload": "再読み込み",
-  "desktop.menu.toggleDeveloperTools": "開発者ツールの表示を切り替える",
   "desktop.menu.actualSize": "実際のサイズ",
   "desktop.menu.zoomIn": "拡大",
   "desktop.menu.zoomOut": "縮小",
@@ -252,7 +251,6 @@ export const dict = {
   "dialog.project.edit.color.select": "{{color}}の色を選択",
   "dialog.project.edit.worktree.startup": "ワークスペース起動スクリプト",
   "dialog.project.edit.worktree.startup.placeholder": "例: bun install",
-  "dialog.usageExceeded.dontShowAgain": "今後表示しない",
 
   "toast.permissions.autoaccept.on.title": "権限を自動承認しています",
   "toast.permissions.autoaccept.on.description": "権限の要求は自動的に承認されます",

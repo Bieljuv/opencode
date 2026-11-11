@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "टर्मिनल टॉगल करें",
   "desktop.menu.toggleFileTree": "फ़ाइल ट्री टॉगल करें",
   "desktop.menu.reload": "पुनः लोड करें",
-  "desktop.menu.toggleDeveloperTools": "डेवलपर टूल टॉगल करें",
   "desktop.menu.actualSize": "वास्तविक आकार",
   "desktop.menu.zoomIn": "ज़ूम इन करें",
   "desktop.menu.zoomOut": "ज़ूम आउट करें",
@@ -246,7 +245,6 @@ export const dict = {
   "dialog.project.edit.color.select": "{{color}} रंग चुनें",
   "dialog.project.edit.worktree.startup": "वर्कस्पेस स्टार्टअप स्क्रिप्ट",
   "dialog.project.edit.worktree.startup.placeholder": "जैसे: bun install",
-  "dialog.usageExceeded.dontShowAgain": "फिर से न दिखाएँ",
 
   "toast.permissions.autoaccept.on.title": "अनुमतियाँ स्वतः स्वीकार करना",
   "toast.permissions.autoaccept.on.description": "अनुमति अनुरोध स्वचालित रूप से स्वीकृत हो जाएंगे",

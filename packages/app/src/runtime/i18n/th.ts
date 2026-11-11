@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "สลับเทอร์มินัล",
   "desktop.menu.toggleFileTree": "สลับแผนผังไฟล์",
   "desktop.menu.reload": "โหลดใหม่",
-  "desktop.menu.toggleDeveloperTools": "สลับเครื่องมือสำหรับนักพัฒนา",
   "desktop.menu.actualSize": "ขนาดจริง",
   "desktop.menu.zoomIn": "ขยาย",
   "desktop.menu.zoomOut": "ย่อ",
@@ -276,7 +275,6 @@ export const dict = {
   "dialog.project.edit.worktree.startup": "สคริปต์เริ่มต้นพื้นที่ทำงาน",
   "dialog.project.edit.worktree.startup.placeholder": "เช่น bun install",
 
-  "dialog.usageExceeded.dontShowAgain": "ไม่ต้องแสดงอีก",
 
   "toast.permissions.autoaccept.on.title": "กำลังยอมรับสิทธิ์โดยอัตโนมัติ",
   "toast.permissions.autoaccept.on.description": "คำขอสิทธิ์จะได้รับการอนุมัติโดยอัตโนมัติ",

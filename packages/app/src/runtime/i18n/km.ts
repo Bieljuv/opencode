@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "បិទ/បើកស្ថានីយ",
   "desktop.menu.toggleFileTree": "បិទបើកឯកសារមែកធាង",
   "desktop.menu.reload": "ផ្ទុកឡើងវិញ",
-  "desktop.menu.toggleDeveloperTools": "បិទបើកឧបករណ៍អ្នកអភិវឌ្ឍន៍",
   "desktop.menu.actualSize": "ទំហំពិត",
   "desktop.menu.zoomIn": "ពង្រីក",
   "desktop.menu.zoomOut": "ពង្រីក",
@@ -594,7 +593,6 @@ export const dict = {
   "workspace.status.error": "មិនអាចផ្ទៀងផ្ទាត់ស្ថានភាព git បានទេ។",
   "workspace.status.dirty": "បានរកឃើញការផ្លាស់ប្តូរដែលមិនរួមបញ្ចូលគ្នានៅក្នុងកន្លែងធ្វើការនេះ។",
   "workspace.delete.button": "លុបកន្លែងធ្វើការ",
-  "dialog.usageExceeded.dontShowAgain": "កុំបង្ហាញម្តងទៀត",
   "desktop.menu.installCli": "ដំឡើង CLI...",
   "desktop.cli.installed.title": "បានដំឡើង CLI",
   "desktop.cli.installed.message":

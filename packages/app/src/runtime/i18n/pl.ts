@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Przełącz terminal",
   "desktop.menu.toggleFileTree": "Przełącz drzewo plików",
   "desktop.menu.reload": "Wczytaj ponownie",
-  "desktop.menu.toggleDeveloperTools": "Przełącz narzędzia deweloperskie",
   "desktop.menu.actualSize": "Rozmiar rzeczywisty",
   "desktop.menu.zoomIn": "Powiększ",
   "desktop.menu.zoomOut": "Pomniejsz",
@@ -243,7 +242,6 @@ export const dict = {
   "dialog.project.edit.color.select": "Wybierz kolor {{color}}",
   "dialog.project.edit.worktree.startup": "Skrypt uruchamiania przestrzeni roboczej",
   "dialog.project.edit.worktree.startup.placeholder": "np. bun install",
-  "dialog.usageExceeded.dontShowAgain": "Nie pokazuj ponownie",
 
   "toast.permissions.autoaccept.on.title": "Automatyczne akceptowanie uprawnień",
   "toast.permissions.autoaccept.on.description": "Żądania uprawnień będą automatycznie zatwierdzane",

@@ -214,3 +214,60 @@ const table = sqliteTable("session", {
 - Keep delivery vocabulary explicit. Prompts steer by default. At safe step boundaries, steered compaction takes priority up to the first steered move control; other steers retain enqueue order. At an idle boundary, steers take priority; otherwise exactly one queued item delivers before the runner reevaluates continuation. Inbox items may be cancelled or changed between queue and steer before delivery. Promoting new user input resets the selected agent's step allowance; a batch of steers resets it once.
 - One step is one logical LLM call; its durable record covers only the model-visible span. Do not write "provider turn", and do not use bare "turn" for a single call: "turn" is reserved for the future assistant-turn unit containing all steps from prompt promotion until the session would go idle.
 - Keep event replay ownership separate from clustered Session execution ownership.
+
+## ManosTech rules (Gabriel's hard rules — do not regress)
+
+This fork ships the Editor IA ManosTech, not upstream. These rules outrank
+convenience; several past regressions came from not knowing them.
+
+- **Absolute masking.** No user-visible text — answer, shown reasoning,
+  summary, error, toast, export, timeline, or log export — may name the
+  harness/engine ("opencode" becomes the brand "ManosTech.AI"), a model or
+  provider, a free/paid tier, a quota, limit, or credit, a cost in dollars,
+  or model switching/routing. Service names stay: OpenCode Go, OpenCode
+  Console, `opencode pair`, and the remote server version. The single
+  generic error is "Tente novamente mais tarde." — errors never show
+  technical detail to the user; the raw error goes only to the logs.
+  The vocabulary table lives in `packages/util/src/mask.ts`; the
+  per-turn instruction in `packages/core/src/session/model-request.ts`
+  (`HIDE_MODEL_IDENTITY`); the error mapper in
+  `packages/core/src/session/to-session-error.ts`.
+- **No GitHub, no OpenCode in user surfaces.** Nothing the user sees may
+  point at GitHub or show repository info, and nothing may mention
+  OpenCode except the brand/service names above.
+- **No US$ in the app.** Screens show tokens used + time, never dollar
+  costs. Costs live only in the panel (admin).
+- **Gateway first.** In gateway mode the app holds no provider key: one
+  model (`manostech/auto`, chat) and one image route (`manostech/auto-image`)
+  reach the ManosTech panel, which routes across its shared keys —
+  free first, paid when needed, complex tasks to the strongest paid
+  route — in silence. The router law lives in
+  `packages/core/src/session/router.ts` and `lib/gateway.ts` in the
+  panel repo; the app never names it to the user.
+- **Approval before building.** The agent shows a short plan and asks
+  before creating/editing files or running commands that change state
+  (`APPROVAL_BEFORE_BUILD` in `model-request.ts`). Every build is born
+  ready to publish: same code/structure locally and in production,
+  database via Supabase with SQL in the project, secrets only via env,
+  mock/simulation only for a missing credential, never localStorage as
+  the final destination.
+- **i18n.** Visible copy uses i18n keys; new visible text ships with
+  `br.ts` + `en.ts` together.
+- **Publishing.** The Forge line publishes compile → adjust → upload to
+  Drive → automatic update (a commit is not a step). The fork publishes
+  by pushing tag `editor-vX.Y.Z` on `dev`, which triggers
+  `.github/workflows/release-windows.yml` (Windows build + installer +
+  `latest.yml` in the release).
+- **Never copy code from rendered tool output.** Rendered output
+  masks sensitive spans (token/`Bearer` values show as a placeholder
+  instead of the real text); pasting that back into a file corrupts
+  token/`Bearer` lines. Write such lines by concatenating innocent
+  fragments, and verify every touched file by grepping for the masked
+  placeholder (count must be 0).
+- **No secrets in the installer.** No shared secret is baked into any
+  build. The usage reporter authenticates with the logged-in client's
+  own API key, handed to the sidecar by desktop main from its
+  encrypted store (`MANOSTECH_INGEST_API_KEY`).
+- **Worktrees, not stash.** Never use `git stash` while another agent
+  is active in this repo; compare against a base with a separate
+  worktree instead.

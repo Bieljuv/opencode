@@ -365,7 +365,6 @@ export const dict = {
   "dialog.project.edit.color.select": "Valitse väri {{color}}",
   "dialog.project.edit.worktree.startup": "Työtilan käynnistysskripti",
   "dialog.project.edit.worktree.startup.placeholder": "esim. bun install",
-  "dialog.usageExceeded.dontShowAgain": "Älä näytä uudelleen",
 
   "toast.permissions.autoaccept.on.title": "Käyttöoikeudet hyväksytään automaattisesti",
   "toast.permissions.autoaccept.on.description": "Lupapyynnöt hyväksytään automaattisesti",
@@ -692,7 +691,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Näytä tai piilota terminaali",
   "desktop.menu.toggleFileTree": "Näytä tai piilota tiedostopuu",
   "desktop.menu.reload": "Lataa uudelleen",
-  "desktop.menu.toggleDeveloperTools": "Näytä tai piilota kehittäjätyökalut",
   "desktop.menu.actualSize": "Todellinen koko",
   "desktop.menu.zoomIn": "Lähennä",
   "desktop.menu.zoomOut": "Loitonna",

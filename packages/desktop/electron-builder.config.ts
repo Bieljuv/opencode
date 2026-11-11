@@ -82,6 +82,9 @@ const getBase = (appId: string): Configuration => {
     files: [
       "out/**/*",
       "resources/**/*",
+      // The renderer ships with sourcemaps for debugging, but they
+      // carry the renderer's sources — keep them out of the installer.
+      "!out/**/*.map",
       "!resources/opencode-cli*",
       // Keep only the target platform's node-pty prebuild when cross-packaging with --cpu=*.
       ...CLI_BINARIES.filter((item) => item.os !== target.os || item.cpu !== target.cpu).map(

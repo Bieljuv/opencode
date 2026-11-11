@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Alihkan terminal",
   "desktop.menu.toggleFileTree": "Alihkan pohon berkas",
   "desktop.menu.reload": "Muat ulang",
-  "desktop.menu.toggleDeveloperTools": "Alihkan alat pengembang",
   "desktop.menu.actualSize": "Ukuran sebenarnya",
   "desktop.menu.zoomIn": "Perbesar",
   "desktop.menu.zoomOut": "Perkecil",
@@ -280,7 +279,6 @@ export const dict = {
   "dialog.project.edit.worktree.startup": "Skrip awal ruang kerja",
   "dialog.project.edit.worktree.startup.placeholder": "mis. bun install",
 
-  "dialog.usageExceeded.dontShowAgain": "Jangan tampilkan lagi",
 
   "toast.permissions.autoaccept.on.title": "Menerima izin secara otomatis",
   "toast.permissions.autoaccept.on.description": "Permintaan izin akan disetujui secara otomatis",

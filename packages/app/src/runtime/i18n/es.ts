@@ -228,7 +228,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Mostrar u ocultar terminal",
   "desktop.menu.toggleFileTree": "Mostrar u ocultar árbol de archivos",
   "desktop.menu.reload": "Volver a cargar",
-  "desktop.menu.toggleDeveloperTools": "Mostrar u ocultar herramientas para desarrolladores",
   "desktop.menu.actualSize": "Tamaño real",
   "desktop.menu.zoomIn": "Ampliar",
   "desktop.menu.zoomOut": "Reducir",
@@ -472,7 +471,6 @@ export const dict = {
   "dialog.project.edit.worktree.startup": "Script de inicio del espacio de trabajo",
   "dialog.project.edit.worktree.startup.placeholder": "p. ej. bun install",
 
-  "dialog.usageExceeded.dontShowAgain": "No volver a mostrar",
 
   "toast.permissions.autoaccept.on.title": "Aceptando permisos automáticamente",
   "toast.permissions.autoaccept.on.description": "Las solicitudes de permisos se aprobarán automáticamente",

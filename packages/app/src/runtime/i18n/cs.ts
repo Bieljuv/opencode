@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Přepnout terminál",
   "desktop.menu.toggleFileTree": "Přepnout strom souborů",
   "desktop.menu.reload": "Znovu načíst",
-  "desktop.menu.toggleDeveloperTools": "Přepnout Vývojářské nástroje",
   "desktop.menu.actualSize": "Skutečná velikost",
   "desktop.menu.zoomIn": "Přiblížit",
   "desktop.menu.zoomOut": "Oddálit",
@@ -539,7 +538,6 @@ export const dict = {
   "workspace.status.dirty": "V tomto pracovním prostoru byly zjištěny nesloučené změny.",
   "workspace.delete.confirm": 'Odstranit pracovní prostor "{{name}}"?',
   "workspace.delete.button": "Odstranit pracovní prostor",
-  "dialog.usageExceeded.dontShowAgain": "Znovu nezobrazovat",
   "provider.disconnect.toast.noCredentials.description":
     "Pro {{provider}} nebyly nalezeny žádné vyměnitelné přihlašovací údaje.",
   "provider.disconnect.toast.failed.description": "Odpojení {{provider}} se nezdařilo.",

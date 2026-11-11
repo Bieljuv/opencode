@@ -30,7 +30,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Terminali aç/kapat",
   "desktop.menu.toggleFileTree": "Dosya ağacını aç/kapat",
   "desktop.menu.reload": "Yeniden yükle",
-  "desktop.menu.toggleDeveloperTools": "Geliştirici araçlarını aç/kapat",
   "desktop.menu.actualSize": "Gerçek boyut",
   "desktop.menu.zoomIn": "Yakınlaştır",
   "desktop.menu.zoomOut": "Uzaklaştır",
@@ -280,7 +279,6 @@ export const dict = {
   "dialog.project.edit.worktree.startup": "Çalışma alanı başlatma betiği",
   "dialog.project.edit.worktree.startup.placeholder": "örneğin bun install",
 
-  "dialog.usageExceeded.dontShowAgain": "Bir daha gösterme",
 
   "toast.permissions.autoaccept.on.title": "İzinler otomatik kabul ediliyor",
   "toast.permissions.autoaccept.on.description": "İzin istekleri otomatik olarak onaylanacak",
