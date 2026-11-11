@@ -420,9 +420,10 @@ export function createBrowserPage(
   contents.on("render-process-gone", () => {
     if (!closed()) options.fail()
   })
-  contents.debugger.on("detach", () => {
-    if (!closed()) options.fail()
-  })
+  // No fail() on a debugger detach: a navigation that swaps the renderer process detaches the debugger, and the
+  // next CDP command re-attaches it (see createCdp). Treating the detach as a crash closed the page — and its
+  // popup window — under the user while the page was alive and rendering. Only a dead renderer fails the page,
+  // through render-process-gone above.
   contents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
   contents.session.setPermissionCheckHandler(() => false)
   contents.session.setDevicePermissionHandler(() => false)
