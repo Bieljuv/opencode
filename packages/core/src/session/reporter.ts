@@ -5,14 +5,18 @@ import type { SessionUsage } from "./usage.js"
 
 /**
  * ManosTech: envia um evento de uso por passo de IA concluído ao Painel
- * Gerenciador (POST /api/ingest). Fail-open por desenho: sem segredo, sem
- * arquivo de identidade, sem uso ou com o painel fora do ar, não envia
- * nada e nunca falha o passo. A primeira vez que falta configuração,
- * identidade ou uso, o motivo fica registrado em nível informativo
- * (só o código do motivo, nunca valores), para aparecer no
+ * Gerenciador (POST /api/ingest). Fail-open por desenho: sem chave do
+ * cliente, sem arquivo de identidade, sem uso ou com o painel fora do
+ * ar, não envia nada e nunca falha o passo. A primeira vez que falta
+ * configuração, identidade ou uso, o motivo fica registrado em nível
+ * informativo (só o código do motivo, nunca valores), para aparecer no
  * "Exportar logs". A identidade do cliente (client_id/client_email)
- * chega pelo arquivo que o app desktop escreve em cada login/logout; o
- * segredo de envio chega por variável de ambiente no processo do servidor.
+ * chega pelo arquivo que o app desktop escreve em cada login/logout; a
+ * chave API do cliente chega por variável de ambiente no processo do
+ * servidor — o main a lê do store criptografado e a entrega ao sidecar
+ * no lançamento. Nenhum segredo compartilhado vai para o instalador:
+ * a ingestão autentica com a chave do próprio cliente (mtk_...), e o
+ * painel rejeita o evento quando o client_id do corpo não é o da chave.
  *
  * Nada do que vai para o painel aparece para o usuário: o modelo é
  * registrado só no painel, nunca na interface.
@@ -52,19 +56,19 @@ export type IngestEvent = {
 /** O que o repórter precisa do ambiente; ausente significa "desligado". */
 export type Config = {
   readonly url: string
-  readonly secret: string
+  readonly apiKey: string
   readonly clientFile: string
 }
 
 export function resolveConfig(env: Record<string, string | undefined>): Config | undefined {
-  const secret = env.MANOSTECH_INGEST_SECRET
+  const apiKey = env.MANOSTECH_INGEST_API_KEY
   const clientFile = env.MANOSTECH_CLIENT_FILE
 
-  if (!secret || !clientFile) return undefined
+  if (!apiKey || !clientFile) return undefined
 
   return {
     url: env.MANOSTECH_INGEST_URL ?? PANEL_INGEST_URL,
-    secret,
+    apiKey,
     clientFile,
   }
 }
@@ -126,15 +130,15 @@ export function buildEvent(input: {
  * O motivo pelo qual o repórter está desligado — só o código, nunca
  * valores (sem segredo, token, chave ou identidade no log).
  */
-export type SkipReason = "sem segredo" | "sem arquivo de identidade" | "sem uso"
+export type SkipReason = "sem chave do cliente" | "sem arquivo de identidade" | "sem uso"
 
 /**
- * O motivo da falta de configuração, quando ela falta. Sem segredo de
- * envio, o repórter nem sabe para onde mandar; sem o caminho do arquivo
- * de identidade, não sabe de quem é o uso.
+ * O motivo da falta de configuração, quando ela falta. Sem a chave do
+ * cliente, o repórter nem sabe com o que autenticar; sem o caminho do
+ * arquivo de identidade, não sabe de quem é o uso.
  */
 export function configSkipReason(env: Record<string, string | undefined>): SkipReason | undefined {
-  if (!env.MANOSTECH_INGEST_SECRET) return "sem segredo"
+  if (!env.MANOSTECH_INGEST_API_KEY) return "sem chave do cliente"
   if (!env.MANOSTECH_CLIENT_FILE) return "sem arquivo de identidade"
   return undefined
 }
@@ -171,7 +175,7 @@ export function makeReporter() {
       const config = resolveConfig(process.env)
 
       if (!config) {
-        yield* logSkippedOnce(configSkipReason(process.env) ?? "sem segredo")
+        yield* logSkippedOnce(configSkipReason(process.env) ?? "sem chave do cliente")
         return
       }
 
@@ -222,7 +226,7 @@ function sendEvent(config: Config, event: IngestEvent) {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${config.secret}`,
+          authorization: "Bearer " + config.apiKey,
         },
         body: JSON.stringify(event),
         signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
