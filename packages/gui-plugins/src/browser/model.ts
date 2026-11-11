@@ -532,12 +532,27 @@ export function createModel(ctx: SetupContext<typeof definition>) {
 
   const tab = (session: Session, tabID: string) => sessionTab(machine(), session.key, tabID)
 
+  const focusTab = (session: Session, tabID: string) => {
+    const item = tab(session, tabID)
+
+    if (item && item.id !== sessionBrowser(machine(), session.key)?.focusedTabID)
+      command(session, { type: "tabs.focus", tabID: item.id })
+  }
+
   const registration = (session: Session) => registrations.get(session.key)?.registration
 
   const command = (session: Session, action: Browser.Action) =>
     dispatch({ type: "session.command", sessionKey: session.key, action, focusAddress: false })
 
-  const openURL = (session: Session, url: string) => command(session, { type: "tabs.open", url })
+  const openURL = (session: Session, url: string) => {
+    // A URL the session already shows gets focused instead of opened
+    // twice: a build that reopens its preview never duplicates its tab.
+    const existing = sessionBrowser(machine(), session.key)?.tabs.find((entry) => entry.url === url)
+
+    if (existing) return focusTab(session, existing.id)
+
+    command(session, { type: "tabs.open", url })
+  }
 
   // Only the routed session has a file model to resolve workspace paths with: the session screen's.
   const files = (session: Session) => {
@@ -646,12 +661,7 @@ export function createModel(ctx: SetupContext<typeof definition>) {
       if (layout.state(key(tabID), session) === "closed") return this.closeTab(session, tabID)
       layout.close(key(tabID), session)
     },
-    focusTab(session: Session, tabID: string) {
-      const item = tab(session, tabID)
-
-      if (item && item.id !== sessionBrowser(machine(), session.key)?.focusedTabID)
-        command(session, { type: "tabs.focus", tabID: item.id })
-    },
+    focusTab,
     /** The page's element picker starting, stopping, or picking an element. */
     onInspect(session: Session, listener: (event: InspectEvent) => void) {
       const set = inspectors.get(session.key) ?? new Set()

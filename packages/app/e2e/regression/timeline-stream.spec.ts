@@ -46,6 +46,22 @@ const completed = {
   time: { created: 2, completed: 3 },
 } satisfies SessionMessageAssistant
 
+const previewHTML = [
+  "<!doctype html>",
+  '<html lang="pt-BR"><head><meta charset="utf-8"><title>Rota do Forte — PDV</title>',
+  "<style>body{margin:0;font-family:sans-serif;background:#f5ead6;color:#2b1d0e}",
+  "header{background:#4a2c14;color:#fff;padding:14px 20px;font-size:20px;font-weight:700}",
+  "main{padding:20px}table{width:100%;border-collapse:collapse;background:#fff}",
+  "th,td{padding:10px 12px;border-bottom:1px solid #e8dcc8;text-align:left}",
+  "th{color:#8a7a5f;font-size:12px;text-transform:uppercase}</style></head>",
+  "<body><header>Rota do Forte — PDV</header><main><h1>Produtos</h1>",
+  "<table><tr><th>Produto</th><th>Preço</th><th>Estoque</th></tr>",
+  "<tr><td>Açaí 500ml</td><td>R$ 25,00</td><td>25 un</td></tr>",
+  "<tr><td>Água 500ml</td><td>R$ 5,00</td><td>46 un</td></tr>",
+  "<tr><td>Cerveja long neck</td><td>R$ 12,00</td><td>60 un</td></tr></table>",
+  "</main></body></html>",
+].join("\n")
+
 test.describe("static projection", () => {
   test("renders current protocol notices in CLI order", async ({ page }) => {
     const ownerWarnings: string[] = []
@@ -1319,21 +1335,6 @@ test.describe("background shortcut", () => {
 
   test("mockup: preview open beside the chat while a subagent works live", async ({ page }, testInfo) => {
     const childID = "ses_live_subagent"
-    const previewHTML = [
-      "<!doctype html>",
-      '<html lang="pt-BR"><head><meta charset="utf-8"><title>Rota do Forte — PDV</title>',
-      "<style>body{margin:0;font-family:sans-serif;background:#f5ead6;color:#2b1d0e}",
-      "header{background:#4a2c14;color:#fff;padding:14px 20px;font-size:20px;font-weight:700}",
-      "main{padding:20px}table{width:100%;border-collapse:collapse;background:#fff}",
-      "th,td{padding:10px 12px;border-bottom:1px solid #e8dcc8;text-align:left}",
-      "th{color:#8a7a5f;font-size:12px;text-transform:uppercase}</style></head>",
-      "<body><header>Rota do Forte — PDV</header><main><h1>Produtos</h1>",
-      "<table><tr><th>Produto</th><th>Preço</th><th>Estoque</th></tr>",
-      "<tr><td>Açaí 500ml</td><td>R$ 25,00</td><td>25 un</td></tr>",
-      "<tr><td>Água 500ml</td><td>R$ 5,00</td><td>46 un</td></tr>",
-      "<tr><td>Cerveja long neck</td><td>R$ 12,00</td><td>60 un</td></tr></table>",
-      "</main></body></html>",
-    ].join("\n")
 
     await setupTimeline(page, {
       settings: { timelineDetail: detailed },
@@ -1386,6 +1387,107 @@ test.describe("background shortcut", () => {
     await expect(panel.frameLocator("iframe").getByText("Rota do Forte")).toBeVisible()
 
     await page.screenshot({ path: testInfo.outputPath("multi-agentes-preview.png") })
+  })
+
+  test("multi-agent toggle is on by default", async ({ page }) => {
+    await setupTimeline(page, {
+      sessionMessages: [user, completed],
+    })
+
+    // A fresh client never touched the toggle, so it starts on: the agents work in parallel unless the user turns it off.
+    await expect(page.getByRole("button", { name: "Multi-agent", exact: true })).toHaveAttribute("aria-pressed", "true")
+  })
+
+  test("preview opens while the build is still streaming its first file", async ({ page }) => {
+    await setupTimeline(page, {
+      settings: { timelineDetail: detailed },
+      viewport: { width: 1366, height: 768 },
+      sessionMessages: [
+        user,
+        {
+          id: "msg_streaming",
+          type: "assistant",
+          agent: "build",
+          model: { id: "model", providerID: "provider" },
+          content: [
+            {
+              type: "tool",
+              id: "call_write",
+              name: "write",
+              state: {
+                status: "completed",
+                input: { path: "index.html", content: previewHTML },
+                content: [{ type: "text", text: "Created file successfully" }],
+              },
+              time: { created: 4, completed: 5 },
+            },
+          ],
+          time: { created: 4 },
+        },
+      ],
+      sessionStatus: { [sessionID]: { type: "busy" } },
+      fileList: (path) => (path ? [] : [fileNode(directory, "index.html")]),
+      fileContent: (path) => (path === "index.html" ? previewHTML : ""),
+    })
+
+    // The message still streams — no link yet, no finished turn — and the preview is already open beside the chat.
+    const panel = page.locator("#review-panel")
+    await expect(panel.getByRole("tab", { name: "index.html" })).toHaveAttribute("aria-selected", "true")
+    await expect(panel.locator("iframe")).toBeVisible()
+    await expect(panel.frameLocator("iframe").getByText("Rota do Forte")).toBeVisible()
+  })
+
+  test("preview reopens when a new build turn writes after it was closed", async ({ page }) => {
+    const second = {
+      id: "msg_second",
+      type: "assistant",
+      agent: "build",
+      model: { id: "model", providerID: "provider" },
+      content: [{ type: "text", text: "Ajustei o rodapé: [index.html](index.html)" }],
+      time: { created: 6 },
+    } satisfies SessionMessageAssistant
+
+    const timeline = await setupTimeline(page, {
+      settings: { timelineDetail: detailed },
+      viewport: { width: 1366, height: 768 },
+      sessionMessages: [
+        user,
+        {
+          id: "msg_first",
+          type: "assistant",
+          agent: "build",
+          model: { id: "model", providerID: "provider" },
+          content: [{ type: "text", text: "Pronto: [index.html](index.html)" }],
+          time: { created: 4, completed: 5 },
+        },
+      ],
+      fileList: (path) => (path ? [] : [fileNode(directory, "index.html")]),
+      fileContent: (path) => (path === "index.html" ? previewHTML : ""),
+    })
+
+    const panel = page.locator("#review-panel")
+    const tab = panel.getByRole("tab", { name: "index.html" })
+    await expect(tab).toHaveAttribute("aria-selected", "true")
+
+    // The user closes the preview; a closed preview stays closed while nothing new is built.
+    await tab.hover()
+    await tab.locator("..").getByRole("button", { name: "Close tab" }).click()
+    await expect(tab).toHaveCount(0)
+
+    // A new Build turn writes the same file again: the preview comes back while the turn is still streaming.
+    await timeline.send(stepStarted(second))
+    await timeline.send(
+      partUpdated({
+        ...toolPart("call_write_2", "write", "completed", { path: "index.html", content: previewHTML }, { output: "Created file successfully" }),
+        messageID: second.id,
+      }),
+    )
+    await expect(tab).toHaveAttribute("aria-selected", "true")
+    await expect(panel.locator("iframe")).toBeVisible()
+
+    await timeline.send(messageUpdated(completedAssistantInfo(second)))
+    await timeline.send(status("idle"))
+    await expect(panel.frameLocator("iframe").getByText("Rota do Forte")).toBeVisible()
   })
 
   test("separates blocking and already-backgrounded work into two rows", async ({ page }) => {
