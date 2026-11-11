@@ -10,11 +10,17 @@ import plugin, {
   buildArenaTool,
   buildGraphifyCommand,
   buildGraphifySkill,
+  buildOpenverseCommand,
+  buildOpenverseSkill,
   buildPonytailCommand,
   buildPonytailSkill,
+  buildRealSfxCommand,
+  buildRealSfxSkill,
   graphifyCommandText,
+  openverseCommandText,
   ponytailCommandText,
   ponytailLevel,
+  realSfxCommandText,
 } from "../index.ts"
 import { ArenaError } from "../src/bracket.ts"
 
@@ -271,8 +277,8 @@ describe("ponytail skill", () => {
     const { ctx, skills, commands } = makeCtx(dir)
     await plugin.setup(ctx as unknown as Context)
     await plugin.setup(ctx as unknown as Context)
-    expect(skills.size).toBe(3)
-    expect(commands.size).toBe(3)
+    expect(skills.size).toBe(5)
+    expect(commands.size).toBe(5)
   })
 
   test("user-visible descriptions and command texts stay in pt-BR and name nothing internal", async () => {
@@ -493,5 +499,235 @@ describe("graphify command", () => {
     } as never)
     expect(prompts[0]?.["skills"]).toEqual([{ id: "graphify" }])
     expect(String(prompts[0]?.["text"])).toContain("src --update")
+  })
+})
+
+describe("openverse skill", () => {
+  test("skill openverse is the new sound-search skill with pt-BR triggers", async () => {
+    const dir = await makeTmp()
+    const { ctx, skills, tools, commands } = makeCtx(dir)
+    await plugin.setup(ctx as unknown as Context)
+
+    const skill = skills.get("openverse")
+    expect(skill).toBeDefined()
+    const info = buildOpenverseSkill()
+    expect(String(info.id)).toBe("openverse")
+    expect(String(info.name)).toBe("Openverse")
+    expect(String(info.path)).toBe("skill://openverse/SKILL.md")
+    expect(info.autoinvoke).toBe(true)
+    for (const trigger of ["openverse", "som para o vídeo", "efeito sonoro", "achar som", "música de fundo", "ambiente sonoro"]) {
+      expect(info.description ?? "").toContain(trigger)
+    }
+    // The skill is written here (no upstream skill): it searches the
+    // Openverse audio API, picks the best result, downloads the direct
+    // file and records the license and the attribution line.
+    expect(info.content).toContain("# /openverse")
+    expect(info.content).toContain("api.openverse.org/v1/audio/")
+    expect(info.content).toContain("license_type=commercial")
+    expect(info.content).toContain("license=cc0")
+    expect(info.content).toContain("attribution")
+    expect(info.content).toContain("Sem chave de API e sem cadastro")
+    expect(info.content).toContain("CC0")
+    expect(info.content).toContain("CC BY")
+    expect(info.content).not.toContain("opencode")
+    // The masking words stay out of the skill text, and the gate patterns
+    // that broke the upstream Graphify body stay out too.
+    for (const word of ["Claude", "OpenCode", "python3", "Python", "Shift+Tab", "free", "paid", "model", "provider", "grátis", "pago", "cota"]) {
+      expect(info.content).not.toContain(word)
+      expect(info.description ?? "").not.toContain(word)
+    }
+    expect(info.content).not.toContain("rm -f")
+    expect(info.content).not.toContain("Do not ask the user")
+    expect(info.content).not.toContain("Never ask the user")
+    expect(info.content).not.toContain("Do not run any commands")
+    expect(info.content).not.toContain("without warning")
+
+    // Openverse is a behavior instruction: no tool, only the skill and the command.
+    expect(tools.get("openverse")).toBeUndefined()
+    expect(commands.get("openverse")).toBeDefined()
+  })
+
+  test("user-visible descriptions and command texts stay in pt-BR and name nothing internal", async () => {
+    const dir = await makeTmp()
+    const { ctx, commands } = makeCtx(dir)
+    await plugin.setup(ctx as unknown as Context)
+    const forbidden = ["Claude", "OpenCode", "Nexus", "grátis", "gratuito", "pago", "cota", "crédito", "roteamento", "US$", "free", "paid", "model", "provider"]
+    const info = buildOpenverseSkill()
+    for (const word of forbidden) {
+      expect(info.description ?? "").not.toContain(word)
+    }
+    const command = buildOpenverseCommand({ prompt: async () => undefined } as never)
+    expect(command.description).toMatch(/Openverse/)
+    for (const word of forbidden) {
+      expect(command.description).not.toContain(word)
+      expect((commands.get("openverse") as unknown as { description: string }).description).not.toContain(word)
+    }
+    for (const args of ["", "whoosh", "clique de botão", "chuva"]) {
+      for (const word of forbidden) {
+        expect(openverseCommandText(args)).not.toContain(word)
+      }
+    }
+  })
+})
+
+describe("openverse command", () => {
+  test("blank arguments load the skill for what the conversation asks", async () => {
+    const prompts: Array<Record<string, unknown>> = []
+    const session = {
+      prompt: async (input: Record<string, unknown>) => {
+        prompts.push(input)
+        return undefined
+      },
+    }
+    const command = buildOpenverseCommand(session as never)
+    await command.execute({
+      sessionID: "ses_openverse_command_test",
+      prompt: { text: "   " },
+      delivery: "steer",
+    } as never)
+    expect(prompts).toHaveLength(1)
+    const sent = prompts[0]
+    expect(sent["sessionID"]).toBe("ses_openverse_command_test")
+    expect(sent["delivery"]).toBe("steer")
+    expect(sent["skills"]).toEqual([{ id: "openverse" }])
+    expect(String(sent["text"])).toContain('skill "openverse"')
+    expect(String(sent["text"])).toContain("(nenhum")
+  })
+
+  test("the search terms pass through to the skill", async () => {
+    const prompts: Array<Record<string, unknown>> = []
+    const session = {
+      prompt: async (input: Record<string, unknown>) => {
+        prompts.push(input)
+        return undefined
+      },
+    }
+    const command = buildOpenverseCommand(session as never)
+    await command.execute({
+      sessionID: "ses_openverse_command_args",
+      prompt: { text: "whoosh" },
+      delivery: "steer",
+    } as never)
+    expect(prompts[0]?.["skills"]).toEqual([{ id: "openverse" }])
+    expect(String(prompts[0]?.["text"])).toContain("whoosh")
+  })
+})
+
+describe("real-sfx skill", () => {
+  test("skill real-sfx is the upstream Real SFX skill adapted to FFmpeg and Openverse", async () => {
+    const dir = await makeTmp()
+    const { ctx, skills, tools, commands } = makeCtx(dir)
+    await plugin.setup(ctx as unknown as Context)
+
+    const skill = skills.get("real-sfx")
+    expect(skill).toBeDefined()
+    const info = buildRealSfxSkill()
+    expect(String(info.id)).toBe("real-sfx")
+    expect(String(info.name)).toBe("Real SFX")
+    expect(String(info.path)).toBe("skill://real-sfx/SKILL.md")
+    expect(info.autoinvoke).toBe(true)
+    for (const trigger of ["real-sfx", "som no vídeo", "sonorizar", "colocar som", "efeito no vídeo", "som no frame"]) {
+      expect(info.description ?? "").toContain(trigger)
+    }
+    // Adapted from the upstream Real SFX skill (Clipwing, MIT): the rules,
+    // the moment kinds, the levels and the taste rules are kept, but the
+    // upstream's own Python scripts are NOT bundled — the agent finds the
+    // moments (project cue list, HyperFrames data-start timeline or frame
+    // analysis), picks real recordings (user library or Openverse) and mixes
+    // them with FFmpeg directly. No bundled sound library; when FFmpeg is
+    // not available the agent still finds the moments and the sounds and
+    // leaves the exact mix commands ready, without asking for an install.
+    expect(info.content).toContain("# /real-sfx")
+    expect(info.content).toContain("O som nunca é sintetizado")
+    expect(info.content).toContain("data-start")
+    expect(info.content).toContain("adelay")
+    expect(info.content).toContain("amix")
+    expect(info.content).toContain("loudnorm")
+    expect(info.content).toContain("Se o FFmpeg não estiver disponível")
+    expect(info.content).toContain("lista de escuta")
+    expect(info.content).toContain("Regras de gosto")
+    expect(info.content).not.toContain("opencode")
+    // The masking words stay out of the skill text, and the gate patterns
+    // that broke the upstream Graphify body stay out too. The adaptation
+    // removes the upstream's Python dependency entirely, so "Python" is
+    // locked out of the content as well.
+    for (const word of ["Claude", "OpenCode", "python3", "Python", "Shift+Tab", "free", "paid", "model", "provider", "grátis", "pago", "cota"]) {
+      expect(info.content).not.toContain(word)
+      expect(info.description ?? "").not.toContain(word)
+    }
+    expect(info.content).not.toContain("rm -f")
+    expect(info.content).not.toContain("Do not ask the user")
+    expect(info.content).not.toContain("Never ask the user")
+    expect(info.content).not.toContain("Do not run any commands")
+    expect(info.content).not.toContain("without warning")
+
+    // Real SFX is a behavior instruction: no tool, only the skill and the command.
+    expect(tools.get("real-sfx")).toBeUndefined()
+    expect(commands.get("real-sfx")).toBeDefined()
+  })
+
+  test("user-visible descriptions and command texts stay in pt-BR and name nothing internal", async () => {
+    const dir = await makeTmp()
+    const { ctx, commands } = makeCtx(dir)
+    await plugin.setup(ctx as unknown as Context)
+    const forbidden = ["Claude", "OpenCode", "Nexus", "grátis", "gratuito", "pago", "cota", "crédito", "roteamento", "US$", "free", "paid", "model", "provider"]
+    const info = buildRealSfxSkill()
+    for (const word of forbidden) {
+      expect(info.description ?? "").not.toContain(word)
+    }
+    const command = buildRealSfxCommand({ prompt: async () => undefined } as never)
+    expect(command.description).toMatch(/Real SFX/)
+    for (const word of forbidden) {
+      expect(command.description).not.toContain(word)
+      expect((commands.get("real-sfx") as unknown as { description: string }).description).not.toContain(word)
+    }
+    for (const args of ["", "video.mp4", "cues.json"]) {
+      for (const word of forbidden) {
+        expect(realSfxCommandText(args)).not.toContain(word)
+      }
+    }
+  })
+})
+
+describe("real-sfx command", () => {
+  test("blank arguments load the skill for the video in the conversation", async () => {
+    const prompts: Array<Record<string, unknown>> = []
+    const session = {
+      prompt: async (input: Record<string, unknown>) => {
+        prompts.push(input)
+        return undefined
+      },
+    }
+    const command = buildRealSfxCommand(session as never)
+    await command.execute({
+      sessionID: "ses_real_sfx_command_test",
+      prompt: { text: "   " },
+      delivery: "steer",
+    } as never)
+    expect(prompts).toHaveLength(1)
+    const sent = prompts[0]
+    expect(sent["sessionID"]).toBe("ses_real_sfx_command_test")
+    expect(sent["delivery"]).toBe("steer")
+    expect(sent["skills"]).toEqual([{ id: "real-sfx" }])
+    expect(String(sent["text"])).toContain('skill "real-sfx"')
+    expect(String(sent["text"])).toContain("(nenhum")
+  })
+
+  test("the video and the cue list pass through to the skill", async () => {
+    const prompts: Array<Record<string, unknown>> = []
+    const session = {
+      prompt: async (input: Record<string, unknown>) => {
+        prompts.push(input)
+        return undefined
+      },
+    }
+    const command = buildRealSfxCommand(session as never)
+    await command.execute({
+      sessionID: "ses_real_sfx_command_args",
+      prompt: { text: "video.mp4 cues.json" },
+      delivery: "steer",
+    } as never)
+    expect(prompts[0]?.["skills"]).toEqual([{ id: "real-sfx" }])
+    expect(String(prompts[0]?.["text"])).toContain("video.mp4 cues.json")
   })
 })
