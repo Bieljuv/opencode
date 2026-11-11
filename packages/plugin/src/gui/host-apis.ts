@@ -1165,6 +1165,24 @@ export interface WeeklyUsage {
 }
 
 /**
+ * The signed-in client's monthly plan usage, as the panel reports it in
+ * `GET /api/uso` (`mensal`). Only the percent and the instants reach the
+ * interface — never token counts or the size of the allowance. The month
+ * turns over at midnight on the first of the next month
+ * (America/Sao_Paulo); while blocked, the release is that turn.
+ */
+export interface MonthlyUsage {
+  /** The month's usage as a percent of the monthly allowance, 0–100. */
+  readonly percent: number
+  /** When the monthly allowance turns over. */
+  readonly resetsAt: string
+  /** True while the monthly allowance is spent and the client waits for the next month. */
+  readonly blocked: boolean
+  /** When the next month starts, while blocked; undefined otherwise. */
+  readonly releasesAt: string | undefined
+}
+
+/**
  * The signed-in client's plan usage, as the panel reports it in
  * `GET /api/uso`. Only the percents and the instants reach the interface —
  * never token counts or the size of the allowance.
@@ -1174,22 +1192,46 @@ export interface ClientUsage {
   readonly percent: number
   /** When the daily allowance turns over. */
   readonly resetsAt: string
+  /** True while the daily allowance is spent and the client waits for midnight. */
+  readonly blocked: boolean
   /** The weekly allowance, when the panel reports one; undefined when the client has no weekly limit. */
   readonly weekly: WeeklyUsage | undefined
+  /** The monthly allowance, when the panel reports one; undefined when the client has no monthly limit. */
+  readonly monthly: MonthlyUsage | undefined
 }
 
 /**
  * Tokens spent today (America/Sao_Paulo) across every session on one
  * server, from the server's own session data — the real day
- * accumulation, whatever answered. Only the total and the day reach
- * the interface — never which model or provider answered, and never a
- * limit or a quota.
+ * accumulation, whatever answered. Only the total, its parts and the
+ * day reach the interface — never which model or provider answered,
+ * and never a limit or a quota.
  */
 export interface DailyTokens {
   /** Tokens spent today across every session on the server. */
   readonly total: number
   /** The day the total covers, as `YYYY-MM-DD` in America/Sao_Paulo. */
   readonly date: string
+  /**
+   * Tokens spent today, by kind — the parts of `total`, in the same
+   * scope (every session on the server, today in America/Sao_Paulo),
+   * so the parts always add up to `total`.
+   */
+  readonly breakdown: {
+    /** Input tokens that were not served from cache. */
+    readonly input: number
+    /** Tokens produced. */
+    readonly output: number
+    /** Reasoning tokens. */
+    readonly reasoning: number
+    /** Cached input tokens, read from the cache and written to it. */
+    readonly cache: {
+      /** Input tokens served from cache. */
+      readonly read: number
+      /** Input tokens written to the cache. */
+      readonly write: number
+    }
+  }
 }
 
 /** What `Desktop.pick` asks for. */

@@ -4,7 +4,7 @@ import type { Accessor } from "solid-js"
 import type { DesktopMenuAction, DesktopZoomLevel } from "@/shell/commands/desktop-menu"
 import type { DraftStore } from "@/runtime/persistence/drafts"
 import type { Bridge } from "@opencode/plugin/gui/host"
-import type { WeeklyUsage } from "@opencode/plugin/gui"
+import type { MonthlyUsage, WeeklyUsage } from "@opencode/plugin/gui"
 
 type PickerPaths = string | string[] | null
 
@@ -152,7 +152,15 @@ type PlatformBase = {
 
   /** The client's daily plan usage, when the gateway is active and the panel answered (desktop only) */
   getClientUsage?(): Promise<
-    { percent: number; resetsAt: string; warnedToday: boolean; weekly?: WeeklyUsage } | undefined
+    | {
+        percent: number
+        resetsAt: string
+        warnedToday: boolean
+        blocked: boolean
+        weekly?: WeeklyUsage
+        monthly?: MonthlyUsage
+      }
+    | undefined
   >
 
   /** Transcreve uma fatia de áudio no gateway do painel (desktop only). */

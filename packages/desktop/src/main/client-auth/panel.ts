@@ -84,8 +84,24 @@ export type SessionInfo = {
 export type DailyUsage = {
   readonly percent: number
   readonly resetsAt: string
+  /** True enquanto o uso diário atingiu o limite e o cliente espera a meia-noite. */
+  readonly blocked: boolean
   /** O uso semanal, quando o painel o reporta; undefined = sem limite semanal, a barra some. */
   readonly weekly: WeeklyUsage | undefined
+  /** O uso mensal, quando o painel o reporta; undefined = sem limite mensal. */
+  readonly monthly: MonthlyUsage | undefined
+}
+
+/**
+ * Uso mensal do plano, como o painel expõe em `mensal` em GET /api/uso.
+ * Só a % e os instantes chegam à interface — nunca a contagem de tokens
+ * nem o tamanho do limite.
+ */
+export type MonthlyUsage = {
+  readonly percent: number
+  readonly resetsAt: string
+  readonly blocked: boolean
+  readonly releasesAt: string | undefined
 }
 
 /**
@@ -168,9 +184,19 @@ const ApiKeyResponse = Schema.Struct({
 const UsageResponse = Schema.Struct({
   usado_percentual: Schema.Number,
   reseta_em: Schema.String,
+  bloqueado: Schema.optional(Schema.Boolean),
 })
 
 const WeeklyUsageResponse = Schema.Struct({
+  limite_tokens: Schema.NullOr(Schema.Number),
+  usado_tokens: Schema.Number,
+  usado_percentual: Schema.Number,
+  bloqueado: Schema.Boolean,
+  liberacao_em: Schema.NullOr(Schema.String),
+  reseta_em: Schema.String,
+})
+
+const MonthlyUsageResponse = Schema.Struct({
   limite_tokens: Schema.NullOr(Schema.Number),
   usado_tokens: Schema.Number,
   usado_percentual: Schema.Number,
@@ -401,9 +427,11 @@ export async function googleLogin(
  * cliente). Fail-open: qualquer falha ou forma inesperada devolve
  * undefined e a barra simplesmente não renderiza — nada de erro visível.
  * `usado_percentual` é 0–100; `reseta_em` é o instante do reset (meia-noite,
- * America/Sao_Paulo). Nunca há contagem de tokens nem tamanho da cota aqui.
- * O objeto `semanal` vem na mesma resposta; um `semanal` malformado ou
- * sem limite esconde só a barra semanal, nunca a diária.
+ * America/Sao_Paulo); `bloqueado` diz se o dia estourou (ausente = não).
+ * Nunca há contagem de tokens nem tamanho da cota aqui. O objeto `semanal`
+ * vem na mesma resposta; um `semanal` malformado ou sem limite esconde só
+ * a barra semanal, nunca a diária. O objeto `mensal` vem no mesmo formato
+ * do `semanal`; ausente ou malformado, o mensal some sem afetar o resto.
  */
 export async function fetchDailyUsage(baseUrl: string, apiKey: string): Promise<DailyUsage | undefined> {
   let response: { status: number; json: unknown }
@@ -425,7 +453,37 @@ export async function fetchDailyUsage(baseUrl: string, apiKey: string): Promise<
   if (!Number.isFinite(value.usado_percentual) || value.usado_percentual < 0 || value.usado_percentual > 100)
     return undefined
 
-  return { percent: value.usado_percentual, resetsAt: value.reseta_em, weekly: weeklyUsage(response.json) }
+  return {
+    percent: value.usado_percentual,
+    resetsAt: value.reseta_em,
+    blocked: value.bloqueado ?? false,
+    weekly: weeklyUsage(response.json),
+    monthly: monthlyUsage(response.json),
+  }
+}
+
+/** O uso mensal do plano (`mensal` em GET /api/uso), ou undefined. */
+function monthlyUsage(json: unknown): MonthlyUsage | undefined {
+  const record = (typeof json === "object" && json !== null ? json : {}) as Record<string, unknown>
+  const decoded = Schema.decodeUnknownOption(MonthlyUsageResponse)(record.mensal)
+
+  if (Option.isNone(decoded)) return undefined
+
+  const value = decoded.value
+
+  if (!Number.isFinite(value.usado_percentual) || value.usado_percentual < 0 || value.usado_percentual > 100)
+    return undefined
+
+  // Sem o `limite_tokens` aqui: o mensal também bloqueia por custo
+  // (alert_cost_monthly_usd), e um cliente só com teto de custo tem
+  // limite_tokens null com o bloqueio valendo. O painel devolve
+  // `mensal: null` quando não há limite mensal nenhum.
+  return {
+    percent: value.usado_percentual,
+    resetsAt: value.reseta_em,
+    blocked: value.bloqueado,
+    releasesAt: value.liberacao_em ?? undefined,
+  }
 }
 
 /** O uso semanal do plano (`semanal` em GET /api/uso), ou undefined. */

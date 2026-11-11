@@ -18,11 +18,39 @@ const ClientStatus = Schema.Union([
   Schema.Struct({ state: Schema.Literal("trial-expired"), trialEndsAt: Schema.NullOr(Schema.String) }),
 ])
 
-/** Uso diário do plano, já agregado: só percentual e hora do reset. */
+/** Uso semanal do plano, como o painel expõe em `semanal` em GET /api/uso. */
+const WeeklyUsage = Schema.Struct({
+  percent: Schema.Number,
+  resetsAt: Schema.String,
+  blocked: Schema.Boolean,
+  // Chave sempre presente no main (undefined = sem liberação); o
+  // Union mantém a chave obrigatória no tipo, como no SDK.
+  releasesAt: Schema.Union([Schema.String, Schema.Undefined]),
+})
+
+/** Uso mensal do plano, como o painel expõe em `mensal` em GET /api/uso. */
+const MonthlyUsage = Schema.Struct({
+  percent: Schema.Number,
+  resetsAt: Schema.String,
+  blocked: Schema.Boolean,
+  // Chave sempre presente no main (undefined = sem liberação); o
+  // Union mantém a chave obrigatória no tipo, como no SDK.
+  releasesAt: Schema.Union([Schema.String, Schema.Undefined]),
+})
+
+/**
+ * Uso do plano, já agregado: percentual e hora do reset do dia, se o
+ * dia estourou, e o uso semanal e mensal quando o painel os reporta.
+ * Só percentuais e instantes cruzam o IPC — nunca contagem de tokens
+ * nem tamanho da cota.
+ */
 const ClientUsage = Schema.Struct({
   percent: Schema.Number,
   resetsAt: Schema.String,
   warnedToday: Schema.Boolean,
+  blocked: Schema.Boolean,
+  weekly: Schema.optional(WeeklyUsage),
+  monthly: Schema.optional(MonthlyUsage),
 })
 
 const ClientError = Schema.Struct({

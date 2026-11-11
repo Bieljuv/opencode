@@ -143,8 +143,10 @@ export default function SessionContextTab(props: { session: MountedSession }) {
   // session on this server, from the server's own session data. While
   // it loads (or when the host cannot answer) the stat falls back to
   // the session total, so the number never blanks and never goes back.
-  // The per-session numbers below stay per session: only "Total de
-  // tokens" is the day total.
+  // The breakdown below is the day total's own parts, in the same
+  // scope: the total and its parts always add up. Without the day
+  // data, total and parts both fall back to the session cumulative,
+  // so the scopes stay consistent either way.
   const [daily, setDaily] = createSignal<DailyTokens | undefined>(undefined)
 
   const loadDaily = async () => {
@@ -216,13 +218,13 @@ export default function SessionContextTab(props: { session: MountedSession }) {
     { label: "stats.limit", value: () => formatter().number(context()?.limit) },
     { label: "stats.totalTokens", value: () => formatter().number(daily()?.total ?? cumulative().total) },
     { label: "stats.usage", value: () => formatter().percent(context()?.usage) },
-    { label: "stats.inputTokens", value: () => formatter().number(cumulative().input) },
-    { label: "stats.outputTokens", value: () => formatter().number(cumulative().output) },
-    { label: "stats.reasoningTokens", value: () => formatter().number(cumulative().reasoning) },
+    { label: "stats.inputTokens", value: () => formatter().number(daily()?.breakdown.input ?? cumulative().input) },
+    { label: "stats.outputTokens", value: () => formatter().number(daily()?.breakdown.output ?? cumulative().output) },
+    { label: "stats.reasoningTokens", value: () => formatter().number(daily()?.breakdown.reasoning ?? cumulative().reasoning) },
     {
       label: "stats.cacheTokens",
       value: () =>
-        `${formatter().number(cumulative().cache.read)} / ${formatter().number(cumulative().cache.write)}`,
+        `${formatter().number(daily()?.breakdown.cache.read ?? cumulative().cache.read)} / ${formatter().number(daily()?.breakdown.cache.write ?? cumulative().cache.write)}`,
     },
     { label: "stats.userMessages", value: () => counts().user.toLocaleString(i18n.locale()) },
     { label: "stats.assistantMessages", value: () => counts().assistant.toLocaleString(i18n.locale()) },

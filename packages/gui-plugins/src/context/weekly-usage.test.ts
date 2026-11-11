@@ -21,7 +21,9 @@ const weekly = (overrides: Partial<WeeklyUsage> = {}): WeeklyUsage => ({
 const usage = (overrides: Partial<ClientUsage> = {}): ClientUsage => ({
   percent: 40,
   resetsAt: "2026-11-10T03:00:00Z",
+  blocked: false,
   weekly: weekly(),
+  monthly: undefined,
   ...overrides,
 })
 

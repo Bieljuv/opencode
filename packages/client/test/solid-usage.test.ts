@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { SessionMessageInfo } from "../src/promise"
-import { cumulativeSessionUsage, dayUsageTotal, lastAssistantWithUsage, saoPauloDayKey } from "../src/solid/usage"
+import { cumulativeSessionUsage, dayUsageBreakdown, dayUsageTotal, lastAssistantWithUsage, saoPauloDayKey } from "../src/solid/usage"
 
 const assistant = (id: string, input: number): SessionMessageInfo => ({
   id,
@@ -24,6 +24,11 @@ const spent = (
   content: [],
   tokens,
   time: { created: 0 },
+})
+
+const on = (id: string, created: string, input: number): SessionMessageInfo => ({
+  ...spent(id, { id: "model", providerID: "provider" }, { input, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }),
+  time: { created: Date.parse(created) },
 })
 
 describe("lastAssistantWithUsage", () => {
@@ -66,11 +71,6 @@ describe("saoPauloDayKey", () => {
 })
 
 describe("dayUsageTotal", () => {
-  const on = (id: string, created: string, input: number): SessionMessageInfo => ({
-    ...spent(id, { id: "model", providerID: "provider" }, { input, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }),
-    time: { created: Date.parse(created) },
-  })
-
   test("sums only the day's assistant messages, across models", () => {
     const messages = [
       spent(
@@ -131,6 +131,60 @@ describe("dayUsageTotal", () => {
   test("returns zero for an empty list or a day with no messages", () => {
     expect(dayUsageTotal([], "2026-11-10")).toBe(0)
     expect(dayUsageTotal([on("msg_a", "2026-11-10T15:00:00Z", 40)], "2026-11-11")).toBe(0)
+  })
+})
+
+describe("dayUsageBreakdown", () => {
+  test("parts add up to the day total, in the same scope", () => {
+    const messages = [
+      spent(
+        "msg_a",
+        { id: "model-a", providerID: "provider-a" },
+        { input: 10_000, output: 500, reasoning: 100, cache: { read: 200, write: 50 } },
+      ),
+      spent(
+        "msg_b",
+        { id: "model-b", providerID: "provider-b" },
+        { input: 12_000, output: 600, reasoning: 200, cache: { read: 300, write: 100 } },
+      ),
+    ].map((message) => ({ ...message, time: { created: Date.parse("2026-11-10T15:00:00Z") } }))
+
+    const breakdown = dayUsageBreakdown(messages, "2026-11-10")
+
+    // The parts are the day total's own parts: a total of 24_050 with
+    // parts summing to something else is the mismatch the Context tab showed.
+    expect(breakdown.total).toBe(24_050)
+    expect(breakdown.total).toBe(dayUsageTotal(messages, "2026-11-10"))
+    expect(breakdown.input).toBe(22_000)
+    expect(breakdown.output).toBe(1_100)
+    expect(breakdown.reasoning).toBe(300)
+    expect(breakdown.cache.read).toBe(500)
+    expect(breakdown.cache.write).toBe(150)
+  })
+
+  test("ignores messages from another São Paulo day in every part", () => {
+    const messages = [
+      on("msg_yesterday", "2026-11-10T02:59:59Z", 100_000),
+      on("msg_today", "2026-11-10T03:00:00Z", 40),
+    ]
+
+    const breakdown = dayUsageBreakdown(messages, "2026-11-10")
+
+    expect(breakdown.total).toBe(40)
+    expect(breakdown.input).toBe(40)
+    expect(breakdown.output).toBe(0)
+    expect(breakdown.cache.read).toBe(0)
+  })
+
+  test("returns zero parts for an empty list or a day with no messages", () => {
+    expect(dayUsageBreakdown([], "2026-11-10")).toEqual({
+      total: 0,
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      cache: { read: 0, write: 0 },
+    })
+    expect(dayUsageBreakdown([on("msg_a", "2026-11-10T15:00:00Z", 40)], "2026-11-11").total).toBe(0)
   })
 })
 
