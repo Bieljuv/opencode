@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import type { SessionMessageAssistant, SessionMessageInfo } from "@opencode/client/promise"
-import { findPreviewHref, latestBuildPreview } from "./preview-link"
+import type { SessionInfo, SessionMessageAssistant, SessionMessageInfo } from "@opencode/client/promise"
+import { collectPreviewMessages, findPreviewHref, latestBuildPreview } from "./preview-link"
 
 const assistant = (
   id: string,
@@ -187,6 +187,36 @@ describe("latestBuildPreview", () => {
     expect(latestBuildPreview(messages)).toBeUndefined()
   })
 
+  test("a Builder subagent message opens a preview like Build", () => {
+    expect(latestBuildPreview([assistant("msg_builder", "builder", "Pronto: [index.html](index.html)")])).toEqual({
+      href: "index.html",
+      messageID: "msg_builder",
+    })
+  })
+
+  test("a General subagent writing the entry file opens a preview", () => {
+    const messages = [assistantParts("msg_general", "general", [fileWrite("call_write", "write", "index.html")], false)]
+
+    expect(latestBuildPreview(messages)).toEqual({ href: "index.html", messageID: "msg_general" })
+  })
+
+  test("a Planner message never opens a preview", () => {
+    expect(latestBuildPreview([assistant("msg_planner", "planner", "Veja [index.html](index.html)")])).toBeUndefined()
+    const messages = [assistantParts("msg_planner", "planner", [fileWrite("call_write", "write", "index.html")], false)]
+
+    expect(latestBuildPreview(messages)).toBeUndefined()
+  })
+
+  test("a Reviewer turn writing a file never opens a preview", () => {
+    const messages = [assistantParts("msg_reviewer", "reviewer", [fileWrite("call_write", "write", "index.html")], false)]
+
+    expect(latestBuildPreview(messages)).toBeUndefined()
+  })
+
+  test("an Explore message never opens a preview", () => {
+    expect(latestBuildPreview([assistant("msg_explore", "explore", "Veja [index.html](index.html)")])).toBeUndefined()
+  })
+
   test("a user message linking a file never opens a preview", () => {
     const linked: SessionMessageInfo = {
       id: "msg_user_link",
@@ -196,5 +226,64 @@ describe("latestBuildPreview", () => {
     }
 
     expect(latestBuildPreview([linked])).toBeUndefined()
+  })
+})
+
+describe("collectPreviewMessages", () => {
+  const info = (id: string, parentID?: string) =>
+    ({
+      id,
+      parentID,
+      projectID: "proj_1",
+      cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: 1, updated: 2 },
+      title: id,
+      location: { directory: "/tmp" },
+    }) satisfies SessionInfo
+
+  const timed = (id: string, created: number, text: string): SessionMessageInfo => ({
+    id,
+    type: "assistant",
+    agent: "builder",
+    model: { id: "model", providerID: "provider" },
+    content: [{ type: "text", text }],
+    time: { created, completed: created + 1 },
+  })
+
+  test("merges a child and a grandchild in time order", () => {
+    const sessions = [info("ses_parent"), info("ses_child", "ses_parent"), info("ses_grandchild", "ses_child")]
+    const byId: Record<string, SessionMessageInfo[]> = {
+      ses_parent: [timed("msg_parent", 1, "Pronto: [rascunho.html](rascunho.html)")],
+      ses_child: [timed("msg_child", 3, "Pronto: [index.html](index.html)")],
+      ses_grandchild: [timed("msg_grandchild", 2, "Pronto: [loja.html](loja.html)")],
+    }
+
+    const merged = collectPreviewMessages("ses_parent", sessions, (id) => byId[id] ?? [])
+
+    expect(merged.map((message) => message.id)).toEqual(["msg_parent", "msg_grandchild", "msg_child"])
+    // The newest write wins: the child's entry file is the preview.
+    expect(latestBuildPreview(merged)).toEqual({ href: "index.html", messageID: "msg_child" })
+  })
+
+  test("ignores sessions that do not descend from the parent", () => {
+    const sessions = [info("ses_parent"), info("ses_other"), info("ses_other_child", "ses_other")]
+    const byId: Record<string, SessionMessageInfo[]> = {
+      ses_parent: [],
+      ses_other_child: [timed("msg_other", 2, "Pronto: [index.html](index.html)")],
+    }
+
+    expect(collectPreviewMessages("ses_parent", sessions, (id) => byId[id] ?? [])).toEqual([])
+  })
+
+  test("a parent cycle stops the walk instead of looping", () => {
+    const sessions = [info("ses_parent", "ses_child"), info("ses_child", "ses_parent")]
+    const byId: Record<string, SessionMessageInfo[]> = {
+      ses_child: [timed("msg_child", 2, "Pronto: [index.html](index.html)")],
+    }
+
+    expect(collectPreviewMessages("ses_parent", sessions, (id) => byId[id] ?? []).map((message) => message.id)).toEqual([
+      "msg_child",
+    ])
   })
 })

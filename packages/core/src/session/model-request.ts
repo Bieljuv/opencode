@@ -206,14 +206,23 @@ export const DELIVERY_RULES =
   "Delivery rules: first identify what the request is — a system (an app with a backend, database, users, or logins), a website (pages and content, no backend logic), or a demo (a throwaway preview). Never downgrade a system to a demo, and never present media as a system. Every build is born ready to publish: the same code and structure locally and in production; the database through Supabase, with the SQL in the project; secrets only through environment variables; a mock or simulation only when a credential is missing, never as architecture; never localStorage as the final destination."
 
 /**
- * ManosTech multi-agent, appended to the system prompt only while the
- * composer's multi-agent toggle is on. The agent splits work that has
- * independent fronts across parallel subagents and joins the results;
- * the user watches each front live by its task label. Without the toggle
- * the agent works alone, as before.
+ * ManosTech multi-agent, appended to the system prompt while multi-agent is
+ * on (the default everywhere: composer, CLI, schedules, child sessions).
+ * The agent works a fixed pipeline with distinct roles, not one vague
+ * suggestion: explore maps the territory, the planner writes the plan, a
+ * builder builds each independent front, and the reviewer checks the built
+ * work before anything is delivered. Each role is a real subagent with its
+ * own instructions — explore, planner, builder, reviewer, general — so the
+ * split is a tool call the user watches live, not a hope. Fronts that
+ * depend on each other run in order, never in parallel, and two fronts
+ * never edit the same files: the tool reports the overlap when they do.
+ * A builder's finished work is reviewed before the final answer: call the
+ * reviewer on the files it changed, and only deliver what passed review
+ * (or say what is still wrong). A single small question or a single-file
+ * change is done directly, without subagents.
  */
 export const MULTI_AGENT =
-  "Multi-agent: when the request splits into independent fronts, split it and run each front in its own parallel subagent in the background, so the fronts work at the same time, then join the results into one answer at the end. Fronts that depend on each other run in order, not in parallel. Give each front a short label of a few words saying what it does, so the user can follow it live. Only delegate fronts that are truly independent; a single small question or a single-file change is done directly, without subagents."
+  "Multi-agent: work the fixed pipeline. When the request needs understanding first, send the explore subagent to map the relevant files and report back. When the request is a build, send the planner subagent first: it writes the plan — the steps, the files each step touches, and which fronts are independent — and you show that plan to the user for approval before building. Then run each front in its own parallel subagent in the background, so the fronts work at the same time: use the builder subagent for fronts that write files, the explore subagent for fronts that only read, and the general subagent for multi-step work that fits no other role. Fronts that depend on each other run in order, not in parallel. Give each front a short label of a few words saying what it does, so the user can follow it live. Never give two fronts the same files to edit. Before delivering, send the reviewer subagent to check the files the builders changed: it reads them and lists every issue, and you fix what it found or say what is still wrong instead of delivering broken work. Only delegate fronts that are truly independent; a single small question or a single-file change is done directly, without subagents."
 
 export const baseTranscript = (input: {
   readonly agent: Agent.Info
@@ -221,7 +230,7 @@ export const baseTranscript = (input: {
   readonly tools: Tool.Snapshot
   readonly initial: ReadonlyArray<Instructions.Rendered>
   readonly messages: ReadonlyArray<SessionMessage.Info>
-  /** The composer's multi-agent toggle for this turn; off keeps the agent working alone. */
+  /** Multi-agent for this turn; on by default, an explicit false keeps the agent working alone. */
   readonly multiAgent?: boolean
 }) => {
   const providerMetadataKey = input.model.model.route.providerMetadataKey ?? input.model.model.provider

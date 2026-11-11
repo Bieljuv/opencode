@@ -41,7 +41,7 @@ import { tmpdirScoped } from "./fixture/tmpdir"
 import { tempGlobalLayer } from "./fixture/global"
 import { offlineModels } from "./fixture/models"
 import { testEffect } from "./lib/effect"
-import { executeTool, registerToolPlugin, toolIdentity } from "./lib/tool"
+import { executeTool, registerToolPlugin, toolIdentity, type ToolExecution } from "./lib/tool"
 
 const childText = "child final response"
 const completedOutput = (sessionID: Session.ID) =>
@@ -68,7 +68,8 @@ const executionNode = makeGlobalNode({
       const completed = new Set<Session.ID>()
       const complete = Effect.fn("SubagentTest.complete")(function* (sessionID: Session.ID) {
         if (completed.has(sessionID)) return
-        if ((yield* store.get(sessionID))?.title?.includes("fail")) {
+        const info = yield* store.get(sessionID)
+        if (info?.title?.includes("fail")) {
           yield* new SessionRunnerModel.ModelNotSelectedError({ sessionID })
           return
         }
@@ -81,6 +82,36 @@ const executionNode = makeGlobalNode({
           model: childModel,
           started: 0,
         })
+        // A writer child also finishes a write, so the parent's enrichment
+        // sees a real file instead of only text.
+        if (info?.title?.startsWith("writer")) {
+          yield* bus.publish(SessionEvent.Tool.Input.Started, {
+            sessionID,
+            assistantMessageID,
+            id: "call_write",
+            name: "write",
+          })
+          yield* bus.publish(SessionEvent.Tool.Input.Ended, {
+            sessionID,
+            assistantMessageID,
+            id: "call_write",
+            text: '{"path":"index.html"}',
+          })
+          yield* bus.publish(SessionEvent.Tool.Called, {
+            sessionID,
+            assistantMessageID,
+            id: "call_write",
+            input: { path: "index.html" },
+            executed: false,
+          })
+          yield* bus.publish(SessionEvent.Tool.Success, {
+            sessionID,
+            assistantMessageID,
+            id: "call_write",
+            content: [{ type: "text", text: "ok" }],
+            executed: false,
+          })
+        }
         yield* bus.publish(SessionEvent.Text.Started, {
           sessionID,
           assistantMessageID,
@@ -333,7 +364,7 @@ describe("SubagentTool", () => {
     ),
   )
 
-  it.live("prevents subagents from launching subagents by default", () =>
+  it.live("allows one level of nesting by default, then stops", () =>
     tmpdirScoped().pipe(
       Effect.flatMap((dir) =>
         Effect.gen(function* () {
@@ -344,26 +375,35 @@ describe("SubagentTool", () => {
           yield* withSubagent(parent.location)
           const locations = yield* LocationServiceMap.Service
           const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
-
-          expect(
-            yield* executeTool(registry, {
-              sessionID: parent.id,
+          const call = (sessionID: Session.ID, id: string, prompt: string) =>
+            executeTool(registry, {
+              sessionID,
               ...toolIdentity,
               call: {
                 type: "tool-call",
-                id: "call-nested-subagent",
+                id,
                 name: SubagentTool.name,
-                input: { agent: "reviewer", description: "nested", prompt: "should fail" },
+                input: { agent: "reviewer", description: "nested", prompt },
               },
-            }),
-          ).toEqual({
+            })
+
+          // A subagent may delegate once by default: the child of a child runs.
+          const nested = yield* call(parent.id, "call-nested-subagent", "should run")
+          expect(nested).toMatchObject({
+            status: "completed",
+            metadata: { status: "completed" },
+          })
+          const childID = outputSessionID(nested.metadata)
+
+          // The grandchild is the leaf: spawning from it hits the default limit.
+          expect(yield* call(childID, "call-too-deep", "should fail")).toEqual({
             status: "error",
             error: {
               type: "tool.execution",
-              message: expect.stringContaining("Subagent depth limit reached (1)"),
+              message: expect.stringContaining("Subagent depth limit reached (2)"),
             },
           })
-          expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(0)
+          expect((yield* sessions.list({ parentID: childID })).data).toHaveLength(0)
         }),
       ),
     ),
@@ -465,6 +505,84 @@ describe("SubagentTool", () => {
           })
           const fallbackChild = yield* sessions.get(outputSessionID(fallback.metadata))
           expect(fallbackChild).toMatchObject({ parentID: parent.id, model: parentModel })
+        }),
+      ),
+    ),
+  )
+
+  it.live("lists the files a foreground child wrote and reviews them", () =>
+    tmpdirScoped().pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+          const sessions = yield* Session.Service
+          const parent = yield* sessions.create({ location, model: parentModel })
+          yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+
+          const settled = yield* executeTool(registry, {
+            sessionID: parent.id,
+            ...toolIdentity,
+            call: {
+              type: "tool-call",
+              id: "call-writer-subagent",
+              name: SubagentTool.name,
+              input: { agent: "fallback", description: "writer builds the page", prompt: "build the page" },
+            },
+          })
+
+          expect(settled).toMatchObject({ status: "completed", metadata: { status: "completed" } })
+          const first = settled.content?.[0]
+          const text = first?.type === "text" ? first.text : ""
+          expect(text).toContain(`<subagent sessionID="${outputSessionID(settled.metadata)}" state="completed">`)
+          expect(text).toContain(childText)
+          expect(text).toContain("Files written:\n- index.html")
+          // The reviewer read the file and reported back before delivery.
+          expect(text).toContain(`Review:\n${childText}`)
+          const children = (yield* sessions.list({ parentID: parent.id })).data
+          expect(children).toHaveLength(2)
+          expect(children.map((child) => child.title).sort()).toEqual([
+            "Review: writer builds the page",
+            "writer builds the page",
+          ])
+        }),
+      ),
+    ),
+  )
+
+  it.live("warns when two subagents write the same file", () =>
+    tmpdirScoped().pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+          const sessions = yield* Session.Service
+          const parent = yield* sessions.create({ location, model: parentModel })
+          yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+          const run = (id: string, description: string) =>
+            executeTool(registry, {
+              sessionID: parent.id,
+              ...toolIdentity,
+              call: {
+                type: "tool-call",
+                id,
+                name: SubagentTool.name,
+                input: { agent: "fallback", description, prompt: "build" },
+              },
+            })
+          const textOf = (settled: ToolExecution) => {
+            const first = settled.content?.[0]
+            return first?.type === "text" ? first.text : ""
+          }
+
+          const first = yield* run("call-writer-one", "writer builds the page")
+          expect(textOf(first)).not.toContain("also written by another subagent")
+          const second = yield* run("call-writer-two", "writer builds the shop")
+          expect(textOf(second)).toContain(
+            "Warning: these files were also written by another subagent in this turn: index.html. Reconcile the overlap before delivering.",
+          )
         }),
       ),
     ),

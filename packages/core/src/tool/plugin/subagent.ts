@@ -12,6 +12,7 @@ import { Permission } from "../../permission.js"
 import { Session } from "../../session.js"
 import { SessionSchema } from "../../session/schema.js"
 import { SubagentCompletion } from "../../session/subagent-completion.js"
+import { SubagentFiles } from "../../session/subagent-files.js"
 import { SubagentJob } from "../../session/subagent-job.js"
 
 export const name = "subagent"
@@ -71,6 +72,59 @@ export const Plugin = {
     const permission = yield* Permission.Service
     const models = yield* Model.Service
     const subagents = yield* SubagentJob.Service
+
+    // Peer review for a finished foreground child: when the child wrote
+    // files, a reviewer subagent reads them and reports issues before the
+    // parent sees the result, so broken work never reaches the final answer
+    // unchecked. Best-effort — any failure returns no review and the turn
+    // continues with the child's own output. The reviewer is a read-only
+    // leaf, so a review never triggers another review.
+    const reviewWrittenFiles = (input: {
+      parentSessionID: SessionSchema.ID
+      childID: SessionSchema.ID
+      childModel: Model.Ref | undefined
+      fallbackModel: Model.Ref | undefined
+      agentID: Agent.ID
+      description: string
+      files: readonly string[]
+    }) =>
+      Effect.gen(function* () {
+        if (input.agentID === Agent.ID.make("reviewer")) return undefined
+        const reviewer = yield* agents.resolve("reviewer")
+        if (reviewer === undefined) return undefined
+        const review = yield* sessions.create({
+          parentID: input.parentSessionID,
+          title: `Review: ${input.description}`,
+          agent: reviewer.id,
+          model: input.childModel ?? input.fallbackModel,
+        })
+        yield* sessions.prompt({
+          sessionID: review.id,
+          text: [
+            "You are reviewing work another agent just finished.",
+            `It changed these files in session ${input.childID} for "${input.description}":`,
+            ...input.files.map((file) => `- ${file}`),
+            "Read them and report every issue you find with the file and line, or confirm the work is sound. Do not edit any files.",
+          ].join("\n"),
+        })
+        // The review is a subagent job like any other: without start there
+        // is no job for block to wait on, and the review silently vanishes.
+        yield* subagents.start({
+          kind: "subagent" as const,
+          parentSessionID: input.parentSessionID,
+          childSessionID: review.id,
+          agent: reviewer.name,
+          description: `Review: ${input.description}`,
+        })
+        const result = yield* jobs.block({ id: review.id, sessionID: input.parentSessionID }).pipe(
+          Effect.onInterrupt(() =>
+            Effect.all([sessions.interrupt(review.id), jobs.cancel(review.id)], { discard: true }),
+          ),
+        )
+        if (result?.type === "backgrounded") return undefined
+        if (result?.info.status !== "completed") return undefined
+        return result.info.output ?? SubagentCompletion.NO_TEXT
+      })
 
     const resolveModel = Effect.fn("SubagentTool.resolveModel")(function* (input: string) {
       const ref = yield* Effect.try({
@@ -132,7 +186,11 @@ export const Plugin = {
                     ),
                   )
               }
-              const limit = Config.latest(yield* config.entries(), "experimental")?.subagent_depth ?? 1
+              // Two levels by default: a subagent may delegate once, so a
+              // planner can send an explorer or a builder can split its own
+              // front, and the grandchild is the leaf. An explicit
+              // experimental.subagent_depth still wins.
+              const limit = Config.latest(yield* config.entries(), "experimental")?.subagent_depth ?? 2
               if (depth >= limit)
                 return yield* new ToolFailure({
                   message: `Subagent depth limit reached (${limit}). Increase "experimental.subagent_depth" to allow nested subagents.`,
@@ -249,10 +307,52 @@ export const Plugin = {
                 })
               if (result?.info.status === "cancelled")
                 return yield* new ToolFailure({ message: `Subagent cancelled (sessionID: ${child.id})` })
+              const output = result?.info.output ?? SubagentCompletion.NO_TEXT
+              // Files, overlap, and peer review for a finished foreground
+              // child: the files it wrote are listed for the parent, a
+              // reviewer checks them, and files another subagent in this
+              // turn also wrote are flagged so the parent reconciles the
+              // overlap before delivering. Nothing here can fail the turn:
+              // any failure leaves the child's own output untouched.
+              const enriched = yield* Effect.gen(function* () {
+                const files = SubagentFiles.writtenFiles(yield* sessions.context(child.id))
+                if (files.length === 0) return output
+                const siblings = yield* sessions.list({ parentID: context.sessionID })
+                const overlaps = SubagentFiles.overlappingFiles(
+                  files,
+                  yield* Effect.forEach(
+                    siblings.data.filter((sibling) => sibling.id !== child.id),
+                    (sibling) =>
+                      Effect.gen(function* () {
+                        return SubagentFiles.writtenFiles(yield* sessions.context(sibling.id))
+                      }),
+                    { concurrency: "unbounded" },
+                  ),
+                )
+                const review = yield* reviewWrittenFiles({
+                  parentSessionID: context.sessionID,
+                  childID: child.id,
+                  childModel: child.model,
+                  fallbackModel: model,
+                  agentID: agent.id,
+                  description: input.description,
+                  files,
+                })
+                return [
+                  output,
+                  ["Files written:", ...files.map((file) => `- ${file}`)].join("\n"),
+                  ...(overlaps.length === 0
+                    ? []
+                    : [
+                        `Warning: these files were also written by another subagent in this turn: ${overlaps.join(", ")}. Reconcile the overlap before delivering.`,
+                      ]),
+                  ...(review === undefined ? [] : [`Review:\n${review}`]),
+                ].join("\n\n")
+              }).pipe(Effect.catch(() => Effect.succeed(output)))
               return {
                 sessionID: child.id,
                 status: "completed" as const,
-                output: result?.info.output ?? SubagentCompletion.NO_TEXT,
+                output: enriched,
               }
             }).pipe(
               Effect.map((output) => ({

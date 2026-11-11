@@ -286,9 +286,15 @@ export function effortFromMetadata(metadata: Record<string, unknown> | undefined
   return "automatico"
 }
 
-/** Multi-agent toggle from prompt metadata; only an explicit true turns it on. */
+/**
+ * Multi-agent toggle from prompt metadata; on unless explicitly turned off.
+ * Multi-agent is a property of the engine, not of the composer's toggle: a
+ * prompt that carries no metadata — CLI, ACP, schedules, child sessions —
+ * runs multi-agent, exactly like a prompt sent from the composer with the
+ * toggle on. Only an explicit false turns it off for that turn.
+ */
 export function multiAgentFromMetadata(metadata: Record<string, unknown> | undefined): boolean {
-  return metadata?.[MULTI_AGENT_METADATA_KEY] === true
+  return metadata?.[MULTI_AGENT_METADATA_KEY] !== false
 }
 
 /** Effort from the session model's reasoning variant, when one is set. */

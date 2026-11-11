@@ -5,7 +5,7 @@ import { Persist, persisted } from "@/runtime/persistence/storage"
 import { Persistence } from "@/runtime/persistence/schema"
 import { usePluginHost } from "@/runtime/plugin/host"
 import { useServer } from "@/runtime/server/current"
-import { latestBuildPreview } from "./preview-link"
+import { latestBuildPreview, collectPreviewMessages } from "./preview-link"
 
 const PreviewAutoOpenState = Persistence.struct({
   /** Session keys to the preview events already opened by themselves, keyed by message and file, so a preview the
@@ -30,7 +30,16 @@ export function PreviewAutoOpen(props: { session: MountedSession; active?: boole
     if (props.active === false) return
 
     const session = props.session
-    const preview = latestBuildPreview(server.ctx.data.session.message.list(session.id))
+    // The parent's messages plus every descendant session's, in time order:
+    // a subagent writes its HTML in its own session, and the preview has to
+    // see it as soon as the file exists.
+    const preview = latestBuildPreview(
+      collectPreviewMessages(
+        session.id,
+        server.ctx.data.session.list(),
+        server.ctx.data.session.message.list,
+      ),
+    )
 
     // One open per Build turn and file: the event of a finished write and
     // the event of the finished message's link share the message, so they
