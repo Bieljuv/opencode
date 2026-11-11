@@ -436,6 +436,10 @@ const layer = Layer.effect(
             toolChoice: stepLimitReached ? "none" : undefined,
             webSocket: "session",
             inputTokens: estimate,
+            // Gateway mode: the classified complexity rides to the server
+            // on the primary request, so a complex turn routes to the
+            // gateway's paid head first instead of entering as "simples".
+            complexity,
           })
           .pipe(
             // The hook event holds every message from before images are bounded, screenshots included, and is a separate

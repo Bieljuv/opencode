@@ -28,6 +28,36 @@ describe("ManosTech", () => {
     }),
   )
 
+  it.effect("carries the turn complexity to the gateway on the wire", () =>
+    Effect.gen(function* () {
+      const calls: Array<Call> = []
+      const capture = dynamicResponse((input) =>
+        Effect.gen(function* () {
+          yield* observe(calls, input)
+          return input.respond("", { status: 500 })
+        }),
+      )
+      // The router classifies the turn in the app; the primary request
+      // carries it as an http.body overlay, merged over the provider
+      // body after validation — the gateway reads it as
+      // `manostech_complexidade` and routes a complex turn to its paid
+      // head first instead of treating every turn as simple.
+      yield* ai
+        .generate(
+          ai.request({
+            model: ManosTech.configure({ apiKey: "key-1" }).model("auto"),
+            prompt: "Hi",
+            http: { body: { manostech_complexidade: "complexa" } },
+          }),
+        )
+        .pipe(Effect.provide(capture), Effect.ignore)
+      expect(calls).toHaveLength(1)
+      const body = JSON.parse(calls[0]!.body) as Record<string, unknown>
+      expect(body.model).toBe("auto")
+      expect(body.manostech_complexidade).toBe("complexa")
+    }),
+  )
+
   it.effect("posts image generations to the panel's live /v1 gateway as the gateway model", () =>
     Effect.gen(function* () {
       const calls: Array<Call> = []
