@@ -37,7 +37,7 @@ describe("logging machine", () => {
         { type: "export.requested", reply: second },
         { type: "netlog.stopped", attempt: 2 },
         { type: "export.requested", reply: third },
-        { type: "archive.succeeded", attempt: 3, output: "/downloads/opencode-debug.zip" },
+        { type: "archive.succeeded", attempt: 3, output: "/downloads/manostech-debug.zip" },
         { type: "netlog.started", attempt: 4, path: netlog },
       ],
       logging,
@@ -46,7 +46,7 @@ describe("logging machine", () => {
     expect(result.commands).toEqual([
       { type: "stop-netlog", attempt: 2 },
       { type: "write-archive", attempt: 3, netLogPath: netlog },
-      { type: "resolve-export", replies: [first, second, third], output: "/downloads/opencode-debug.zip" },
+      { type: "resolve-export", replies: [first, second, third], output: "/downloads/manostech-debug.zip" },
       { type: "start-netlog", attempt: 4, mode: "restart" },
     ])
     expect(result.state).toEqual({ status: "idle", attempt: 4, netLog: "active", netLogPath: netlog })

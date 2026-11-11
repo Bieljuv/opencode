@@ -14,6 +14,7 @@ import {
   type ClientGateError,
   type ClientGateEvent,
 } from "./machine"
+import { transitionExportLogs, type ExportLogsState } from "./export-logs"
 import "./gate.css"
 
 /**
@@ -39,6 +40,7 @@ export function ManosTechClientGate(props: { api: ElectronAPI }) {
   const [confirmPassword, setConfirmPassword] = createSignal("")
   const [mismatch, setMismatch] = createSignal(false)
   const [copied, setCopied] = createSignal(false)
+  const [exportLogs, setExportLogs] = createSignal<ExportLogsState>("idle")
 
   const queue: ClientGateEvent[] = []
   let revalidateTimer: ReturnType<typeof setTimeout> | undefined
@@ -209,6 +211,29 @@ export function ManosTechClientGate(props: { api: ElectronAPI }) {
     }
   }
 
+  // A exportação de logs a partir da tela de login: o mesmo exportador que
+  // o menu e a página de erro já usam, sem exigir sessão. O zip cai na
+  // pasta Downloads e o Explorer abre com ele selecionado; a tela só mostra
+  // a confirmação genérica (ou o erro genérico), nunca detalhe técnico.
+  const exportLogsNow = () => {
+    const next = transitionExportLogs(exportLogs(), {
+      type: "export.requested",
+      available: !!platform.exportDebugLogs,
+    })
+    setExportLogs(next.state)
+
+    if (next.effects.length === 0) return
+
+    const runExport = platform.exportDebugLogs
+
+    if (!runExport) return
+
+    void runExport().then(
+      () => setExportLogs(transitionExportLogs(exportLogs(), { type: "export.succeeded" }).state),
+      () => setExportLogs(transitionExportLogs(exportLogs(), { type: "export.failed" }).state),
+    )
+  }
+
   const forgotBusy = () => {
     const current = state()
 
@@ -319,6 +344,23 @@ export function ManosTechClientGate(props: { api: ElectronAPI }) {
             <Button variant="outline" disabled={loginBusy()} onClick={() => dispatch({ type: "google.submitted" })}>
               {language.t("client.login.google")}
             </Button>
+          </Show>
+          <Show when={platform.platform === "desktop" && platform.exportDebugLogs}>
+            <Button
+              variant="ghost"
+              disabled={exportLogs() === "exporting" || loginBusy()}
+              onClick={exportLogsNow}
+            >
+              {language.t("command.logs.export")}
+            </Button>
+            <Show when={exportLogs() === "exported"}>
+              <p role="status">{language.t("client.login.exportLogs.exported")}</p>
+            </Show>
+            <Show when={exportLogs() === "failed"}>
+              <span class="client-gate-error" role="alert">
+                {language.t("common.requestFailed")}
+              </span>
+            </Show>
           </Show>
         </GateShell>
       </Match>
