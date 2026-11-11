@@ -391,7 +391,7 @@ describe("ponytail command", () => {
 })
 
 describe("graphify skill", () => {
-  test("skill graphify is the upstream content with pt-BR triggers", async () => {
+  test("skill graphify is the adapted content with pt-BR triggers", async () => {
     const dir = await makeTmp()
     const { ctx, skills, tools, commands } = makeCtx(dir)
     await plugin.setup(ctx as unknown as Context)
@@ -406,14 +406,17 @@ describe("graphify skill", () => {
     for (const trigger of ["graphify", "mapa do projeto", "mapa do código", "onde fica", "quem chama", "quem usa", "como funciona"]) {
       expect(info.description ?? "").toContain(trigger)
     }
-    // Upstream body, adapted in ~10 lines so it passes the repo's own
-    // SkillSpector gate (the upstream body scores 88/100 CRITICAL: `rm -f`
-    // on its own cache files, "without warning", "do not ask the user" and
-    // unpinned `uv tool run`). The fast path, the honesty rules and the
-    // "no API key" line are the upstream text, with the flagged patterns
-    // reworded (deleting the skill's own cache files now uses the Python
-    // interpreter, `uv tool run` is pinned to graphifyy==0.9.106, and the
-    // 5,000-node rule is phrased positively).
+    // Adapted from the upstream Graphify skill: the pipeline, the honesty
+    // rules and the fast path are kept, but the supporting procedures the
+    // skill cites live in references/ beside it (the upstream ships them
+    // separately and they were missing), Step 1 only detects the tool —
+    // it never installs, downloads or upgrades anything — and when the
+    // tool is not available the agent builds the native lightweight map
+    // (see the "graphify references" suite). The body names no provider,
+    // model, key or install command: the upstream tip that printed a
+    // provider key and an install command to the user is gone, so the
+    // old excuse ("Claude Code" / "python3" are never visible text) no
+    // longer holds for any line of the body.
     expect(info.content).toContain("# /graphify")
     expect(info.content).toContain("## Usage")
     expect(info.content).toContain("## Honesty Rules")
@@ -430,12 +433,19 @@ describe("graphify skill", () => {
     expect(info.content).not.toContain("Do not run any commands")
     expect(info.content).not.toContain("without warning")
     expect(info.content).not.toContain("uv tool run --from graphifyy ")
-    expect(info.content).toContain("uv tool run --from graphifyy==0.9.106")
-    // The body is upstream-faithful, so it keeps the upstream words for the
-    // tools it drives ("python3", "Claude Code" as one host example). Those
-    // are instructions the model reads, never visible text: the visible
-    // masking is enforced by the system prompt, not by editing the body.
-    expect(info.content).toContain("python3")
+    // Mask lock: no provider/model/key/install word anywhere in the body.
+    // Lowercased once, so "Claude Code", "GEMINI_API_KEY" and "GitHub"
+    // cannot hide behind capital letters. Bare "model" / "provider" are
+    // not on the list: the body uses "the model" generically once, and
+    // the mask bans names, not the generic word.
+    const lower = info.content.toLowerCase()
+    for (const word of ["claude", "opencode", "gemini", "google", "anthropic", "openai", "github", "pip install", "uv tool install", "uv tool run", "break-system-packages", "sponsors", "whisper", "free", "paid"]) {
+      expect(lower).not.toContain(word)
+    }
+    // The native map is a real procedure with fixed outputs, not a
+    // promise in the system prompt.
+    expect(info.content).toContain("## Native lightweight map")
+    expect(info.content).toContain("graphify-out/GRAPH_REPORT.md")
 
     // Graphify is a behavior instruction: no tool, only the skill and the command.
     expect(tools.get("graphify")).toBeUndefined()
@@ -461,6 +471,60 @@ describe("graphify skill", () => {
       for (const word of forbidden) {
         expect(graphifyCommandText(args)).not.toContain(word)
       }
+    }
+  })
+})
+
+describe("graphify references", () => {
+  const skillDir = new URL("../skills/graphify/", import.meta.url)
+
+  function citedReferences(content: string): string[] {
+    return [...new Set([...content.matchAll(/references\/([A-Za-z0-9_.-]+\.md)/g)].map((m) => m[1] as string))]
+  }
+
+  test("every references/ file the skill cites exists beside SKILL.md", async () => {
+    const info = buildGraphifySkill()
+    const cited = citedReferences(info.content)
+    // The eight procedures the skill cites. Locking the count means a
+    // future citation cannot point at a file nobody wrote.
+    expect(cited).toHaveLength(8)
+    for (const name of cited) {
+      expect(await Bun.file(new URL(`references/${name}`, skillDir)).exists()).toBe(true)
+    }
+  })
+
+  test("cited references are mask-clean and never install anything", async () => {
+    const info = buildGraphifySkill()
+    const forbidden = ["claude", "opencode", "gemini", "google", "anthropic", "openai", "github", "pip install", "uv tool install", "uv tool run", "break-system-packages", "sponsors", "whisper", "free", "paid"]
+    const gate = ["rm -f", "do not ask the user", "never ask the user", "do not run any commands", "without warning"]
+    for (const name of citedReferences(info.content)) {
+      const text = (await Bun.file(new URL(`references/${name}`, skillDir)).text()).toLowerCase()
+      for (const word of [...forbidden, ...gate]) {
+        expect(text).not.toContain(word)
+      }
+    }
+  })
+
+  test("step 1 detects the tool and never installs it", () => {
+    const info = buildGraphifySkill()
+    expect(info.content).toContain("Detect only")
+    for (const word of ["uv tool install", "pip install", "uv tool run", "break-system-packages"]) {
+      expect(info.content).not.toContain(word)
+    }
+    expect(info.content).toContain("stop the pipeline here and run the native lightweight map")
+  })
+
+  test("the native lightweight map is a real procedure with fixed outputs", () => {
+    const info = buildGraphifySkill()
+    for (const marker of [
+      "## Native lightweight map",
+      "graphify-out/GRAPH_REPORT.md",
+      "graphify-out/graph.json",
+      "Module map",
+      "God nodes",
+      "never run `graphify query`",
+    ]) {
+      expect(info.content).toContain(marker)
     }
   })
 })
