@@ -48,6 +48,14 @@ export const Info = Schema.Struct({
             { action: "read", resource: "*.env", effect: "ask" },
             { action: "read", resource: "*.env.*", effect: "ask" },
             { action: "read", resource: "*.env.example", effect: "allow" },
+            // ManosTech: approval before acting. File edits ask the user
+            // first instead of running silently; the user can answer
+            // "always" once per project and the rule is saved.
+            { action: "edit", resource: "*", effect: "ask" },
+            // ManosTech: mutating shell commands ask the user first
+            // (see ShellParse.isMutatingCommand). Read-only commands keep
+            // using the "shell" action and stay allowed.
+            { action: "shell.mutate", resource: "*", effect: "ask" },
           ],
         }) satisfies Info,
     })),

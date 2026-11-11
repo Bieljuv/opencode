@@ -123,9 +123,16 @@ export const Plugin = {
         }),
       )
       yield* access.authorizeExternal([target, ...directories], context)
+      // ManosTech: approval before acting. A command that can change
+      // anything asks the user first under the "shell.mutate" action; a
+      // read-only command keeps the "shell" action and stays allowed.
+      // One request covers the whole call, read-only and mutating parts
+      // together, so a mixed command prompts once, not once per part.
       if (parsed.commands.length > 0)
         yield* permission.assert({
-          action: name,
+          action: parsed.commands.some((command) => ShellParse.isMutatingCommand(command.resource, invocation.shell))
+            ? "shell.mutate"
+            : name,
           resources: parsed.commands.map((command) => command.resource),
           save: parsed.commands.map((command) => command.save),
           ...Permission.invocation(context),

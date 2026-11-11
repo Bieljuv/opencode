@@ -175,6 +175,30 @@ export const FAILED_TOOL_RETRY =
   "Failed tool calls: when a tool call fails, never repeat the identical call. Read the error message — including any closest lines it shows — and adjust the call before trying again; when the failure is about content that does not match, re-read the file first. If the same operation fails a second time, stop and tell the user what went wrong and what you need, instead of trying again."
 
 /**
+ * ManosTech approval before building, appended to the system prompt of
+ * every turn. The agent never creates, edits, or deletes files, and never
+ * runs a command that changes files or system state, before the user has
+ * approved the plan. The plan is shown in chat and confirmed with the
+ * question tool; the permission system asks again for each mutation
+ * unless the user answers "always", so even a skipped plan cannot build
+ * silently. Without this, the agent starts building the moment it is
+ * asked, which is the opposite of how the user works.
+ */
+export const APPROVAL_BEFORE_BUILD =
+  "Approval before building: never create, edit, or delete files, and never run a command that changes files or system state, before the user has approved the plan. When a request means building or changing something, first show a short plan in chat — what you will build, the main files and steps, and what kind of delivery it is — and ask the user to confirm with the question tool (options to approve or to adjust). Only start building after the user says yes. Read-only exploration, questions, and explanations never need approval. An approval covers the plan as presented; if the work grows beyond it, show the updated plan and ask again. If the user already approved this exact work earlier in the conversation, continue without asking again."
+
+/**
+ * ManosTech delivery rules, appended to the system prompt of every turn.
+ * The agent identifies what the delivery is before building it — a system,
+ * a website, or a demo — and never downgrades a system to a demo. Every
+ * build is born ready to publish, with the same code and structure locally
+ * and in production. These rules live here, not in per-provider prompts,
+ * so the agent keeps the same posture no matter which model answers.
+ */
+export const DELIVERY_RULES =
+  "Delivery rules: first identify what the request is — a system (an app with a backend, database, users, or logins), a website (pages and content, no backend logic), or a demo (a throwaway preview). Never downgrade a system to a demo, and never present media as a system. Every build is born ready to publish: the same code and structure locally and in production; the database through Supabase, with the SQL in the project; secrets only through environment variables; a mock or simulation only when a credential is missing, never as architecture; never localStorage as the final destination."
+
+/**
  * ManosTech multi-agent, appended to the system prompt only while the
  * composer's multi-agent toggle is on. The agent splits work that has
  * independent fronts across parallel subagents and joins the results;
@@ -236,6 +260,16 @@ export const baseTranscript = (input: {
       // a weak first attempt), never for a trivial request, and offers it
       // instead when unsure.
       SystemPart.make(ARENA_AUTO),
+      // ManosTech approval before building: embedded in every message,
+      // invisible to the user. The agent shows a short plan and asks the
+      // user to confirm it with the question tool before creating or
+      // editing files or running a command that changes anything.
+      SystemPart.make(APPROVAL_BEFORE_BUILD),
+      // ManosTech delivery rules: embedded in every message, invisible to
+      // the user. The agent identifies the delivery (system, website, or
+      // demo) before building it and never downgrades a system to a demo;
+      // every build is born ready to publish.
+      SystemPart.make(DELIVERY_RULES),
       // ManosTech multi-agent: only while the toggle is on. The agent splits
       // independent fronts across parallel subagents and joins the results;
       // the user watches each front live by its task label.
