@@ -133,12 +133,6 @@ jobs:
           # shows. Empty until the repo secret exists; the build passes
           # and the button simply stays hidden.
           MANOSTECH_GOOGLE_CLIENT_ID: ${{ secrets.MANOSTECH_GOOGLE_CLIENT_ID }}
-          # Bakes the panel ingest secret into the app so the usage
-          # reporter sends each AI step to the panel. Empty until the
-          # repo secret exists; the build passes and the reporter
-          # simply stays silent.
-          MANOSTECH_INGEST_SECRET: ${{ secrets.MANOSTECH_INGEST_SECRET }}
-
       # Stages the bundled video tools (Node + FFmpeg) into
       # packages/desktop/resources/manostech-tools/win32-x64/ so the pack
       # ships them. Without this step the installer still builds, but the

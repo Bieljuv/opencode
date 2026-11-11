@@ -177,7 +177,6 @@ export const dict = {
   "dialog.project.edit.color.select": "{{color}} 색상 선택",
   "dialog.project.edit.worktree.startup": "작업 공간 시작 스크립트",
   "dialog.project.edit.worktree.startup.placeholder": "예: bun install",
-  "dialog.usageExceeded.dontShowAgain": "다시 표시하지 않기",
 
   "toast.permissions.autoaccept.on.title": "권한 자동 수락 중",
   "toast.permissions.autoaccept.on.description": "권한 요청이 자동으로 승인됩니다",
@@ -516,7 +515,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "터미널 표시/숨기기",
   "desktop.menu.toggleFileTree": "파일 트리 표시/숨기기",
   "desktop.menu.reload": "새로 고침",
-  "desktop.menu.toggleDeveloperTools": "개발자 도구 표시/숨기기",
   "desktop.menu.actualSize": "실제 크기",
   "desktop.menu.zoomIn": "확대",
   "desktop.menu.zoomOut": "축소",

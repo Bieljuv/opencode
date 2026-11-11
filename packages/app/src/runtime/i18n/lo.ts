@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "ສະຫຼັບສະຖານີ",
   "desktop.menu.toggleFileTree": "ປິດ/ເປີດ File Tree",
   "desktop.menu.reload": "ໂຫຼດໃໝ່",
-  "desktop.menu.toggleDeveloperTools": "ສະຫຼັບເຄື່ອງມືນັກພັດທະນາ",
   "desktop.menu.actualSize": "ຂະໜາດຕົວຈິງ",
   "desktop.menu.zoomIn": "ຊູມເຂົ້າ",
   "desktop.menu.zoomOut": "ຊູມອອກ",
@@ -594,7 +593,6 @@ export const dict = {
   "workspace.status.error": "ບໍ່ສາມາດກວດສອບສະຖານະ git ໄດ້.",
   "workspace.status.dirty": "ກວດພົບການປ່ຽນແປງທີ່ບໍ່ຮວມຢູ່ໃນບ່ອນເຮັດວຽກນີ້.",
   "workspace.delete.button": "ລຶບພື້ນທີ່ເຮັດວຽກ",
-  "dialog.usageExceeded.dontShowAgain": "ຢ່າສະແດງອີກ",
   "desktop.menu.installCli": "ຕິດຕັ້ງ CLI...",
   "desktop.cli.installed.title": "ຕິດຕັ້ງ CLI ແລ້ວ",
   "desktop.cli.installed.message":

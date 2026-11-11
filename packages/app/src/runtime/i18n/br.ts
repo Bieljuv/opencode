@@ -288,7 +288,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Alternar terminal",
   "desktop.menu.toggleFileTree": "Alternar árvore de arquivos",
   "desktop.menu.reload": "Recarregar",
-  "desktop.menu.toggleDeveloperTools": "Alternar ferramentas de desenvolvedor",
   "desktop.menu.actualSize": "Tamanho real",
   "desktop.menu.zoomIn": "Ampliar",
   "desktop.menu.zoomOut": "Reduzir",
@@ -510,7 +509,6 @@ export const dict = {
   "dialog.project.edit.color.select": "Selecionar cor {{color}}",
   "dialog.project.edit.worktree.startup": "Script de inicialização do espaço de trabalho",
   "dialog.project.edit.worktree.startup.placeholder": "Ex.: bun install",
-  "dialog.usageExceeded.dontShowAgain": "Não mostrar novamente",
 
   "toast.permissions.autoaccept.on.title": "Aceitando permissões automaticamente",
   "toast.permissions.autoaccept.on.description": "Solicitações de permissão serão aprovadas automaticamente",
@@ -843,6 +841,17 @@ export const dict = {
   "settings.extensions.tab.mcps": "MCP",
   "settings.extensions.tab.skills": "Habilidades",
   "settings.extensions.availableAll": "Disponível para todos os projetos",
+  "settings.extensions.skills.description": "Chame uma habilidade no chat com /nome — algumas entram sozinhas quando o pedido pede.",
+  "settings.extensions.skills.descriptions.arena":
+    "Quando a resposta não ficou boa: vários agentes tentam a mesma tarefa e só a melhor solução volta.",
+  "settings.extensions.skills.descriptions.graphify":
+    "Mapa do projeto: entende onde fica cada coisa no código antes de responder.",
+  "settings.extensions.skills.descriptions.hyperframes":
+    "Cria vídeos a partir das telas do projeto, quadro a quadro.",
+  "settings.extensions.skills.descriptions.openverse": "Acha sons e músicas com licença aberta para o vídeo.",
+  "settings.extensions.skills.descriptions.ponytail":
+    "Mudanças enxutas: a menor alteração que resolve, sem complicar.",
+  "settings.extensions.skills.descriptions.real-sfx": "Coloca som de verdade no frame exato do vídeo.",
   "settings.extensions.manageConfig": "Gerenciar no arquivo de configuração do ManosTech.AI",
   "project.settings.extensions.description": "Ver extensões disponíveis para este projeto",
   "project.settings.extensions.tab.lsps": "LSPs",
@@ -1183,11 +1192,6 @@ export const dict = {
   "session.error.signedOut.signIn": "Entrar novamente",
   "session.error.unreachable": "Não foi possível alcançar este servidor",
   "session.error.unreachable.description": "{{server}} não está respondendo, então esta sessão não pode ser carregada. Ela abrirá automaticamente quando o servidor estiver acessível novamente.",
-  "session.goLimit.extraUsage": "Ativar Uso Extra",
-  "session.goLimit.reset": "Ele é zerado às {{time}}.",
-  "session.goLimit.switchFree": "Mudar para um modelo gratuito",
-  "session.goLimit.title": "Limite de uso do Go atingido.",
-  "session.goLimit.titleNamed": "Limite de uso do Go {{name}} atingido.",
   "session.location.choose": "Escolher diretório",
   "session.location.copyBranch": "Copiar nome da branch",
   "session.location.copyPath": "Copiar caminho",

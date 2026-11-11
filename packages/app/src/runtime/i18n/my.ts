@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Terminal ပြောင်းရန်",
   "desktop.menu.toggleFileTree": "ဖိုင်သစ်ပြောင်းရန်",
   "desktop.menu.reload": "ပြန်လည်စတင်ပါ။",
-  "desktop.menu.toggleDeveloperTools": "ဆော့ဖ်ဝဲရေးသားသူ တူးလ်များကို ပြောင်းရန်",
   "desktop.menu.actualSize": "အမှန်တကယ်အရွယ်အစား",
   "desktop.menu.zoomIn": "ဇူးမ်ချဲ့ပါ။",
   "desktop.menu.zoomOut": "ချုံ့ပါ",
@@ -605,7 +604,6 @@ export const dict = {
   "workspace.status.error": "git အခြေအနေကို အတည်မပြုနိုင်ပါ။",
   "workspace.status.dirty": "ဤလုပ်ငန်းခွင်တွင် ပေါင်းစပ်မထားသော အပြောင်းအလဲများကို တွေ့ရှိခဲ့သည်။",
   "workspace.delete.button": "အလုပ်ခွင်ကို ဖျက်ပါ။",
-  "dialog.usageExceeded.dontShowAgain": "ထပ်မပြပါနှင့်",
   "desktop.menu.installCli": "CLI ကို ထည့်သွင်းရန်...",
   "desktop.cli.installed.title": "CLI ထည့်သွင်းပြီးပါပြီ",
   "desktop.cli.installed.message":

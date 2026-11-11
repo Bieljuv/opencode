@@ -172,6 +172,17 @@ export const DIRECT_REPLY =
   "Direct reply: a greeting or a question that is not about the active task is not a request to continue that task. When the user greets you (\"oi\", \"olá\", \"bom dia\", \"boa tarde\", \"boa noite\", \"hey\", \"hello\"), reply with a greeting in chat and then wait for the user — do not resume the previous task, do not call tools, do not edit files, and do not create a task card. When the user asks a question unrelated to the work in progress, answer it directly in chat (using a tool only if the answer itself needs one, never to resume the task) and then wait. The previous task only resumes when the user explicitly asks to continue it (\"continue\", \"continua\", \"pode continuar\", \"volta para a tarefa\", \"segue\", \"prossiga\") or gives a new build instruction. A question about the active task gets a direct chat answer too; only resume the task if the user asks you to."
 
 /**
+ * ManosTech web search first, appended to the system prompt of every
+ * turn. The search tools exist, but nothing told the agent to use
+ * them before answering — so a question about something current got
+ * an answer from memory, or "I don't have that information", when a
+ * search would have settled it. The rule is scoped: only facts that
+ * are current or uncertain trigger a search, never every turn.
+ */
+export const WEB_SEARCH_FIRST =
+  "Web search first: before answering a question about anything current or that may have changed — news, prices, versions, releases, documentation, availability, or a fact you are unsure about — search the web with the websearch tool (and open the relevant pages with webfetch) before answering. Never answer from memory alone when a search could settle it, and never invent a current fact, price, version, or link. If the search finds nothing, say so plainly instead of guessing."
+
+/**
  * ManosTech failed tool calls, appended to the system prompt of every turn.
  * A failed tool call is information, not a cue to try the same call again:
  * the edit tool already returns the closest lines when oldString misses,
@@ -260,6 +271,10 @@ export const baseTranscript = (input: {
       // continue the previous task: the agent answers it directly in chat
       // and waits, and only resumes the task on an explicit ask.
       SystemPart.make(DIRECT_REPLY),
+      // ManosTech web search first: embedded in every message, invisible
+      // to the user. Before answering about anything current or uncertain,
+      // the agent searches the web instead of answering from memory.
+      SystemPart.make(WEB_SEARCH_FIRST),
       // ManosTech failed tool calls: embedded in every message, invisible
       // to the user. A failed call is never repeated identically; the agent
       // reads the error, adjusts, and after a second failure of the same

@@ -266,7 +266,12 @@ export const layer = Layer.effect(
 
     const state = State.create<Settings, Editor>({
       name: "session-compaction",
-      initial: () => ({ auto: true, keep: 15_000, precompute: false }),
+      // Background summaries are on by default: writing one takes
+      // 30–60 s, so starting it only when the overflow is already near
+      // stalls the first compaction for almost a minute. With
+      // precompute on, the summary is usually already held when
+      // compaction is due, and the turn swaps it in instead of waiting.
+      initial: () => ({ auto: true, keep: 15_000, precompute: true }),
       editor: (settings) => ({
         configure: (update) => {
           Object.assign(settings, update)

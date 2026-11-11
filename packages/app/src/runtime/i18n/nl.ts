@@ -219,7 +219,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Terminal tonen of verbergen",
   "desktop.menu.toggleFileTree": "Bestandsstructuur tonen of verbergen",
   "desktop.menu.reload": "Opnieuw laden",
-  "desktop.menu.toggleDeveloperTools": "Ontwikkelaarstools tonen of verbergen",
   "desktop.menu.actualSize": "Werkelijke grootte",
   "desktop.menu.zoomIn": "Inzoomen",
   "desktop.menu.zoomOut": "Uitzoomen",
@@ -435,7 +434,6 @@ export const dict = {
   "dialog.project.edit.color.select": "Kleur {{color}} selecteren",
   "dialog.project.edit.worktree.startup": "Opstartscript voor werkruimte",
   "dialog.project.edit.worktree.startup.placeholder": "bijv. bun install",
-  "dialog.usageExceeded.dontShowAgain": "Niet meer weergeven",
 
   "toast.permissions.autoaccept.on.title": "Machtigingen automatisch accepteren",
   "toast.permissions.autoaccept.on.description": "Toestemmingsverzoeken worden automatisch goedgekeurd",

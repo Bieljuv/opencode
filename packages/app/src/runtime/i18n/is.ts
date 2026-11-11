@@ -578,7 +578,6 @@ export const dict = {
   "workspace.status.dirty": "Ósamræmdar breytingar fundust á þessu vinnusvæði.",
   "workspace.delete.confirm": 'Eyða vinnusvæðinu "{{name}}"?',
   "workspace.delete.button": "Eyða vinnusvæði",
-  "dialog.usageExceeded.dontShowAgain": "Ekki sýna aftur",
   "provider.disconnect.toast.noCredentials.description": "Engin fjarlægjanleg skilríki fundust fyrir {{provider}}.",
   "provider.disconnect.toast.failed.description": "Mistókst að aftengja {{provider}}.",
   "toast.migration.failed.title": "Gagnaflutningur mistókst",

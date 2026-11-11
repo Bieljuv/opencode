@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Comută terminalul",
   "desktop.menu.toggleFileTree": "Comută arborele de fișiere",
   "desktop.menu.reload": "Reîncarcă",
-  "desktop.menu.toggleDeveloperTools": "Comută instrumentele pentru dezvoltatori",
   "desktop.menu.actualSize": "Dimensiune reală",
   "desktop.menu.zoomIn": "Mărește",
   "desktop.menu.zoomOut": "Micșorează",
@@ -570,7 +569,6 @@ export const dict = {
   "workspace.status.dirty": "S-au detectat modificări necomasate în acest spațiu de lucru.",
   "workspace.delete.confirm": "Ștergi spațiul de lucru „{{name}}”?",
   "workspace.delete.button": "Șterge spațiul de lucru",
-  "dialog.usageExceeded.dontShowAgain": "Nu mai afișa",
   "provider.disconnect.toast.noCredentials.description":
     "Nu s-au găsit date de autentificare care pot fi eliminate pentru {{provider}}.",
   "provider.disconnect.toast.failed.description": "Nu s-a putut deconecta {{provider}}.",

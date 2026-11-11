@@ -68,6 +68,8 @@ export namespace TimelineRow {
     text: string
     kind?: "free-limit" | "go-limit" | "budget-limit" | "model-budget-limit"
     resetAt?: number
+    /** Every route refused: the timeline shows guidance below the generic message, never a cause. */
+    exhausted?: boolean
   }> {}
 
   /** The active turn waits to retry its step: `attempt` counts tries, `next` is when the next one starts. */
@@ -215,6 +217,7 @@ export type TimelineRowMap = {
     text: string
     kind?: "free-limit" | "go-limit" | "budget-limit" | "model-budget-limit"
     resetAt?: number
+    exhausted?: boolean
   }
   CompactionQueued: { userMessageID: string; inboxID: string }
   TurnDiff: { userMessageID: string; messageID: string; from: string; files: readonly string[] }

@@ -2,7 +2,8 @@ import { app } from "electron"
 import type { Endpoint } from "@opencode/client/service"
 import { Context, Effect, FileSystem, Layer, Option, Path, Schema } from "effect"
 import { SidecarChanged } from "../../shared/ipc-rpc/events"
-import { CHANNEL, MANOSTECH_INGEST_SECRET } from "../constants"
+import { CHANNEL } from "../constants"
+import { loadApiKey } from "../client-auth/store"
 import { emitIpcEvent } from "../ipc-events"
 import { getMainWindows } from "../windows"
 import { clientFilePath } from "../client-auth/reporter-file"
@@ -74,6 +75,7 @@ const ensure = Effect.fn("BackgroundService.ensure")(function* (mode: Background
   const runFork = Effect.runForkWith(yield* Effect.context<FileSystem.FileSystem | Path.Path>())
   const setup = yield* prepare(mode)
 
+  const ingestApiKey = loadApiKey()
   const run = (version = setup.version) =>
     setup.client.Service.ensure({
       file: setup.file,
@@ -87,13 +89,16 @@ const ensure = Effect.fn("BackgroundService.ensure")(function* (mode: Background
         ...(setup.isolated ? ["--hostname", "0.0.0.0", "--port", String(0x0c0c)] : []),
       ],
       // ManosTech: the usage reporter in the server reads the client identity
-      // from this file and the ingest secret from the environment. The secret
-      // is baked into the main bundle at build time; without it the reporter
-      // stays silent. Login after startup needs no restart: the file is read
-      // fresh on every reported step.
+      // from this file and authenticates with the client's own API key,
+      // which the main reads from its encrypted store and hands to the
+      // sidecar here. No shared secret is baked into the installer: the
+      // key belongs to the logged-in client, and the panel rejects any
+      // event whose client_id is not the key's. Login after startup
+      // needs no restart: the file is read fresh on every reported
+      // step, and the key is re-read on the next service start.
       env: {
         MANOSTECH_CLIENT_FILE: clientFilePath(),
-        ...(MANOSTECH_INGEST_SECRET ? { MANOSTECH_INGEST_SECRET } : {}),
+        ...(ingestApiKey ? { MANOSTECH_INGEST_API_KEY: ingestApiKey } : {}),
         // ManosTech: the bundled video tools (Node + FFmpeg) go on the
         // sidecar's PATH so the agent's shell finds them without installing
         // anything. Nothing is added when the build did not stage them.

@@ -17,6 +17,7 @@ export default {
   "stats.reasoningTokens": "Pensamento",
   "stats.cacheTokens": "Reaproveitado",
   "stats.totalCost": "Custo total",
+  "stats.windowRemaining": "Restam na janela",
   "stats.automatic": "Automático",
   "weeklyUsage.title": "Uso da semana",
   "weeklyUsage.resetsInHours": "reseta em {{hours}}h {{minutes}}min",

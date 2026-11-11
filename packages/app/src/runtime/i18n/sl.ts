@@ -49,7 +49,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Preklopi terminal",
   "desktop.menu.toggleFileTree": "Preklopi drevo datotek",
   "desktop.menu.reload": "Ponovno naloži",
-  "desktop.menu.toggleDeveloperTools": "Preklop orodij za razvijalce",
   "desktop.menu.actualSize": "Dejanska velikost",
   "desktop.menu.zoomIn": "Povečaj",
   "desktop.menu.zoomOut": "Pomanjšaj",
@@ -560,7 +559,6 @@ export const dict = {
   "workspace.status.dirty": "V tem delovnem prostoru so bile zaznane nespojene spremembe.",
   "workspace.delete.confirm": 'Izbrišem delovni prostor "{{name}}"?',
   "workspace.delete.button": "Izbriši delovni prostor",
-  "dialog.usageExceeded.dontShowAgain": "Ne prikaži več",
   "provider.disconnect.toast.noCredentials.description":
     "Za {{provider}} ni bilo mogoče najti odstranljivih poverilnic.",
   "provider.disconnect.toast.failed.description": "Odklop {{provider}} ni uspel.",

@@ -18,16 +18,16 @@ import { withEnv } from "./fixture/env"
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 describe("resolveConfig", () => {
-  test("needs the secret and the client file", () => {
+  test("needs the client key and the client file", () => {
     expect(resolveConfig({})).toBeUndefined()
-    expect(resolveConfig({ MANOSTECH_INGEST_SECRET: "s" })).toBeUndefined()
+    expect(resolveConfig({ MANOSTECH_INGEST_API_KEY: "s" })).toBeUndefined()
     expect(resolveConfig({ MANOSTECH_CLIENT_FILE: "/tmp/c.json" })).toBeUndefined()
   })
 
   test("defaults to the panel ingest URL", () => {
-    expect(resolveConfig({ MANOSTECH_INGEST_SECRET: "s", MANOSTECH_CLIENT_FILE: "/tmp/c.json" })).toEqual({
+    expect(resolveConfig({ MANOSTECH_INGEST_API_KEY: "s", MANOSTECH_CLIENT_FILE: "/tmp/c.json" })).toEqual({
       url: "https://painel-manostech.manostech.workers.dev/api/ingest",
-      secret: "s",
+      apiKey: "s",
       clientFile: "/tmp/c.json",
     })
   })
@@ -35,7 +35,7 @@ describe("resolveConfig", () => {
   test("a custom ingest URL wins over the default", () => {
     expect(
       resolveConfig({
-        MANOSTECH_INGEST_SECRET: "s",
+        MANOSTECH_INGEST_API_KEY: "s",
         MANOSTECH_CLIENT_FILE: "/tmp/c.json",
         MANOSTECH_INGEST_URL: "http://127.0.0.1:9999/api/ingest",
       })?.url,
@@ -65,17 +65,17 @@ describe("parseClientIdentity", () => {
 })
 
 describe("configSkipReason", () => {
-  test("without the secret the reason is sem segredo", () => {
-    expect(configSkipReason({})).toBe("sem segredo")
-    expect(configSkipReason({ MANOSTECH_CLIENT_FILE: "/tmp/c.json" })).toBe("sem segredo")
+  test("without the client key the reason is sem chave do cliente", () => {
+    expect(configSkipReason({})).toBe("sem chave do cliente")
+    expect(configSkipReason({ MANOSTECH_CLIENT_FILE: "/tmp/c.json" })).toBe("sem chave do cliente")
   })
 
-  test("with a secret but no client file the reason is sem arquivo de identidade", () => {
-    expect(configSkipReason({ MANOSTECH_INGEST_SECRET: "s" })).toBe("sem arquivo de identidade")
+  test("with a client key but no client file the reason is sem arquivo de identidade", () => {
+    expect(configSkipReason({ MANOSTECH_INGEST_API_KEY: "s" })).toBe("sem arquivo de identidade")
   })
 
   test("a full config has no skip reason", () => {
-    expect(configSkipReason({ MANOSTECH_INGEST_SECRET: "s", MANOSTECH_CLIENT_FILE: "/tmp/c.json" })).toBeUndefined()
+    expect(configSkipReason({ MANOSTECH_INGEST_API_KEY: "s", MANOSTECH_CLIENT_FILE: "/tmp/c.json" })).toBeUndefined()
   })
 })
 
@@ -98,7 +98,7 @@ describe("report", () => {
   test("without a config it never fails the step", async () => {
     await Effect.runPromise(
       withEnv(
-        { MANOSTECH_INGEST_SECRET: undefined, MANOSTECH_CLIENT_FILE: undefined, MANOSTECH_INGEST_URL: undefined },
+        { MANOSTECH_INGEST_API_KEY: undefined, MANOSTECH_CLIENT_FILE: undefined, MANOSTECH_INGEST_URL: undefined },
         () => report({ model: "manostech/auto", tokens, cost: Money.USD.make(0.001) }),
       ),
     )
@@ -114,7 +114,7 @@ describe("report", () => {
     const run = () =>
       Effect.runPromise(
         withEnv(
-          { MANOSTECH_INGEST_SECRET: "s", MANOSTECH_CLIENT_FILE: missing, MANOSTECH_INGEST_URL: undefined },
+          { MANOSTECH_INGEST_API_KEY: "s", MANOSTECH_CLIENT_FILE: missing, MANOSTECH_INGEST_URL: undefined },
           () =>
             reporter.report({ model: "manostech/auto", tokens, cost: Money.USD.make(0.001) }).pipe(
               Effect.provide(Logger.layer([logger])),
@@ -142,7 +142,7 @@ describe("report", () => {
     const run = () =>
       Effect.runPromise(
         withEnv(
-          { MANOSTECH_INGEST_SECRET: "s", MANOSTECH_CLIENT_FILE: file, MANOSTECH_INGEST_URL: undefined },
+          { MANOSTECH_INGEST_API_KEY: "s", MANOSTECH_CLIENT_FILE: file, MANOSTECH_INGEST_URL: undefined },
           () =>
             reporter.report({ model: "manostech/auto", tokens: noUsage, cost: Money.USD.zero }).pipe(
               Effect.provide(Logger.layer([logger])),
@@ -178,7 +178,7 @@ describe("report", () => {
       await Effect.runPromise(
         withEnv(
           {
-            MANOSTECH_INGEST_SECRET: "s",
+            MANOSTECH_INGEST_API_KEY: "s",
             MANOSTECH_CLIENT_FILE: file,
             MANOSTECH_INGEST_URL: `http://127.0.0.1:${server.port}/api/ingest`,
           },
@@ -189,7 +189,7 @@ describe("report", () => {
         ),
       )
       expect(received).toHaveLength(1)
-      expect(received[0]?.authorization).toBe("Bearer s")
+      expect(received[0]?.authorization).toBe("Bearer " + "s")
       expect(received[0]?.body).toEqual({
         client_id: "abc",
         client_email: "a@b.com",

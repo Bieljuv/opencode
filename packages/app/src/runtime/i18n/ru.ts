@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Переключить терминал",
   "desktop.menu.toggleFileTree": "Переключить дерево файлов",
   "desktop.menu.reload": "Перезагрузить",
-  "desktop.menu.toggleDeveloperTools": "Переключить инструменты разработчика",
   "desktop.menu.actualSize": "Фактический размер",
   "desktop.menu.zoomIn": "Увеличить",
   "desktop.menu.zoomOut": "Уменьшить",
@@ -267,7 +266,6 @@ export const dict = {
 
   "dialog.project.edit.worktree.startup": "Скрипт запуска рабочего пространства",
   "dialog.project.edit.worktree.startup.placeholder": "например, bun install",
-  "dialog.usageExceeded.dontShowAgain": "Больше не показывать",
 
   "toast.permissions.autoaccept.on.title": "Разрешения принимаются автоматически",
   "toast.permissions.autoaccept.on.description": "Запросы на разрешения будут одобряться автоматически",

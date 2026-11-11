@@ -13,7 +13,7 @@ export default {
   "toast.checkFailed.description": "Couldn't check for updates right now. Try again later.",
   "migration.title": "Move from Beta to Stable",
   "migration.description":
-    "For now, Editor IA ManosTech Beta is moving to Editor IA ManosTech Stable. Download version {{version}}, then install Editor IA ManosTech from the disk image to continue receiving updates.",
+    "For now, Editor IA ManosTech Beta is moving to Editor IA ManosTech Stable. Download version {{version}}, then install Editor IA ManosTech with the Windows installer to continue receiving updates.",
   "section.title": "Updates",
   "releaseNotes.title": "Release notes",
   "releaseNotes.description": "Show What's New popups after updates",

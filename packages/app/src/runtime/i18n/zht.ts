@@ -29,7 +29,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "切換終端機",
   "desktop.menu.toggleFileTree": "切換檔案樹",
   "desktop.menu.reload": "重新載入",
-  "desktop.menu.toggleDeveloperTools": "切換開發人員工具",
   "desktop.menu.actualSize": "實際大小",
   "desktop.menu.zoomIn": "放大",
   "desktop.menu.zoomOut": "縮小",
@@ -278,7 +277,6 @@ export const dict = {
 
   "dialog.project.edit.worktree.startup": "工作區啟動腳本",
   "dialog.project.edit.worktree.startup.placeholder": "例如 bun install",
-  "dialog.usageExceeded.dontShowAgain": "不再顯示",
 
   "toast.permissions.autoaccept.on.title": "正在自動接受權限",
   "toast.permissions.autoaccept.on.description": "權限要求將自動獲准",

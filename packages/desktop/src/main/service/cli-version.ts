@@ -13,6 +13,12 @@ export function serviceVersion(input: {
   readonly mode: "initial" | "reconnect"
   readonly version: string
 }) {
+  // `undefined` means "any version is accepted": the version lock is off
+  // on reconnect (the running server is the one to keep) and on the beta
+  // channel in a non-isolated install. Releases ship on the `dev`
+  // channel, so the beta bypass has no effect today — but if the release
+  // channel ever changes to `beta`, the lock silently stops applying and
+  // a stale CLI can be adopted. Keep this in mind before flipping channels.
   if (input.mode === "reconnect") return undefined
 
   if (input.channel === "beta" && !input.isolated) return undefined

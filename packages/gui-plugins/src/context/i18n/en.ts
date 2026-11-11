@@ -18,6 +18,7 @@ export default {
   "stats.reasoningTokens": "Thinking",
   "stats.cacheTokens": "Reused",
   "stats.totalCost": "Total Cost",
+  "stats.windowRemaining": "Window remaining",
   "stats.automatic": "Automatic",
   "weeklyUsage.title": "Weekly usage",
   "weeklyUsage.resetsInHours": "resets in {{hours}}h {{minutes}}m",

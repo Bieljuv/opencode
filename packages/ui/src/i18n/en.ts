@@ -87,6 +87,8 @@ const source = {
   "ui.sessionTurn.retry.attemptRetryingNow": "Attempt {{attempt}} - retrying",
   "ui.sessionTurn.retry.geminiHot": "gemini is way too hot right now",
   "ui.sessionTurn.exhausted": "Try again later.",
+  "ui.sessionTurn.exhaustedGuidance":
+    "You can try again in a few minutes. If the request is long, split it into smaller parts or rephrase it more briefly.",
   "ui.sessionTurn.budgetLimit.all":
     "Workspace budget reached · paid models paused until {{time}} · free models still work",
   "ui.sessionTurn.budgetLimit.allUntilReset":
@@ -98,11 +100,6 @@ const source = {
   "ui.sessionTurn.error.freeUsageExceeded": "Free usage exceeded",
   "ui.sessionTurn.error.addCredits": "Add credits",
 
-  "dialog.usageExceeded.freeTier.title": "Free limit reached",
-  "dialog.usageExceeded.freeTier.description":
-    "Subscribe to OpenCode Go for reliable access to the best open-source models for $10/month.",
-  "dialog.usageExceeded.freeTier.reset": "Your free messages reset at {{time}}.",
-  "dialog.usageExceeded.freeTier.actionLabel": "Subscribe",
 
   "ui.sessionTurn.status.delegating": "Delegating work",
   "ui.sessionTurn.status.planning": "Planning next steps",

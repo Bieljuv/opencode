@@ -555,7 +555,6 @@ export const dict = {
   "workspace.status.dirty": "Nespojene promjene otkrivene u ovom radnom prostoru.",
   "workspace.delete.confirm": 'Delete radni prostor "{{name}}"?',
   "workspace.delete.button": "Delete radni prostor",
-  "dialog.usageExceeded.dontShowAgain": "Ne prikazuj ponovno",
   "provider.disconnect.toast.noCredentials.description": "Nisu pronađene uklonjive vjerodajnice za {{provider}}.",
   "provider.disconnect.toast.failed.description": "Odspajanje {{provider}} nije uspjelo.",
   "toast.migration.failed.title": "Migracija podataka nije uspjela",

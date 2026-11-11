@@ -588,7 +588,6 @@ export const dict = {
   "workspace.status.dirty": "Šioje darbo srityje aptikti nesujungti pakeitimai.",
   "workspace.delete.confirm": 'Ištrinti darbo sritį "{{name}}"?',
   "workspace.delete.button": "Ištrinti darbo sritį",
-  "dialog.usageExceeded.dontShowAgain": "Daugiau nerodyti",
   "provider.disconnect.toast.noCredentials.description": "Nerasta pašalinamų {{provider}} kredencialų.",
   "provider.disconnect.toast.failed.description": "Nepavyko atjungti {{provider}}.",
   "toast.migration.failed.title": "Duomenų perkėlimas nepavyko",

@@ -117,10 +117,6 @@ export const dict = {
   "ui.sessionTurn.error.freeUsageExceeded": "Limite de uso gratuito excedido",
   "ui.sessionTurn.error.addCredits": "Adicionar créditos",
 
-  "dialog.usageExceeded.freeTier.title": "Limite gratuito atingido",
-  "dialog.usageExceeded.freeTier.description":
-    "Assine o OpenCode Go por $10/mês para ter acesso confiável aos melhores modelos de código aberto.",
-  "dialog.usageExceeded.freeTier.actionLabel": "Assinar",
 
   "ui.sessionTurn.status.delegating": "Delegando trabalho",
   "ui.sessionTurn.status.planning": "Planejando próximos passos",
@@ -282,7 +278,6 @@ export const dict = {
   "ui.messagePart.context.updates": "Atualizações",
   "ui.promptInput.cancelUpload": "Cancelar envio",
   "ui.promptInput.uploading": "{{percent}}%",
-  "dialog.usageExceeded.freeTier.reset": "Suas mensagens grátis são renovadas às {{time}}.",
   "ui.commentCard.addComment": "Adicionar comentário",
   "ui.commentCard.editComment": "Editar comentário",
   "ui.commentCard.quote": "Citar",
@@ -330,6 +325,8 @@ export const dict = {
   "ui.sessionTurn.diffs.failed": "Diff indisponível",
   "ui.sessionTurn.diffs.retry": "Tentar novamente",
   "ui.sessionTurn.exhausted": "Tente novamente mais tarde.",
+  "ui.sessionTurn.exhaustedGuidance":
+    "Você pode tentar de novo em alguns minutos. Se o pedido for longo, divida-o em partes menores ou reformule-o de forma mais curta.",
   "ui.sources.count.one": "{{count}} fonte",
   "ui.sources.count.other": "{{count}} fontes",
   "ui.sources.noResults": "Nenhum resultado",

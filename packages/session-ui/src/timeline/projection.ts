@@ -748,6 +748,10 @@ function stepEvent(
 function errorInfo(message: Parameters<typeof usageLimit>[0]): TurnErrorInfo {
   return {
     text: unwrapErrorMessage(message.error?.message ?? ""),
+    // Total exhaustion is its own flag, not a limit kind: the timeline
+    // shows guidance below the generic message for it, and the limit
+    // kinds keep their own rendering.
+    ...(message.error?.type === "provider.exhausted" ? { exhausted: true as const } : {}),
     ...usageLimit(message),
     ...budgetLimit(message),
   }

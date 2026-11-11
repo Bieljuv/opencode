@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "ٹرمینل دکھائیں یا چھپائیں",
   "desktop.menu.toggleFileTree": "فائل ٹری دکھائیں یا چھپائیں",
   "desktop.menu.reload": "دوبارہ لوڈ کریں",
-  "desktop.menu.toggleDeveloperTools": "ڈویلپر ٹولز دکھائیں یا چھپائیں",
   "desktop.menu.actualSize": "اصل سائز",
   "desktop.menu.zoomIn": "بڑا کریں",
   "desktop.menu.zoomOut": "چھوٹا کریں",
@@ -249,7 +248,6 @@ export const dict = {
   "dialog.project.edit.color.select": "\u2068{{color}}\u2069 رنگ منتخب کریں۔",
   "dialog.project.edit.worktree.startup": "ورک اسپیس اسٹارٹ اپ اسکرپٹ",
   "dialog.project.edit.worktree.startup.placeholder": "جیسے bun install",
-  "dialog.usageExceeded.dontShowAgain": "دوبارہ نہ دکھائیں",
 
   "toast.permissions.autoaccept.on.title": "خودکار طور پر قبول کرنے کی اجازتیں۔",
   "toast.permissions.autoaccept.on.description": "اجازت کی درخواستیں خود بخود منظور ہو جائیں گی۔",

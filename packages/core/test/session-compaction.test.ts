@@ -490,15 +490,16 @@ it.effect("auto compaction estimates current content against the buffered prompt
     // Without provider usage, the estimate includes the whole system prompt and tool definition, not just the
     // message. The parts are named here, not pinned as a number: editing a rule's wording leaves the expectation
     // alone, while adding or removing a rule moves it — and this list must follow baseTranscript. Today it is
-    // 1,456 tokens (agent system 7, instructions 5, token economy 62, identity masking 300, direct reply 214,
-    // failed tool retry 96, mandatory token saving 235, arena auto 195, approval before building 186,
-    // delivery rules 148, read tool 8), plus the one "Done" token.
+    // 1,575 tokens (agent system 7, instructions 5, token economy 62, identity masking 300, direct reply 214,
+    // web search first 119, failed tool retry 96, mandatory token saving 235, arena auto 195, approval before
+    // building 186, delivery rules 148, read tool 8), plus the one "Done" token.
     const systemTokens =
       Token.estimate("You are a helpful assistant.") +
       Token.estimate("Project instructions.") +
       Token.estimate(SessionModelRequest.TOKEN_ECONOMY) +
       Token.estimate(SessionModelRequest.HIDE_MODEL_IDENTITY) +
       Token.estimate(SessionModelRequest.DIRECT_REPLY) +
+      Token.estimate(SessionModelRequest.WEB_SEARCH_FIRST) +
       Token.estimate(SessionModelRequest.FAILED_TOOL_RETRY) +
       Token.estimate(SessionModelRequest.MANDATORY_TOKEN_SAVING) +
       Token.estimate(SessionModelRequest.ARENA_AUTO) +
@@ -1230,10 +1231,13 @@ it.effect("summary measured recovery reuses usage only for the matching agent", 
   }),
 )
 
-it.effect("background summaries stay off unless enabled", () =>
+it.effect("background summaries stay off when disabled", () =>
   Effect.gen(function* () {
     requests = []
     const compaction = yield* SessionCompaction.Service
+    // Precompute is on by default; this test proves the off switch still
+    // holds it back.
+    yield* compaction.transform((editor) => editor.configure({ precompute: false }))
     const session = yield* insertSession(Session.ID.make("ses_precompute_off"))
     const history = precomputeHistory()
 

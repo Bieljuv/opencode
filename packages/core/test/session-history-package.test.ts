@@ -103,6 +103,18 @@ describe("SessionHistoryPackage.packageHistory", () => {
     expect(packaged).toHaveLength(21)
   })
 
+  test("a long user message keeps its detail in the digest instead of truncating at 300 chars", () => {
+    // The distinctive detail sits past 300 chars: the old 300-char clip
+    // dropped it, the 600-char clip keeps it.
+    const detail = `${"x".repeat(350)} use the file src/painel/config.ts and the command npm run build:lento`
+    const messages = [textUser(detail), ...conversation(24)]
+    const packaged = SessionHistoryPackage.packageHistory(messages)
+    const first = packaged[0]
+    const summary = first?.type === "compaction" && first.status === "completed" ? first.summary : ""
+    expect(summary).toContain("src/painel/config.ts")
+    expect(summary).toContain("npm run build:lento")
+  })
+
   test("switches and idle markers do not eat window slots", () => {
     const switches = (count: number, prefix: string) =>
       Array.from({ length: count }, (_, index) => modelSwitched(`${prefix}-${index}`))

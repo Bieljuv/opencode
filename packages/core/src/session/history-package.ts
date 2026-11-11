@@ -16,13 +16,13 @@ import { SessionRecentText } from "./recent-text.js"
 export const WINDOW_SIZE = 20
 
 /** The most characters the condensed summary of the older messages may hold. */
-export const DIGEST_MAX_CHARS = 8_000
+export const DIGEST_MAX_CHARS = 16_000
 
-const USER_MAX_CHARS = 300
-const ASSISTANT_MAX_CHARS = 300
-const TOOL_INPUT_MAX_CHARS = 120
-const TOOL_RESULT_MAX_CHARS = 200
-const SUMMARY_MAX_CHARS = 1_000
+const USER_MAX_CHARS = 600
+const ASSISTANT_MAX_CHARS = 600
+const TOOL_INPUT_MAX_CHARS = 240
+const TOOL_RESULT_MAX_CHARS = 500
+const SUMMARY_MAX_CHARS = 2_000
 
 const clip = (value: string, max: number) => {
   if (value.length <= max) return value

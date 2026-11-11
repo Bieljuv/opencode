@@ -385,7 +385,6 @@ export const dict = {
   "dialog.project.edit.color.select": "Seleziona il colore {{color}}",
   "dialog.project.edit.worktree.startup": "Script di avvio dell'area di lavoro",
   "dialog.project.edit.worktree.startup.placeholder": "es. bun install",
-  "dialog.usageExceeded.dontShowAgain": "Non mostrare più",
 
   "toast.permissions.autoaccept.on.title": "Accettazione automatica delle autorizzazioni",
   "toast.permissions.autoaccept.on.description": "Le richieste di autorizzazione verranno approvate automaticamente",
@@ -713,7 +712,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Mostra o nascondi il terminale",
   "desktop.menu.toggleFileTree": "Mostra o nascondi l'albero dei file",
   "desktop.menu.reload": "Ricarica",
-  "desktop.menu.toggleDeveloperTools": "Mostra o nascondi gli strumenti per sviluppatori",
   "desktop.menu.actualSize": "Dimensioni effettive",
   "desktop.menu.zoomIn": "Ingrandisci",
   "desktop.menu.zoomOut": "Riduci",

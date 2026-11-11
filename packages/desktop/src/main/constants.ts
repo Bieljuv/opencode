@@ -6,11 +6,6 @@ const raw = import.meta.env.OPENCODE_CHANNEL
 
 export const CHANNEL: Channel = raw === "local" || raw === "dev" || raw === "beta" || raw === "prod" ? raw : "dev"
 
-// ManosTech: the ingest secret baked into the main bundle at build time
-// (release workflow sets MANOSTECH_INGEST_SECRET). Empty in dev builds,
-// so the usage reporter stays silent there.
-export const MANOSTECH_INGEST_SECRET = import.meta.env.MANOSTECH_INGEST_SECRET ?? ""
-
 // ManosTech: o Client ID OAuth do Google embutido no build (o workflow de
 // release define MANOSTECH_GOOGLE_CLIENT_ID). Ausente até o Client ID
 // existir no Google Cloud — sem ele, o botão "Entrar com Google" não

@@ -11,7 +11,7 @@ export default {
   "toast.checkFailed.description": "Não foi possível verificar a atualização agora. Tente novamente mais tarde.",
   "migration.title": "Migrar da versão Beta para a Estável",
   "migration.description":
-    "Por enquanto, o Editor IA ManosTech Beta está migrando para o Editor IA ManosTech Estável. Baixe a versão {{version}} e instale o Editor IA ManosTech pela imagem de disco para continuar recebendo atualizações.",
+    "Por enquanto, o Editor IA ManosTech Beta está migrando para o Editor IA ManosTech Estável. Baixe a versão {{version}} e instale o Editor IA ManosTech com o instalador do Windows para continuar recebendo atualizações.",
   "section.title": "Atualizações",
   "releaseNotes.title": "Notas da versão",
   "releaseNotes.description": 'Mostrar pop-ups de "Novidades" após atualizações',

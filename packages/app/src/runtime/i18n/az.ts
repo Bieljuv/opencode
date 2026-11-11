@@ -25,7 +25,6 @@ export const dict = {
   "desktop.menu.toggleTerminal": "Terminalı aç/bağla",
   "desktop.menu.toggleFileTree": "Fayl ağacını aç/bağla",
   "desktop.menu.reload": "Yenidən yüklə",
-  "desktop.menu.toggleDeveloperTools": "Tərtibatçı alətlərini aç/bağla",
   "desktop.menu.actualSize": "Faktiki ölçü",
   "desktop.menu.zoomIn": "Böyüt",
   "desktop.menu.zoomOut": "Kiçilt",
@@ -242,7 +241,6 @@ export const dict = {
   "dialog.project.edit.color.select": "{{color}} rəngini seçin",
   "dialog.project.edit.worktree.startup": "İş sahəsi başlanğıc skripti",
   "dialog.project.edit.worktree.startup.placeholder": "məs. bun install",
-  "dialog.usageExceeded.dontShowAgain": "Bir daha göstərmə",
 
   "toast.permissions.autoaccept.on.title": "İcazələr avtomatik qəbul edilir",
   "toast.permissions.autoaccept.on.description": "İcazə sorğuları avtomatik təsdiqlənəcək",

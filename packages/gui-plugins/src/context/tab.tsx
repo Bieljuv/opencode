@@ -131,10 +131,19 @@ export default function SessionContextTab(props: { session: MountedSession }) {
       message.tokens.cache.read +
       message.tokens.cache.write
 
+    const limit = entry?.model?.limit.context
+    // What is left of the window, in the same estimate the header ring
+    // uses (latest step after the last compaction over the window): the
+    // tab shows it as a number, so the user knows when the conversation
+    // is about to be summarized without reading the ring.
+    const remaining = limit ? Math.max(0, limit - total) : null
+
     return {
       message,
-      limit: entry?.model?.limit.context,
-      usage: entry?.model?.limit.context ? Math.round((total / entry.model.limit.context) * 100) : null,
+      limit,
+      usage: limit ? Math.round((total / limit) * 100) : null,
+      remaining,
+      remainingPercent: limit ? Math.max(0, 100 - Math.round((total / limit) * 100)) : null,
     }
   })
 
@@ -222,8 +231,9 @@ export default function SessionContextTab(props: { session: MountedSession }) {
 
   // The grid shows what the user can act on: the session, how many
   // messages it holds, the two totals — today and this week, side by
-  // side — the router's choice, and the day total's own parts. The
-  // message split (user/assistant) is gone: it never added up to the
+  // side — the router's choice, what is left of the context window
+  // (tokens and percent, so the user sees when a summary is near),
+  // and the day total's own parts. The message split (user/assistant) is gone: it never added up to the
   // total, and the total alone says how long the session is.
   // "Sessão criada" and "Última atividade" are gone: dates the user
   // never acts on.
@@ -236,6 +246,15 @@ export default function SessionContextTab(props: { session: MountedSession }) {
       value: () => formatter().number(weekly()?.total ?? daily()?.total ?? cumulative().total),
     },
     { label: "stats.model", value: aiLabel },
+    {
+      label: "stats.windowRemaining",
+      value: () => {
+        const remaining = context()?.remaining
+        const percent = context()?.remainingPercent
+        if (remaining === null || remaining === undefined || percent === null || percent === undefined) return "—"
+        return `${formatter().number(remaining)} (${percent}%)`
+      },
+    },
     { label: "stats.inputTokens", value: () => formatter().number(daily()?.breakdown.input ?? cumulative().input) },
     { label: "stats.outputTokens", value: () => formatter().number(daily()?.breakdown.output ?? cumulative().output) },
     {
