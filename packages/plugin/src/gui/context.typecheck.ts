@@ -21,6 +21,7 @@ import {
   type PanelTab,
   type SessionScreen,
   type SlotMap,
+  type WeeklyTokens,
 } from "./index.js"
 
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
@@ -59,6 +60,8 @@ export const setup: Plugin.Setup<typeof Consumer> = (ctx) => {
   equal<typeof ctx.clientUsage, (() => Promise<ClientUsage | undefined>) | undefined>(true)
   // The day's token total is undefined on the web and when the server cannot answer.
   equal<typeof ctx.dailyTokens, ((serverID: string) => Promise<DailyTokens | undefined>) | undefined>(true)
+  // The week's token total is undefined on the web and when the server cannot answer.
+  equal<typeof ctx.weeklyTokens, ((serverID: string) => Promise<WeeklyTokens | undefined>) | undefined>(true)
   // @ts-expect-error no store named missing
   void ctx.stores.missing
   // A session carries its identity and data only; the route-following models belong to the session screen.

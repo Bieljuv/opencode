@@ -131,6 +131,8 @@ function fakeApis(storage: (plugin: string) => Storage): HostApiFactories {
     clientUsage: () => undefined,
     // No server data in the component tests: the day total falls back to the session total.
     dailyTokens: () => undefined,
+    // No server data in the component tests: the week total falls back to the day total.
+    weeklyTokens: () => undefined,
     sessions: () => ({ list: () => [], current: () => undefined }),
     screen: () => ({ current: () => undefined }),
     layout: () => layout,

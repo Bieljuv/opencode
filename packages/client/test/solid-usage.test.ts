@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { SessionMessageInfo } from "../src/promise"
-import { cumulativeSessionUsage, dayUsageBreakdown, dayUsageTotal, lastAssistantWithUsage, saoPauloDayKey } from "../src/solid/usage"
+import { cumulativeSessionUsage, dayUsageBreakdown, dayUsageTotal, lastAssistantWithUsage, saoPauloDayKey, saoPauloWeekKey, weekUsageBreakdown, weekUsageTotal } from "../src/solid/usage"
 
 const assistant = (id: string, input: number): SessionMessageInfo => ({
   id,
@@ -185,6 +185,110 @@ describe("dayUsageBreakdown", () => {
       cache: { read: 0, write: 0 },
     })
     expect(dayUsageBreakdown([on("msg_a", "2026-11-10T15:00:00Z", 40)], "2026-11-11").total).toBe(0)
+  })
+})
+
+describe("saoPauloWeekKey", () => {
+  test("cuts the week at Monday 00:00 in São Paulo, not UTC", () => {
+    // The week of Monday 2026-11-09 runs to Sunday 2026-11-15 23:59:59 in São Paulo.
+    expect(saoPauloWeekKey(Date.parse("2026-11-09T03:00:00Z"))).toBe("2026-11-09")
+    expect(saoPauloWeekKey(Date.parse("2026-11-11T15:00:00Z"))).toBe("2026-11-09")
+    expect(saoPauloWeekKey(Date.parse("2026-11-15T02:59:59Z"))).toBe("2026-11-09")
+    // Sunday 23:59:59 in São Paulo is still the old week; Monday 00:00 is the next.
+    expect(saoPauloWeekKey(Date.parse("2026-11-09T02:59:59Z"))).toBe("2026-11-02")
+    expect(saoPauloWeekKey(Date.parse("2026-11-16T03:00:00Z"))).toBe("2026-11-16")
+  })
+})
+
+describe("weekUsageTotal", () => {
+  test("sums only the week's assistant messages, across models", () => {
+    const messages = [
+      spent(
+        "msg_a",
+        { id: "model-a", providerID: "provider-a" },
+        { input: 10_000, output: 500, reasoning: 100, cache: { read: 200, write: 50 } },
+      ),
+      spent(
+        "msg_b",
+        { id: "model-b", providerID: "provider-b" },
+        { input: 12_000, output: 600, reasoning: 200, cache: { read: 300, write: 100 } },
+      ),
+    ].map((message) => ({ ...message, time: { created: Date.parse("2026-11-11T15:00:00Z") } }))
+
+    expect(weekUsageTotal(messages, "2026-11-09")).toBe(24_050)
+  })
+
+  test("ignores messages from another São Paulo week", () => {
+    const messages = [
+      on("msg_last_week", "2026-11-09T02:59:59Z", 100_000),
+      on("msg_monday", "2026-11-09T03:00:00Z", 40),
+    ]
+
+    expect(weekUsageTotal(messages, "2026-11-09")).toBe(40)
+  })
+
+  test("keeps spend from before a completed compaction", () => {
+    const compaction: SessionMessageInfo = {
+      id: "msg_compaction",
+      type: "compaction",
+      status: "completed",
+      reason: "manual",
+      summary: "Current state",
+      time: { created: Date.parse("2026-11-11T15:00:00Z") },
+    }
+    const messages = [
+      on("msg_before", "2026-11-10T14:00:00Z", 30),
+      compaction,
+      on("msg_after", "2026-11-11T16:00:00Z", 5),
+    ]
+
+    expect(weekUsageTotal(messages, "2026-11-09")).toBe(35)
+  })
+
+  test("returns zero for an empty list or a week with no messages", () => {
+    expect(weekUsageTotal([], "2026-11-09")).toBe(0)
+    expect(weekUsageTotal([on("msg_a", "2026-11-11T15:00:00Z", 40)], "2026-11-02")).toBe(0)
+  })
+})
+
+describe("weekUsageBreakdown", () => {
+  test("parts add up to the week total, in the same scope", () => {
+    const messages = [
+      spent(
+        "msg_a",
+        { id: "model-a", providerID: "provider-a" },
+        { input: 10_000, output: 500, reasoning: 100, cache: { read: 200, write: 50 } },
+      ),
+      spent(
+        "msg_b",
+        { id: "model-b", providerID: "provider-b" },
+        { input: 12_000, output: 600, reasoning: 200, cache: { read: 300, write: 100 } },
+      ),
+    ].map((message) => ({ ...message, time: { created: Date.parse("2026-11-11T15:00:00Z") } }))
+
+    const breakdown = weekUsageBreakdown(messages, "2026-11-09")
+
+    expect(breakdown.total).toBe(24_050)
+    expect(breakdown.total).toBe(weekUsageTotal(messages, "2026-11-09"))
+    expect(breakdown.input).toBe(22_000)
+    expect(breakdown.output).toBe(1_100)
+    expect(breakdown.reasoning).toBe(300)
+    expect(breakdown.cache.read).toBe(500)
+    expect(breakdown.cache.write).toBe(150)
+  })
+
+  test("ignores messages from another São Paulo week in every part", () => {
+    const messages = [
+      on("msg_last_week", "2026-11-09T02:59:59Z", 100_000),
+      on("msg_monday", "2026-11-09T03:00:00Z", 40),
+    ]
+
+    const breakdown = weekUsageBreakdown(messages, "2026-11-09")
+
+    expect(breakdown.total).toBe(40)
+    expect(breakdown.input).toBe(40)
+    expect(breakdown.output).toBe(0)
+    expect(breakdown.cache.read).toBe(0)
   })
 })
 

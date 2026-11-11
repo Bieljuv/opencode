@@ -37,6 +37,7 @@ import type {
   Tabs,
   Toasts,
   Ui,
+  WeeklyTokens,
   Workspaces,
 } from "./host-apis.js"
 
@@ -177,6 +178,21 @@ export interface Context extends BaseContext {
    * ```
    */
   readonly dailyTokens: ((serverID: string) => Promise<DailyTokens | undefined>) | undefined
+  /**
+   * Tokens spent this week (America/Sao_Paulo) across every session on
+   * a server, from the server's own session data; undefined on the web
+   * and when the server cannot answer. The Context tab falls back to
+   * the day total then. Only the total and the week reach the plugin
+   * — never which model or provider answered, and never a limit or a
+   * quota.
+   *
+   * @example
+   * ```ts
+   * const week = (await ctx.weeklyTokens?.(serverID))?.total
+   * if (week === undefined) return
+   * ```
+   */
+  readonly weeklyTokens: ((serverID: string) => Promise<WeeklyTokens | undefined>) | undefined
   /**
    * Dialogs that close with the owner that opened them, else when the plugin goes away.
    *

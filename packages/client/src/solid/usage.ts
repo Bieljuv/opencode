@@ -37,6 +37,22 @@ export function saoPauloDayKey(timestampMs: number): string {
   }).format(new Date(timestampMs))
 }
 
+/**
+ * The Monday (America/Sao_Paulo) of the week a timestamp falls in,
+ * `YYYY-MM-DD` — the same week the weekly plan limit counts on. The
+ * week runs Monday 00:00 to Sunday 23:59 in São Paulo. Computed from
+ * the São Paulo calendar date, so no offset math and no DST edge:
+ * the weekday comes from the date itself, and subtracting whole days
+ * from a calendar date is exact.
+ */
+export function saoPauloWeekKey(timestampMs: number): string {
+  const [year, month, date] = saoPauloDayKey(timestampMs).split("-").map(Number)
+  const weekday = new Date(Date.UTC(year, month - 1, date)).getUTCDay()
+  const mondayOffset = (weekday + 6) % 7
+
+  return new Date(Date.UTC(year, month - 1, date - mondayOffset)).toISOString().slice(0, 10)
+}
+
 type AssistantWithTokens = SessionMessageAssistant & { tokens: NonNullable<SessionMessageAssistant["tokens"]> }
 
 function isAssistantWithTokens(message: SessionMessageInfo): message is AssistantWithTokens {
@@ -101,6 +117,34 @@ export function dayUsageTotal(messages: ReadonlyArray<SessionMessageInfo>, day: 
 export function dayUsageBreakdown(messages: ReadonlyArray<SessionMessageInfo>, day: string) {
   const spent = sumTokenParts(
     messages.filter(isAssistantWithTokens).filter((message) => saoPauloDayKey(message.time.created) === day),
+  )
+
+  return { ...spent, total: totalOf(spent) }
+}
+
+/**
+ * Every token spent in one São Paulo week, across every session that
+ * reports it: the sum over that week's assistant messages with
+ * tokens, whatever model or provider answered. The week runs Monday
+ * 00:00 to Sunday 23:59 in America/Sao_Paulo, and a message counts
+ * in the week it was created. Same spend rules as `dayUsageTotal`:
+ * no refund on revert or compaction, messages without tokens count
+ * nothing.
+ */
+export function weekUsageTotal(messages: ReadonlyArray<SessionMessageInfo>, week: string): number {
+  return weekUsageBreakdown(messages, week).total
+}
+
+/**
+ * Every token spent in one São Paulo week, by kind: the parts of the
+ * week total — input, output, reasoning and cache, summed over that
+ * week's assistant messages with tokens. Same scope as
+ * `weekUsageTotal`: `total` here IS that total, so the parts always
+ * add up to the number the Context tab shows.
+ */
+export function weekUsageBreakdown(messages: ReadonlyArray<SessionMessageInfo>, week: string) {
+  const spent = sumTokenParts(
+    messages.filter(isAssistantWithTokens).filter((message) => saoPauloWeekKey(message.time.created) === week),
   )
 
   return { ...spent, total: totalOf(spent) }
