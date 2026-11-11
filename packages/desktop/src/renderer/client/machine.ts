@@ -30,7 +30,16 @@ export type ClientGateState =
     }
   | { readonly status: "forgot-sent"; readonly googleAvailable: boolean | undefined }
   | { readonly status: "trial-expired"; readonly trialEndsAt: string | null }
-  | { readonly status: "ready"; readonly trialEndsAt: string | null }
+  | {
+      readonly status: "ready"
+      readonly trialEndsAt: string | null
+      /**
+       * A revalidação em andamento: a conta segue pronta na tela enquanto o
+       * status é conferido de novo — a tela de "Verificando sua conta…" só
+       * aparece na checagem inicial, nunca durante o uso.
+       */
+      readonly revalidating?: boolean
+    }
 
 export type ClientGateEvent =
   | { readonly type: "status.settled"; readonly status: ManosTechClientStatusValue }
@@ -111,13 +120,22 @@ export function transitionClientGate(state: ClientGateState, event: ClientGateEv
     if (state.status === "waiting-google")
       return to({ status: "checking", googlePending: true }, [{ type: "check-status" }])
 
+    // A conta já está pronta e o usuário está trabalhando: a checagem roda
+    // em silêncio, sem a tela de "Verificando sua conta…". Só o resultado
+    // muda a tela — se a conta de fato mudou, o próximo status.settled
+    // leva ao login ou ao fim do teste.
+    if (state.status === "ready")
+      return to({ ...state, revalidating: true }, [{ type: "check-status" }])
+
     return to({ status: "checking" }, [{ type: "check-status" }])
   }
 
   if (event.type === "revalidate") {
     if (state.status !== "ready") return unchanged(state)
 
-    return to({ status: "checking" }, [{ type: "check-status" }])
+    // Revalidação silenciosa: a tela segue pronta enquanto o status é
+    // conferido de novo. A splash do robô só aparece na checagem inicial.
+    return to({ ...state, revalidating: true }, [{ type: "check-status" }])
   }
 
   if (event.type === "status.settled") {
@@ -133,12 +151,19 @@ export function transitionClientGate(state: ClientGateState, event: ClientGateEv
   }
 
   if (event.type === "status.failed") {
-    if (state.status !== "checking") return unchanged(state)
+    if (state.status === "checking")
+      return to(
+        { status: "login", googleAvailable: false, error: "network", busy: false },
+        [{ type: "check-google" }],
+      )
 
-    return to(
-      { status: "login", googleAvailable: false, error: "network", busy: false },
-      [{ type: "check-google" }],
-    )
+    // A revalidação silenciosa falhou (rede, por exemplo): a tela segue
+    // pronta e a próxima revalidação tenta de novo. Nunca derruba o
+    // usuário para o login por uma falha transitória.
+    if (state.status === "ready" && state.revalidating)
+      return to({ status: "ready", trialEndsAt: state.trialEndsAt }, [{ type: "schedule-revalidation" }])
+
+    return unchanged(state)
   }
 
   if (event.type === "login.submitted") {
