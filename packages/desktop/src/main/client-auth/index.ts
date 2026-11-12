@@ -18,6 +18,7 @@ import {
 } from "./google"
 import { connectGatewayCredential, disconnectGatewayCredential, isGatewayActive, resolveGatewayBaseUrl, todayInSaoPaulo, DEFAULT_GATEWAY_URL } from "./gateway"
 import * as Panel from "./panel"
+import { requestBackgroundServiceRestart } from "../service/background-service-restart"
 import * as Transcribe from "./transcribe"
 import { clearClientIdentity, repairClientIdentity, writeClientIdentity } from "./reporter-file"
 import {
@@ -198,6 +199,22 @@ function storeGatewayCredentials(apiKey: string | undefined, gatewayUrl: string 
   if (gatewayUrl) saveGatewayUrl(gatewayUrl)
 }
 
+/**
+ * O sidecar lê a chave do cliente do ambiente no arranque: um login (ou
+ * uma validação) que guarda uma chave DIFERENTE da que estava lá pede um
+ * arranque novo do serviço, senão o relatório de uso segue desligado
+ * ("sem chave do cliente") até o próximo reinício do app — foi o que
+ * aconteceu no primeiro login com Google num perfil novo. Sem troca de
+ * chave, nada a fazer: o serviço já nasceu com ela. O pedido é
+ * fire-and-forget e fail-open: se o restart falhar, o serviço antigo
+ * segue respondendo e o login não depende dele.
+ */
+function restartServiceForNewKey(keyBefore: string | undefined): void {
+  const keyNow = loadApiKey()
+
+  if (keyNow !== undefined && keyNow !== keyBefore) requestBackgroundServiceRestart()
+}
+
 /** Uso diário do plano (GET /api/uso), com cache curto; sem gateway ativo, nada. */
 export async function getDailyUsage(): Promise<Panel.DailyUsage | undefined> {
   if (!gatewayActive()) return undefined
@@ -342,6 +359,7 @@ export async function getStatus(): Promise<ClientStatus> {
 
   if (result.ok) {
     const info = result.value
+    const keyBefore = loadApiKey()
     // A /sessao não reemite token nem trial: o guardado continua valendo.
     // Ela também nunca devolve a chave — só o fim do ciclo mensal.
     updateSession({ mustChange: info.mustChange, expires_at: info.expires_at })
@@ -357,6 +375,7 @@ export async function getStatus(): Promise<ClientStatus> {
     await refreshStoredApiKey(
       info.apiKeyRenewsAt !== null && Date.parse(info.apiKeyRenewsAt) <= Date.now(),
     )
+    restartServiceForNewKey(keyBefore)
 
     return statusFromSession(
       {
@@ -391,6 +410,7 @@ export async function getStatus(): Promise<ClientStatus> {
 }
 
 export async function login(email: string, password: string): Promise<LoginResult> {
+  const keyBefore = loadApiKey()
   const result = await Panel.login(Panel.panelBaseUrl(process.env), {
     email,
     password,
@@ -412,6 +432,7 @@ export async function login(email: string, password: string): Promise<LoginResul
 
   if (fresh) saveApiKey(fresh)
   await refreshGatewayCredential()
+  restartServiceForNewKey(keyBefore)
   notifyClientChanged()
 
   return { ok: true, status: statusFromSession(result.value) }
@@ -593,6 +614,7 @@ async function finishGoogleLoopback(code: Promise<AuthReturn>, state: string): P
     return
   }
 
+  const keyBefore = loadApiKey()
   saveSession(loginResult.value)
   storeGatewayCredentials(loginResult.value.apiKey, loginResult.value.gatewayUrl)
   writeClientIdentity({ id: loginResult.value.client.id, email: loginResult.value.client.email })
@@ -605,6 +627,7 @@ async function finishGoogleLoopback(code: Promise<AuthReturn>, state: string): P
 
   if (fresh) saveApiKey(fresh)
   await refreshGatewayCredential()
+  restartServiceForNewKey(keyBefore)
   logMain("info", "[manostech] google login: panel accepted")
 
   notifyClientChanged()

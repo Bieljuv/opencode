@@ -6,6 +6,10 @@ describe("cli-version", () => {
     { channel: "beta" as const, isolated: false, mode: "initial" as const, version: "0.0.0-beta-2", expected: undefined },
     { channel: "beta" as const, isolated: true, mode: "initial" as const, version: "0.0.0-beta-2", expected: "0.0.0-beta-2" },
     { channel: "prod" as const, isolated: false, mode: "initial" as const, version: "2.0.32", expected: "2.0.32" },
+    // A restart replaces the running server, so it keeps the version lock like an initial connect;
+    // a reconnect keeps the running server, so the lock is off.
+    { channel: "prod" as const, isolated: false, mode: "restart" as const, version: "2.0.32", expected: "2.0.32" },
+    { channel: "prod" as const, isolated: false, mode: "reconnect" as const, version: "2.0.32", expected: undefined },
   ])("serviceVersion($channel, isolated=$isolated) -> $expected", (input) => {
     expect(serviceVersion(input)).toBe(input.expected)
   })

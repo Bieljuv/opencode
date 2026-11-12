@@ -8,6 +8,7 @@ import { emitIpcEvent } from "../ipc-events"
 import { getMainWindows } from "../windows"
 import { clientFilePath } from "../client-auth/reporter-file"
 import { BackgroundServiceMachine } from "./background-service-machine"
+import { setBackgroundServiceRestarter } from "./background-service-restart"
 import { cleanStages } from "./cli-stages"
 import { keptStages, serviceVersion, shouldAdoptProbedService, shouldRetryEnsure } from "./cli-version"
 import { DesktopCli } from "./desktop-cli"
@@ -23,6 +24,7 @@ const RegisteredService = Schema.Struct({ version: Schema.optional(Schema.String
 export interface Interface {
   readonly connection: Effect.Effect<SidecarCredentials.Data>
   readonly reconnect: Effect.Effect<SidecarCredentials.Data>
+  readonly restart: Effect.Effect<SidecarCredentials.Data>
 }
 
 export class Service extends Context.Service<Service, Interface>()("opencode/desktop/BackgroundService") {}
@@ -32,18 +34,26 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const context = yield* Effect.context<FileSystem.FileSystem | Path.Path | DesktopCli.Service>()
 
-    return Service.of(
-      yield* BackgroundServiceMachine.make({
-        probe: probe().pipe(Effect.provide(context)),
-        ensure: (mode) => ensure(mode).pipe(Effect.provide(context)),
-        publish: (data) => {
-          SidecarCredentials.set(data)
-          // Every window moves its requests and event stream to the new origin, not only the one that reconnected.
-          const event = new SidecarChanged({ url: data.url })
-          getMainWindows().forEach((win) => emitIpcEvent(win.webContents, event))
-        },
-      }),
-    )
+    const machine = yield* BackgroundServiceMachine.make({
+      probe: probe().pipe(Effect.provide(context)),
+      ensure: (mode) => ensure(mode).pipe(Effect.provide(context)),
+      publish: (data) => {
+        SidecarCredentials.set(data)
+        // Every window moves its requests and event stream to the new origin, not only the one that reconnected.
+        const event = new SidecarChanged({ url: data.url })
+        getMainWindows().forEach((win) => emitIpcEvent(win.webContents, event))
+      },
+    })
+
+    // Plain main code (the client login) asks for a restart through this
+    // bridge: the machine owns the transition, this only dispatches it.
+    // A failed restart keeps the last service (the machine's contract),
+    // so the login never depends on it.
+    setBackgroundServiceRestarter(() => {
+      void Effect.runFork(machine.restart.pipe(Effect.ignore))
+    })
+
+    return Service.of(machine)
   }),
 )
 
@@ -75,6 +85,14 @@ const ensure = Effect.fn("BackgroundService.ensure")(function* (mode: Background
   const runFork = Effect.runForkWith(yield* Effect.context<FileSystem.FileSystem | Path.Path>())
   const setup = yield* prepare(mode)
 
+  // A restart replaces the running server: stop it first, so the ensure
+  // below spawns a fresh one with the current environment. A reconnect
+  // would reuse the running server and its frozen environment.
+  // `Service.stop` is the Promise client: no service registered is a
+  // no-op, and a failure to stop must not block the fresh ensure.
+  if (mode === "restart")
+    yield* Effect.tryPromise(() => setup.client.Service.stop({ file: setup.file })).pipe(Effect.ignore)
+
   const ingestApiKey = loadApiKey()
   const run = (version = setup.version) =>
     setup.client.Service.ensure({
@@ -93,9 +111,11 @@ const ensure = Effect.fn("BackgroundService.ensure")(function* (mode: Background
       // which the main reads from its encrypted store and hands to the
       // sidecar here. No shared secret is baked into the installer: the
       // key belongs to the logged-in client, and the panel rejects any
-      // event whose client_id is not the key's. Login after startup
-      // needs no restart: the file is read fresh on every reported
-      // step, and the key is re-read on the next service start.
+      // event whose client_id is not the key's. The file is read fresh on
+      // every reported step, but the key arrives only in this environment,
+      // so it is read once per service start: a login that stores a key
+      // after startup asks for a service restart, or the reporter keeps
+      // running without the key until the app restarts.
       env: {
         MANOSTECH_CLIENT_FILE: clientFilePath(),
         ...(ingestApiKey ? { MANOSTECH_INGEST_API_KEY: ingestApiKey } : {}),
