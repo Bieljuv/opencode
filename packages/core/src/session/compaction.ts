@@ -36,6 +36,7 @@ import { SessionRunnerModel } from "./runner/model.js"
 import { SessionRunnerRetry } from "./runner/retry.js"
 import { toLLMMessages } from "./runner/to-llm-message.js"
 import { SessionRecentText } from "./recent-text.js"
+import { SessionRouter } from "./router.js"
 import { contentFilterError, toSessionError } from "./to-session-error.js"
 import { SessionUsage } from "./usage.js"
 
@@ -487,69 +488,151 @@ export const layer = Layer.effect(
       const prompt = buildPrompt(previous !== undefined, previous?.summary.includes(LEGACY_HEADING) ?? false)
       const headings = SUMMARY_TEMPLATE.split("\n").filter((line) => line.startsWith("##"))
       const filled = (text: string) => text.split("\n").some((line) => headings.includes(line.trim()))
-      const prepared = yield* prepare(context, messages, budget)
-      // Size the unchanged request with the number that decided to compact: the last response's count plus an
-      // estimate of what came after it. Characters overstate a conversation whose old reasoning the provider drops.
-      // A hook can still make this request larger than that count; the provider then rejects it and it is resent as
-      // text. An overflow already proved the count low, so it keeps the character estimate.
-      const measured = trigger.reason === "overflow" ? undefined : measuredPrompt({ ...context, messages })
-
-      // Hooks saw the request without the summary prompt, so it is appended here. A reply that ignores the
-      // template gets one reminder before it counts as a failure.
-      const send = (request: LLMRequest, size?: Estimate) =>
+      // One summary attempt on one model: prepare the request for it, send it, and shrink it on "too long".
+      // A hop-signal failure leaves through `deliver` as the failure, so the loop below can try another model.
+      const attempt = (attemptTrigger: Trigger) =>
         Effect.gen(function* () {
-          const prompted = fitOutput(
-            { ...request, messages: [...request.messages, Message.user(prompt)] },
-            context.model.limit,
-            size && { ...size, estimated: size.estimated + Token.estimate(prompt) },
-          )
-          const reply = yield* stream(context, prompted, prepared.options, background)
-          if (filled(reply.text)) return reply
+          const attemptContext = attemptTrigger.context
+          const prepared = yield* prepare(attemptContext, messages, budget)
+          // Size the unchanged request with the number that decided to compact: the last response's count plus an
+          // estimate of what came after it. Characters overstate a conversation whose old reasoning the provider drops.
+          // A hook can still make this request larger than that count; the provider then rejects it and it is resent as
+          // text. An overflow already proved the count low, so it keeps the character estimate.
+          const measured =
+            attemptTrigger.reason === "overflow" ? undefined : measuredPrompt({ ...attemptContext, messages })
 
-          const nudged = fitOutput(
-            { ...prompted, messages: [...prompted.messages, Message.user(NUDGE)] },
-            context.model.limit,
-            size && { ...size, estimated: size.estimated + Token.estimate(prompt) + Token.estimate(NUDGE) },
-          )
-          const retry = yield* stream(context, nudged, prepared.options, background)
-          if (filled(retry.text)) return retry
-          return yield* Effect.fail<Failure>({
-            error: {
-              type: "compaction.failed",
-              message: retry.text.trim()
-                ? "Compaction summary did not match the required template"
-                : "Compaction produced no summary",
+          // Hooks saw the request without the summary prompt, so it is appended here. A reply that ignores the
+          // template gets one reminder before it counts as a failure.
+          const send = (request: LLMRequest, size?: Estimate) =>
+            Effect.gen(function* () {
+              const prompted = fitOutput(
+                { ...request, messages: [...request.messages, Message.user(prompt)] },
+                attemptContext.model.limit,
+                size && { ...size, estimated: size.estimated + Token.estimate(prompt) },
+              )
+              const reply = yield* stream(attemptContext, prompted, prepared.options, background)
+              if (filled(reply.text)) return reply
+
+              const nudged = fitOutput(
+                { ...prompted, messages: [...prompted.messages, Message.user(NUDGE)] },
+                attemptContext.model.limit,
+                size && { ...size, estimated: size.estimated + Token.estimate(prompt) + Token.estimate(NUDGE) },
+              )
+              const retry = yield* stream(attemptContext, nudged, prepared.options, background)
+              if (filled(retry.text)) return retry
+              return yield* Effect.fail<Failure>({
+                error: {
+                  type: "compaction.failed",
+                  message: retry.text.trim()
+                    ? "Compaction summary did not match the required template"
+                    : "Compaction produced no summary",
+                },
+              })
+            })
+
+          const overhead = Token.estimate(prompt) + Token.estimate(NUDGE)
+          // Automatic compaction starts past the ceiling, so the whole conversation is sent unchanged while the window can
+          // still fit the summary. Below that, the history before the tail is sent instead, as before: unchanged when it fits,
+          // which still reuses the cache for that shorter prefix, and as text otherwise. Dropping exchanges to make room
+          // for the tail would leave them in neither the summary nor the tail. Where 15% of the window is under
+          // `RESERVE_MIN`, the ceiling equals `summaryRoom`, so automatic compaction always takes this fallback.
+          const fit =
+            attemptTrigger.reason === "overflow"
+              ? budget
+              : Math.max(budget, summaryRoom(attemptContext.model.limit, prepared.request.maxTokens))
+          const result = yield* deliver(
+            attemptTrigger,
+            prepared,
+            budget - overhead,
+            send,
+            {
+              fit: fit - overhead,
+              history: withoutTail(prepared.request, keepID),
+              measured,
+              // The provider just rejected this conversation, so sending it unchanged again would be rejected too.
+              text: attemptTrigger.reason === "overflow",
             },
-          })
+            background,
+          )
+          if (!keepID) return result
+          // A compaction hook may choose its own kept range.
+          return { ...result, metadata: { keepID, ...result.metadata } }
         })
 
-      const overhead = Token.estimate(prompt) + Token.estimate(NUDGE)
-      // Automatic compaction starts past the ceiling, so the whole conversation is sent unchanged while the window can
-      // still fit the summary. Below that, the history before the tail is sent instead, as before: unchanged when it fits,
-      // which still reuses the cache for that shorter prefix, and as text otherwise. Dropping exchanges to make room
-      // for the tail would leave them in neither the summary nor the tail. Where 15% of the window is under
-      // `RESERVE_MIN`, the ceiling equals `summaryRoom`, so automatic compaction always takes this fallback.
-      const fit =
-        trigger.reason === "overflow"
-          ? budget
-          : Math.max(budget, summaryRoom(context.model.limit, prepared.request.maxTokens))
-      const result = yield* deliver(
-        trigger,
-        prepared,
-        budget - overhead,
-        send,
-        {
-          fit: fit - overhead,
-          history: withoutTail(prepared.request, keepID),
-          measured,
-          // The provider just rejected this conversation, so sending it unchanged again would be rejected too.
-          text: trigger.reason === "overflow",
-        },
-        background,
-      )
-      if (!keepID) return result
-      // A compaction hook may choose its own kept range.
-      return { ...result, metadata: { keepID, ...result.metadata } }
+      // The summary is mechanical work — it reads a long conversation and writes a short one — so it always hops on
+      // the free-first chain, whatever the turn asked for: a dead model must not condemn the summary, and a paid
+      // model is only tried after every free one failed. The chain is built once per summary from the providers
+      // connected right now, sized to this summary's real prompt.
+      const available = yield* catalog.available()
+      const lastUser = [...messages]
+        .reverse()
+        .find((message): message is SessionMessage.User => message.type === "user")
+      const effort =
+        lastUser?.metadata !== undefined
+          ? SessionRouter.effortFromMetadata(lastUser.metadata)
+          : SessionRouter.effortFromVariant(context.model.ref.variant)
+      const chain = SessionRouter.buildChain(available, {
+        complexity: "simple",
+        effort,
+        promptTokens: total(trigger.reason === "manual" ? estimatePrompt(context) : (trigger.estimate ?? estimatePrompt(context))),
+        rotateAfter: context.session.model,
+      })
+      const tried = new Set<string>([SessionRouter.refKey(context.model.ref)])
+      // The next hop that resolves to a usable model, or undefined when the chain is exhausted. An unresolvable
+      // ref is marked tried and the following hop is tried instead, so one dead catalog entry cannot stall the hop.
+      const nextHop = (from: SessionContext.Loaded["model"], error: SessionError.Error) =>
+        Effect.gen(function* () {
+          while (true) {
+            const next = SessionRouter.nextHopFor(chain, tried, available, error, from)
+            if (next === undefined) return undefined
+            tried.add(SessionRouter.refKey(next))
+            const resolved = yield* models
+              .resolve({ ...context.session, model: next }, catalog.available)
+              .pipe(Effect.orElseSucceed(() => undefined))
+            if (resolved !== undefined) return resolved
+          }
+        })
+      // Fall back to the session model once per summary: when the chain is exhausted, the session keeps the model
+      // it was on instead of dying — a key that just failed on another model may still answer on it.
+      let sessionFallbackUsed = false
+      let current = trigger
+      while (true) {
+        const outcome = yield* Effect.result(attempt(current))
+        if (Result.isSuccess(outcome)) return outcome.success
+        const failure = outcome.failure
+        // Only a failure that names a model problem hops: anything else (the summary itself cannot run) fails now.
+        if (!SessionRouter.isHopSignal(failure.error)) return yield* Effect.fail(failure)
+        const next = yield* nextHop(current.context.model, failure.error)
+        if (next !== undefined) {
+          yield* Effect.logInfo("manostech router compaction hop", {
+            sessionID: context.session.id,
+            from: SessionRouter.refKey(current.context.model.ref),
+            to: SessionRouter.refKey(next.ref),
+            errorType: failure.error.type,
+            tried: tried.size,
+            chain: chain.length,
+          })
+          current = { ...trigger, context: { ...trigger.context, model: next } }
+          continue
+        }
+        const target = SessionRouter.sessionFallback(
+          context.session.model,
+          current.context.model.ref,
+          sessionFallbackUsed,
+        )
+        if (target !== undefined) {
+          sessionFallbackUsed = true
+          tried.add(SessionRouter.refKey(target))
+          const resolved = yield* models
+            .resolve({ ...context.session, model: target }, catalog.available)
+            .pipe(Effect.orElseSucceed(() => undefined))
+          if (resolved !== undefined) {
+            current = { ...trigger, context: { ...trigger.context, model: resolved } }
+            continue
+          }
+        }
+        return yield* Effect.fail(failure)
+      }
     })
 
     /**
