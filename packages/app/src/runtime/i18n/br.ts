@@ -61,7 +61,7 @@ export const dict = {
   "client.changePassword.error.tooShort": "A senha nova precisa ter pelo menos 8 caracteres.",
   "client.changePassword.error.mismatch": "As senhas novas não coincidem.",
   "client.trialExpired.title": "Gostou? Entre em contato conosco",
-  "client.trialExpired.description": "Seu período de teste de 3 horas acabou. Fale conosco para continuar usando o editor.",
+  "client.trialExpired.description": "Seu período de teste de 5 horas acabou. Fale conosco para continuar usando o editor.",
   "client.trialExpired.email": "Enviar e-mail",
   "client.trialExpired.whatsapp": "Chamar no WhatsApp",
   "client.account.title": "Conta",

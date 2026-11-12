@@ -495,7 +495,7 @@ export const dict = {
   "client.changePassword.error.tooShort": "The new password needs at least 8 characters.",
   "client.changePassword.error.mismatch": "The new passwords don't match.",
   "client.trialExpired.title": "Liked it? Get in touch with us",
-  "client.trialExpired.description": "Your 3-hour trial has ended. Talk to us to keep using the editor.",
+  "client.trialExpired.description": "Your 5-hour trial has ended. Talk to us to keep using the editor.",
   "client.trialExpired.email": "Send email",
   "client.trialExpired.whatsapp": "Message on WhatsApp",
   "client.account.title": "Account",

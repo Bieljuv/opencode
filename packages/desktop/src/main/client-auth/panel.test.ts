@@ -212,7 +212,7 @@ describe("login", () => {
       port: 0,
       fetch: () =>
         Response.json(
-          { erro: "teste_expirado", mensagem: "O período de teste de 3 horas terminou." },
+          { erro: "teste_expirado", mensagem: "O período de teste de 5 horas terminou." },
           { status: 403 },
         ),
     })
