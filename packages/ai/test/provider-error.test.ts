@@ -155,6 +155,55 @@ describe("provider error classification", () => {
     ).toBe("ProviderInternal")
   })
 
+  test("classifies a provider function that no longer exists as provider internal even with a 4xx status", () => {
+    // The live case (Gabriel's DELIVERY session, 2026-11-12 02:06:28Z,
+    // 3.4.37): the SAME dead function id as the degraded case came back
+    // with a new wording — "Specified function ... is not found" — and
+    // the classifier turned it into InvalidRequest on the 4xx, so the
+    // turn died instead of hopping. A function the provider no longer
+    // has refuses the MODEL, not the request, so it stays a hop signal
+    // even with a status. The account id below is the live one from
+    // the log; it is an identifier, not a secret.
+    expect(
+      classifyProviderFailure({
+        message:
+          "Function id 'fd21cc19-b4ff-4949-ba07-90dd663c416a' version 'null': Specified function in account '5WnNEXp-ERjiejBPc85newbI_5KaSXnLHUbvrphl7c0' is not found",
+        status: 404,
+      })._tag,
+    ).toBe("ProviderInternal")
+  })
+
+  test("classifies a missing provider function without a status as provider internal", () => {
+    // Same refusal, no HTTP status attached (mid-stream or wrapped
+    // failure): still a provider-side refusal, still a hop signal.
+    expect(
+      classifyProviderFailure({
+        message:
+          "Function id 'fd21cc19-b4ff-4949-ba07-90dd663c416a' version 'null': Specified function in account '5WnNEXp-ERjiejBPc85newbI_5KaSXnLHUbvrphl7c0' is not found",
+      })._tag,
+    ).toBe("ProviderInternal")
+  })
+
+  test("keeps unrelated not-found failures as invalid requests", () => {
+    // Only the provider's "Specified function ... is not found"
+    // wording is a hop signal. A plain 404, a missing resource, a
+    // missing model, a function named without "specified", and a
+    // function that is unsupported rather than missing stay
+    // deterministic rejections of the request.
+    expect(
+      [
+        classifyProviderFailure({ message: "404 Not Found", status: 404 }),
+        classifyProviderFailure({ message: "The requested resource was not found", status: 404 }),
+        classifyProviderFailure({ message: "model 'retired-model' not found", status: 404 }),
+        classifyProviderFailure({ message: "The function 'my-tool' is not found", status: 404 }),
+        classifyProviderFailure({
+          message: "The specified function is not supported by this model",
+          status: 400,
+        }),
+      ].map((failure) => failure._tag),
+    ).toEqual(["InvalidRequest", "InvalidRequest", "InvalidRequest", "InvalidRequest", "InvalidRequest"])
+  })
+
   test("prioritizes specific failures over retryable server text", () => {
     expect(
       [
