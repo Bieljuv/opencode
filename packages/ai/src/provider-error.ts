@@ -160,12 +160,17 @@ const SERVER_ERROR_TEXT =
   /\b(?:try again|(?:please |you can )?retry (?:the |this |your )?request|try (?:the |this |your )?request again|(?:currently |temporarily )?at capacity|overloaded|degraded|temporarily unavailable|service[-_\s]?unavailable|(?:server|internal)[-_\s]?error|server (?:is )?busy|provider returned (?:an )?error|resource[-_\s]?exhausted|upstream (?:connect|connection|request)|request buffer limit while retrying upstream)\b/i
 // Provider-side refusals that stay hop signals even with a 4xx status.
 // `degraded` is a provider marking a model/function degraded and refusing
-// to invoke it; "no longer available" is a retired model. Both refuse the
-// MODEL, not the request, so the next model in the chain may work — the
-// router hops to the next model instead of killing the turn. The general
-// server phrasing above still needs no contradicting 4xx status; only
-// these two signals bypass that gate.
-const PROVIDER_REFUSAL_TEXT = /\b(?:degraded|no longer available)\b/i
+// to invoke it; "no longer available" is a retired model; "Specified
+// function ... is not found" is a function the provider no longer has.
+// All three refuse the MODEL, not the request, so the next model in the
+// chain may work — the router hops to the next model instead of killing
+// the turn. The general server phrasing above still needs no
+// contradicting 4xx status; only these three signals bypass that gate.
+// The "specified function" arm stays narrow on purpose: the gap between
+// "specified function" and "is not found" is capped at 200 characters so
+// a long body cannot join two unrelated sentences, and a bare "not
+// found" (missing model, missing resource, plain 404) never matches.
+const PROVIDER_REFUSAL_TEXT = /\b(?:degraded|no longer available|specified function[\s\S]{0,200}?is not found)\b/i
 
 const Message = Schema.String.check(Schema.isPattern(/\S/))
 

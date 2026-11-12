@@ -957,6 +957,29 @@ describe("nextHopFor", () => {
     )
   })
 
+  test("a provider function that no longer exists hops to the next model instead of killing the turn", () => {
+    // Gabriel's DELIVERY session (2026-11-12 02:06:28Z, 3.4.37): the
+    // SAME dead function id as the degraded case came back with a new
+    // wording — "Specified function ... is not found" — with a 4xx
+    // status, and the turn died on it instead of hopping. A function
+    // the provider no longer has refuses the MODEL, not the request, so
+    // the session error stays provider.internal — a hop signal — and
+    // the router moves to the next model in the chain (free models
+    // first, paid only as a last resort) instead of killing the turn.
+    const reason = classifyProviderFailure({
+      message:
+        "Function id 'fd21cc19-b4ff-4949-ba07-90dd663c416a' version 'null': Specified function in account '5WnNEXp-ERjiejBPc85newbI_5KaSXnLHUbvrphl7c0' is not found",
+      status: 404,
+    })
+    const error = toSessionError(new AIError({ reason }))
+    expect(error.type).toBe("provider.internal")
+    expect(isHopSignal(error)).toBe(true)
+    const stepfun = resolved(free("openrouter", "a-free"))
+    expect(nextHopFor(chain, new Set(["openrouter/a-free"]), pool, error, stepfun)).toEqual(
+      ref("manostech", "auto"),
+    )
+  })
+
   test("exhaustion takes the next untried model, any provider", () => {
     const stepfun = resolved(free("openrouter", "a-free"))
     expect(
