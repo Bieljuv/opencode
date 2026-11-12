@@ -62,6 +62,7 @@ export type ClientGateEvent =
   | { readonly type: "forgot.succeeded" }
   | { readonly type: "forgot.failed"; readonly error: ManosTechClientErrorValue }
   | { readonly type: "forgot.cancelled" }
+  | { readonly type: "trial-expired.back" }
   | { readonly type: "client.changed" }
   | { readonly type: "revalidate" }
   | { readonly type: "disposed" }
@@ -272,6 +273,15 @@ export function transitionClientGate(state: ClientGateState, event: ClientGateEv
     if (state.status !== "forgot" && state.status !== "forgot-sent") return unchanged(state)
 
     return to({ status: "login", googleAvailable: state.googleAvailable, error: undefined, busy: false })
+  }
+
+  if (event.type === "trial-expired.back") {
+    if (state.status !== "trial-expired") return unchanged(state)
+
+    // A conta pode ter sido liberada no painel desde o bloqueio: confere
+    // o status de novo em vez de só mostrar o login — liberada, o editor
+    // abre direto; ainda bloqueada, a tela de bloqueio volta.
+    return to({ status: "checking" }, [{ type: "check-status" }])
   }
 
   return unchanged(state)

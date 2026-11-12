@@ -470,7 +470,6 @@ export function ManosTechClientGate(props: { api: ElectronAPI }) {
                 name="current-password"
                 type="password"
                 autocomplete="current-password"
-                required
                 appearance="large"
                 value={currentPassword()}
                 disabled={changeBusy()}
@@ -541,6 +540,9 @@ export function ManosTechClientGate(props: { api: ElectronAPI }) {
           </Button>
           <Button variant="outline" onClick={() => platform.openExternal(CONTACT_WHATSAPP_URL)}>
             {language.t("client.trialExpired.whatsapp")}
+          </Button>
+          <Button variant="ghost" onClick={() => dispatch({ type: "trial-expired.back" })}>
+            {language.t("client.trialExpired.back")}
           </Button>
         </GateShell>
       </Match>

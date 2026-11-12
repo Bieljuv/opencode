@@ -190,6 +190,52 @@ describe("change-password", () => {
 
     expect(next.state).toEqual({ ...change, error: "password-too-short" })
   })
+
+  test("submitting with an empty current password still calls the change", () => {
+    // Conta sem senha (Google): a senha atual não é conferida — o token
+    // da sessão é a prova — então o vazio não pode travar o envio.
+    const next = transitionClientGate(change, {
+      type: "change.submitted",
+      current: "",
+      next: "nova-senha",
+    })
+
+    expect(next.state).toEqual({ ...change, busy: true })
+    expect(next.effects).toEqual([{ type: "do-change", current: "", next: "nova-senha" }])
+  })
+})
+
+describe("trial-expired", () => {
+  const expired: ClientGateState = { status: "trial-expired", trialEndsAt: "2026-11-09T06:00:00Z" }
+
+  test("going back re-checks the session instead of staying blocked", () => {
+    const next = transitionClientGate(expired, { type: "trial-expired.back" })
+
+    expect(next.state).toEqual({ status: "checking" })
+    expect(next.effects).toEqual([{ type: "check-status" }])
+  })
+
+  test("going back from another screen does nothing", () => {
+    const login: ClientGateState = { status: "login", googleAvailable: true, error: undefined, busy: false }
+
+    expect(transitionClientGate(login, { type: "trial-expired.back" }).state).toBe(login)
+  })
+
+  test("a re-check that finds the account paid opens the editor", () => {
+    const checking = transitionClientGate(expired, { type: "trial-expired.back" })
+    const next = transitionClientGate(checking.state, { type: "status.settled", status: ready })
+
+    expect(next.state).toEqual({ status: "ready", trialEndsAt: null, apiKeyRenewsAt: null })
+    expect(next.effects).toEqual([{ type: "schedule-revalidation" }])
+  })
+
+  test("a re-check that still finds the trial expired blocks again", () => {
+    const checking = transitionClientGate(expired, { type: "trial-expired.back" })
+    const next = transitionClientGate(checking.state, { type: "status.settled", status: trialExpired })
+
+    expect(next.state).toEqual(expired)
+    expect(next.effects).toEqual([])
+  })
 })
 
 describe("forgot-password", () => {
