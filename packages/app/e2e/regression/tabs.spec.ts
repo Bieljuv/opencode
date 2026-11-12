@@ -199,6 +199,38 @@ test("tab strip keeps draft tabs as wide as session tabs and navigates on mouse 
   await expectPath(page, sessionHref(b.id))
 })
 
+test("home opens the empty new-session screen for the current project without losing the session", async ({
+  page,
+}) => {
+  await mockWorkspace(page, {
+    name: "Tabs",
+    sessions: [a, b],
+    seed: {
+      settings: { appearance: { tabLayout: "vertical" } },
+      tabs: [a.id, b.id],
+    },
+  })
+  await page.goto(sessionHref(a.id))
+
+  const sidebar = page.locator('[data-slot="vertical-tabs-sidebar"]')
+  const home = sidebar.locator('[data-action="vertical-tabs-home"]')
+  await home.click()
+  await expect(page).toHaveURL(/\/new-session\?draftId=/)
+  await expect(page.locator('[data-component="new-session"]')).toBeVisible()
+  await expect(page.locator('[data-component="composer-editor"]')).toBeEditable()
+
+  // The session stays open in its tab: going back to it still works.
+  const tabA = sidebar.locator(`[data-titlebar-tab-link][href="${sessionHref(a.id)}"]`)
+  await expect(tabA).toBeVisible()
+  await tabA.click()
+  await expectPath(page, sessionHref(a.id))
+
+  // Clicking home again reuses the untouched draft instead of opening another one.
+  await home.click()
+  await expect(page).toHaveURL(/\/new-session\?draftId=/)
+  await expect(sidebar.locator("[data-titlebar-tab-slot]")).toHaveCount(3)
+})
+
 test("inactive session attention dots share the close control without marking the avatar or active tab", async ({
   page,
 }) => {
