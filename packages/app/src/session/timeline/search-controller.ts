@@ -24,7 +24,9 @@ const HIGHLIGHT_ACTIVE = "timeline-search-hit-active"
 
 const TEXT_SELECTORS = '[data-slot="text-part-body"], [data-slot="user-message-text"]'
 
-const FOLD_TOGGLE = '[data-slot="user-message-fold-toggle"]'
+const FOLD_TOGGLE = '[data-slot="user-message-fold-toggle"], [data-slot="assistant-text-fold-toggle"]'
+
+const FOLDED = '[data-slot="user-message-fold"][data-folded], [data-slot="assistant-text-fold"][data-folded]'
 
 // Matches the fold's mask in session-ui's message-part.css.
 const FOLD_FADE = 40
@@ -56,7 +58,7 @@ function collectRanges(
     const isActivePart = activePartID !== undefined && partID === activePartID
     let occurrenceInPart = 0
 
-    // A folded user message's Read more button sits inside its text.
+    // A folded message's Read more button sits inside its text.
     const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
       acceptNode: (node) =>
         node.parentElement?.closest(FOLD_TOGGLE) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
@@ -279,7 +281,7 @@ export function createTimelineSearchController(input: {
 
     // A match in or past a folded message's fading last lines opens the message, then scrolls to it.
     const fold = effect.allowUnfold
-      ? range.startContainer.parentElement?.closest<HTMLElement>('[data-slot="user-message-fold"][data-folded]')
+      ? range.startContainer.parentElement?.closest<HTMLElement>(FOLDED)
       : undefined
 
     if (

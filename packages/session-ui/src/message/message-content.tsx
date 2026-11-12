@@ -744,14 +744,15 @@ export function CurrentUserMessageDisplay(props: {
               when={props.fold}
               fallback={<CurrentHighlightedText text={props.text} files={inlineFiles()} agents={agents()} />}
             >
-              <UserMessageFold
+              <MessageFold
                 id={`${props.message.id}-text`}
                 text={props.text}
+                slot="user-message-fold"
                 expanded={expanded()}
                 onExpandedChange={setExpanded}
               >
                 <CurrentHighlightedText text={props.text} files={inlineFiles()} agents={agents()} />
-              </UserMessageFold>
+              </MessageFold>
             </Show>
             <Show when={comments().length > 0}>
               <UserMessageComments comments={comments()} bounded />
@@ -788,22 +789,26 @@ export function CurrentUserMessageDisplay(props: {
   )
 }
 
-// The OpenCode iOS app's fold (UserBubbleFold): a message past 12 lines shows its first 8, so a fold always hides at
-// least 5 lines and a message just past the limit never folds away a line or two.
-const USER_MESSAGE_FOLD = { over: 12, show: 8 }
+// The OpenCode iOS app's fold (UserBubbleFold), shared by long user and assistant messages: a message past 12 lines
+// shows its first 8, so a fold always hides at least 5 lines and a message just past the limit never folds away a
+// line or two.
+const MESSAGE_FOLD = { over: 12, show: 8 }
 
-function UserMessageFold(props: {
+function MessageFold(props: {
   id: string
   text: string
   expanded: boolean
   onExpandedChange: (expanded: boolean) => void
+  slot: "user-message-fold" | "assistant-text-fold"
+  /** A streaming reply never folds: it stays whole while it arrives and folds only once it completes. */
+  foldable?: boolean
   children: JSX.Element
 }) {
   const i18n = useI18n()
   // Hard line breaks are a floor on the laid-out lines, so most long messages fold before the row is first measured.
   const [lines, setLines] = createSignal(props.text.trimEnd().split("\n").length)
-  const long = () => lines() > USER_MESSAGE_FOLD.over
-  const folded = () => long() && !props.expanded
+  const long = () => lines() > MESSAGE_FOLD.over
+  const folded = () => props.foldable !== false && long() && !props.expanded
 
   let content: HTMLDivElement | undefined
   let toggle: HTMLButtonElement | undefined
@@ -842,17 +847,17 @@ function UserMessageFold(props: {
     <>
       <div
         id={props.id}
-        data-slot="user-message-fold"
+        data-slot={props.slot}
         data-folded={folded() ? "" : undefined}
-        style={{ "max-height": folded() ? `${USER_MESSAGE_FOLD.show}lh` : undefined }}
+        style={{ "max-height": folded() ? `${MESSAGE_FOLD.show}lh` : undefined }}
       >
         <div ref={content}>{props.children}</div>
       </div>
-      <Show when={long()}>
+      <Show when={props.foldable !== false && long()}>
         <button
           ref={toggle}
           type="button"
-          data-slot="user-message-fold-toggle"
+          data-slot={`${props.slot}-toggle`}
           aria-expanded={props.expanded}
           aria-controls={props.id}
           onClick={flip}
@@ -1183,6 +1188,10 @@ export function AssistantTextContent(props: {
   /** The finished turn's web searches and fetches, shown as a chip in its footer. */
   sources?: TurnSources
   onOpenSources?: () => void
+  /** Whether a long completed reply is open. The timeline owns it so it survives row recycling. */
+  expanded?: boolean
+  onExpandedChange?: (expanded: boolean) => void
+  onContentRendered?: () => void
 }) {
   const data = useData()
   const i18n = useI18n()
@@ -1247,11 +1256,27 @@ export function AssistantTextContent(props: {
 
   const copy = createCopyFeedback()
 
+  // A reply stays whole while it streams and folds only once it completes, so a long finished answer shows its
+  // first lines behind "Read more" instead of filling the chat.
+  const streaming = () => props.message.time.completed === undefined
+
   return (
     <Show when={props.text}>
       <div data-component="text-part" data-timeline-part-id={props.id}>
         <div data-slot="text-part-body">
-          <PacedMarkdown text={props.text} cacheKey={props.id} streaming={props.message.time.completed === undefined} />
+          <MessageFold
+            id={`assistant-text-fold:${props.id}`}
+            text={props.text}
+            slot="assistant-text-fold"
+            foldable={!streaming()}
+            expanded={props.expanded ?? false}
+            onExpandedChange={(open) => {
+              props.onExpandedChange?.(open)
+              props.onContentRendered?.()
+            }}
+          >
+            <PacedMarkdown text={props.text} cacheKey={props.id} streaming={streaming()} />
+          </MessageFold>
         </div>
         <Show when={sources()} fallback={<Show when={props.showCopy}>{copyFooter()}</Show>}>
           {(value) => (

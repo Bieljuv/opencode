@@ -377,7 +377,17 @@ export function createSessionTimelineRowRenderer(input: {
               {
                 type: "text",
                 id: ref.partID,
-                render: () => <SessionAssistantContent message={message} content={content} contentID={ref.partID} />,
+                render: () => (
+                  <SessionAssistantContent
+                    message={message}
+                    content={content}
+                    contentID={ref.partID}
+                    textExpanded={input.disclosure.value(`assistant-text-expanded:${ref.partID}`)}
+                    onTextExpandedChange={(open) =>
+                      input.disclosure.set(`assistant-text-expanded:${ref.partID}`, open)
+                    }
+                  />
+                ),
               },
             ]
 
@@ -583,6 +593,10 @@ export function createSessionTimelineRowRenderer(input: {
                 defaultOpen={defaultOpen()}
                 toolOpen={input.disclosure.value(disclosureKey()) ?? defaultOpen()}
                 onToolOpenChange={(open) => input.disclosure.set(disclosureKey(), open)}
+                textExpanded={input.disclosure.value(`assistant-text-expanded:${ref()!.partID}`)}
+                onTextExpandedChange={(open) =>
+                  input.disclosure.set(`assistant-text-expanded:${ref()!.partID}`, open)
+                }
                 onContentRendered={onSizeChange}
               />
             )}
