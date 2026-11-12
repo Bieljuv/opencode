@@ -77,6 +77,71 @@ describe("background service connection", () => {
     expect(result.commands.at(-1)).toEqual([{ type: "resolve", replies: [r1], data: A }])
   })
 
+  test("a restart replaces the running service instead of reusing it", () => {
+    const r1 = reply()
+
+    const result = replay(
+      [
+        { type: "restart.requested", reply: r1 },
+        { type: "connect.succeeded", attempt: 2, data: B },
+      ],
+      readyA,
+    )
+
+    expect(result.commands).toEqual([
+      [{ type: "connect", attempt: 2, mode: "restart" }],
+      [
+        { type: "publish", data: B },
+        { type: "resolve", replies: [r1], data: B },
+      ],
+    ])
+    expect(result.state).toEqual({ status: "ready", attempt: 2, data: B })
+  })
+
+  test("a restart and a reconnect asked together share one attempt, restart first", () => {
+    const [r1, r2] = [reply(), reply()]
+
+    const result = replay(
+      [
+        { type: "restart.requested", reply: r1 },
+        { type: "reconnect.requested", reply: r2 },
+        { type: "connect.succeeded", attempt: 2, data: B },
+      ],
+      readyA,
+    )
+
+    expect(result.commands).toEqual([
+      [{ type: "connect", attempt: 2, mode: "restart" }],
+      [],
+      [
+        { type: "publish", data: B },
+        { type: "resolve", replies: [r1, r2], data: B },
+      ],
+    ])
+    expect(result.state).toEqual({ status: "ready", attempt: 2, data: B })
+  })
+
+  test("a failed restart keeps the last service and retries as a restart", () => {
+    const [r1, r2] = [reply(), reply()]
+    const error = new Error("port in use")
+
+    const failed = replay(
+      [
+        { type: "restart.requested", reply: r1 },
+        { type: "connect.failed", attempt: 2, error },
+      ],
+      readyA,
+    )
+
+    expect(failed.state).toEqual({ status: "failed", attempt: 2, error, last: A })
+    expect(failed.commands.at(-1)).toEqual([{ type: "reject", replies: [r1], error }])
+
+    const retried = replay([{ type: "restart.requested", reply: r2 }], failed.state)
+
+    expect(retried.state).toEqual({ status: "reconnecting", attempt: 3, data: A, waiters: [r2], joiners: [] })
+    expect(retried.commands).toEqual([[{ type: "connect", attempt: 3, mode: "restart" }]])
+  })
+
   test("a probed service is adopted at once and replaced by the one its verification settles on", () => {
     const r1 = reply()
 
@@ -334,6 +399,34 @@ describe("background service driver", () => {
     )
 
     expect(result).toEqual({ first: "Failure", second: A, attempts: ["initial", "initial"] })
+  })
+
+  test("a restart runs ensure in restart mode", async () => {
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const attempts: string[] = []
+
+          const machine = yield* BackgroundServiceMachine.make({
+            probe: Effect.succeed(undefined),
+            ensure: (mode) =>
+              Effect.suspend(() => {
+                attempts.push(mode)
+
+                return Effect.succeed(mode === "initial" ? A : B)
+              }),
+            publish: () => undefined,
+          })
+
+          const first = yield* machine.connection
+          const restarted = yield* machine.restart
+
+          return { first, restarted, attempts }
+        }),
+      ),
+    )
+
+    expect(result).toEqual({ first: A, restarted: B, attempts: ["initial", "restart"] })
   })
 
   test("concurrent reconnects run one ensure and publish each new service once", async () => {

@@ -332,6 +332,68 @@ describe("googleLogin", () => {
     }
   })
 
+  test("a Google signup response shaped like the live panel (full client row) still passes the key through", async () => {
+    // O /api/auth/google ao vivo espalha a linha inteira de clients em
+    // `client` — campos a mais não podem quebrar o decode, ou o primeiro
+    // login com Google deixaria a chave fora do app e o relatório
+    // desligado.
+    const live = Bun.serve({
+      port: 0,
+      fetch(request) {
+        const url = new URL(request.url)
+
+        if (url.pathname === "/api/auth/google" && request.method === "POST")
+          return Response.json(
+            {
+              token: "tok-1",
+              mustChange: false,
+              client: {
+                id: "c-google-1",
+                name: "Gabriel",
+                email: "gabriel@exemplo.com",
+                whatsapp: null,
+                plan: "desktop",
+                ai_mode: "padrao",
+                active: 1,
+                created_at: "2026-11-12T02:21:46Z",
+                updated_at: "2026-11-12T02:21:46Z",
+                alert_tokens_monthly: null,
+                alert_cost_monthly_usd: null,
+                password_hash: null,
+                must_change_password: 0,
+                trial_ends_at: "2026-11-12T07:21:47Z",
+                google_sub: "sub-1",
+                limit_tokens_daily: null,
+                limit_tokens_weekly: null,
+                routing_mode: "padrao",
+                valor_mensal_brl: null,
+                is_trial: true,
+              },
+              trial_ends_at: "2026-11-12T07:21:47Z",
+              is_trial: true,
+              api_key: "mtk_exemplo",
+              gateway_url: "https://gw.exemplo/v1",
+            },
+            { status: 200 },
+          )
+
+        return Response.json({ erro: "não encontrado" }, { status: 404 })
+      },
+    })
+
+    try {
+      const result = await googleLogin(`http://127.0.0.1:${live.port}`, { idToken: "idtok", deviceId: "dev-1" })
+
+      expect(result.ok).toBe(true)
+      if (result.ok) {
+        expect(result.value.apiKey).toBe("mtk_exemplo")
+        expect(result.value.client.email).toBe("gabriel@exemplo.com")
+      }
+    } finally {
+      live.stop()
+    }
+  })
+
   test("a rejected id token maps to google-unavailable", async () => {
     const result = await googleLogin(base, { idToken: "ruim", deviceId: "dev-1" })
 

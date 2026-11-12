@@ -5,8 +5,8 @@ import type { SidecarCredentials } from "./sidecar-credentials"
 
 type Data = SidecarCredentials.Data
 
-/** `initial` may adopt a service the entry module found; `reconnect` always runs `Service.ensure`. */
-export type ConnectMode = "initial" | "reconnect"
+/** `initial` may adopt a service the entry module found; `reconnect` always runs `Service.ensure`. `restart` stops the running service first, so the next one spawns with the current environment — a login that stored the client key after startup needs it, or the usage reporter keeps running without the key until the app restarts. */
+export type ConnectMode = "initial" | "reconnect" | "restart"
 
 /** Settles one caller of `connection` or `reconnect`. */
 export type Reply = {
@@ -45,6 +45,7 @@ export type State =
 export type Event =
   | { readonly type: "connection.requested"; readonly reply: Reply }
   | { readonly type: "reconnect.requested"; readonly reply: Reply }
+  | { readonly type: "restart.requested"; readonly reply: Reply }
   | { readonly type: "waiter.cancelled"; readonly reply: Reply }
   | { readonly type: "probe.succeeded"; readonly attempt: number; readonly data: Data }
   | { readonly type: "connect.succeeded"; readonly attempt: number; readonly data: Data }
@@ -74,9 +75,16 @@ export function initialTransition(): Transition {
   }
 }
 
+/** A restart or reconnect request: the only events besides `connection.requested` that carry a reply and ask for a new attempt. */
+function isRestartOrReconnect(
+  event: Event,
+): event is { readonly type: "reconnect.requested" | "restart.requested"; readonly reply: Reply } {
+  return event.type === "reconnect.requested" || event.type === "restart.requested"
+}
+
 export function transition(state: State, event: Event): Transition {
   if (state.status === "disposed") {
-    if (event.type === "connection.requested" || event.type === "reconnect.requested")
+    if (event.type === "connection.requested" || isRestartOrReconnect(event))
       return { state, commands: [{ type: "reject", replies: [event.reply], error: DISPOSED_ERROR }] }
 
     return unchanged(state)
@@ -94,7 +102,7 @@ export function transition(state: State, event: Event): Transition {
 
   if (state.status === "ready") return ready(state, event)
 
-  if (event.type !== "connection.requested" && event.type !== "reconnect.requested") return unchanged(state)
+  if (event.type !== "connection.requested" && !isRestartOrReconnect(event)) return unchanged(state)
 
   const attempt = state.attempt + 1
 
@@ -106,10 +114,10 @@ export function transition(state: State, event: Event): Transition {
         status: "reconnecting",
         attempt,
         data: state.last,
-        waiters: event.type === "reconnect.requested" ? [event.reply] : [],
+        waiters: isRestartOrReconnect(event) ? [event.reply] : [],
         joiners: event.type === "connection.requested" ? [event.reply] : [],
       },
-      commands: [{ type: "connect", attempt, mode: "reconnect" }],
+      commands: [{ type: "connect", attempt, mode: event.type === "restart.requested" ? "restart" : "reconnect" }],
     }
 
   return {
@@ -121,7 +129,9 @@ export function transition(state: State, event: Event): Transition {
 // No service was reached yet, so every caller shares the attempt's outcome, failure included.
 function connecting(state: Extract<State, { status: "connecting" }>, event: Event): Transition {
   // Every caller joins the attempt in flight, so windows that start together run one `Service.ensure`.
-  if (event.type === "connection.requested" || event.type === "reconnect.requested")
+  // A restart asked here joins it too: the initial ensure already read the client key when it ran,
+  // and a login that stores a key takes user interaction, so by then the service is ready.
+  if (event.type === "connection.requested" || isRestartOrReconnect(event))
     return { state: { ...state, waiters: [...state.waiters, event.reply] }, commands: [] }
 
   if (event.type === "waiter.cancelled") {
@@ -159,7 +169,8 @@ function connecting(state: Extract<State, { status: "connecting" }>, event: Even
 
 function reconnecting(state: Extract<State, { status: "reconnecting" }>, event: Event): Transition {
   // Windows that reconnect together run one `Service.ensure`; a window that opens meanwhile waits for it too.
-  if (event.type === "reconnect.requested")
+  // A restart asked here joins the attempt in flight instead of starting another one.
+  if (isRestartOrReconnect(event))
     return { state: { ...state, waiters: [...state.waiters, event.reply] }, commands: [] }
 
   if (event.type === "connection.requested")
@@ -199,13 +210,13 @@ function ready(state: Extract<State, { status: "ready" }>, event: Event): Transi
   if (event.type === "connection.requested")
     return { state, commands: [{ type: "resolve", replies: [event.reply], data: state.data }] }
 
-  if (event.type === "reconnect.requested") {
+  if (isRestartOrReconnect(event)) {
     const attempt = state.attempt + 1
 
     // The new attempt also supersedes a verification still running for the current one.
     return {
       state: { status: "reconnecting", attempt, data: state.data, waiters: [event.reply], joiners: [] },
-      commands: [{ type: "connect", attempt, mode: "reconnect" }],
+      commands: [{ type: "connect", attempt, mode: event.type === "restart.requested" ? "restart" : "reconnect" }],
     }
   }
 
@@ -302,12 +313,17 @@ export const make = Effect.fn("BackgroundServiceMachine.make")(function* (input:
       return void report(
         command.mode === "reconnect"
           ? connect("reconnect")
-          : input.probe.pipe(
-              Effect.orElseSucceed(() => undefined),
-              Effect.flatMap((data) =>
-                data ? Effect.succeed<Event>({ type: "probe.succeeded", attempt, data }) : connect("initial"),
+          : command.mode === "restart"
+            // A restart replaces the running server: never adopt it through
+            // the probe, or the old service (and its frozen environment)
+            // would keep answering.
+            ? connect("restart")
+            : input.probe.pipe(
+                Effect.orElseSucceed(() => undefined),
+                Effect.flatMap((data) =>
+                  data ? Effect.succeed<Event>({ type: "probe.succeeded", attempt, data }) : connect("initial"),
+                ),
               ),
-            ),
         (error) => ({ type: "connect.failed", attempt, error }),
       )
     }
@@ -338,7 +354,7 @@ export const make = Effect.fn("BackgroundServiceMachine.make")(function* (input:
     command.replies.forEach((reply) => reply.reject(command.error))
   }
 
-  const request = (type: "connection.requested" | "reconnect.requested") =>
+  const request = (type: "connection.requested" | "reconnect.requested" | "restart.requested") =>
     Effect.callback<Data>((resume) => {
       const reply: Reply = {
         resolve: (data) => resume(Effect.succeed(data)),
@@ -357,5 +373,6 @@ export const make = Effect.fn("BackgroundServiceMachine.make")(function* (input:
   return {
     connection: request("connection.requested"),
     reconnect: request("reconnect.requested"),
+    restart: request("restart.requested"),
   }
 })
