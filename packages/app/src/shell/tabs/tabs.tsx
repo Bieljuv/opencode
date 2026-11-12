@@ -795,32 +795,6 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
           }),
         )
       },
-      toggleHome(input: { home: boolean; current?: Tab }) {
-        if (input.home) {
-          const current = preview.current()
-
-          if (current) {
-            navigate(tabHref(current))
-
-            return
-          }
-
-          const tab = store.find((tab) => tabKey(tab) === recentKey())
-
-          if (tab) navigateTab(tab)
-
-          return
-        }
-
-        if (input.current) {
-          if (input.current !== preview.current()) setRecentKey(tabKey(input.current))
-          navigate("/")
-
-          return
-        }
-
-        navigate("/")
-      },
       state<T>(tab: Tab, name: string, init: () => T) {
         return memory.ensure(tabKey(tab), name, init)
       },

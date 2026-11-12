@@ -24,8 +24,9 @@ import { createMediaQuery } from "@solid-primitives/media"
 import { readSessionTabsRemovedDetail, SESSION_TABS_REMOVED_EVENT } from "@/shell/titlebar/session-events"
 import { useGlobal } from "@/runtime/server/runtime"
 import { ServerConnection } from "@/runtime/server/registry"
-import { tabKey, useTabs } from "@/shell/tabs/tabs"
+import { tabKey, useTabs, type DraftTab } from "@/shell/tabs/tabs"
 import type { ComposerState } from "@/composer/persistence"
+import { promptLength } from "@/composer/prompt-parts"
 import "./titlebar.css"
 import { MobileDrawer, MobileDrawerContent, MobileDrawerLabel, MobileDrawerTrigger } from "@/shell/mobile-drawer"
 import { sessionTabTitle } from "./tab-title"
@@ -227,50 +228,29 @@ export function Titlebar(props: { verticalTabs?: { mount?: HTMLElement } }) {
               tabsStoreActions.removeSessions(detail)
             })
 
-            /** Opens draft `draftID` for the current context. Returns false when there is nothing to open it in. */
-            const openDraft = (draftID: string) => {
+            /** The server + directory a new draft opens in for the current route. */
+            const draftTarget = () => {
               const route = layout.route()
 
               switch (route.type) {
                 case "session": {
                   const pending = tabs.pendingSession(route.server, route.sessionId)
 
-                  if (pending) {
-                    const model = tabs.stateValue<ComposerState>(pending.draft, "prompt")?.model.current()
-                    void tabs.newDraft({ server: route.server, directory: pending.draft.directory, draftID }, "", model)
-
-                    return true
-                  }
+                  if (pending) return { server: route.server, directory: pending.draft.directory }
 
                   const activeSession = session()
 
-                  if (!activeSession) return false
+                  if (!activeSession) return undefined
 
-                  const sessionTab = {
-                    type: "session" as const,
-                    server: route.server,
-                    sessionId: activeSession.id,
-                  }
-
-                  const model = tabs.stateValue<ComposerState>(sessionTab, "prompt")?.model.current()
-                  void tabs.newDraft(
-                    { server: sessionTab.server, directory: activeSession.location.directory, draftID },
-                    "",
-                    model,
-                  )
-
-                  return true
+                  return { server: route.server, directory: activeSession.location.directory }
                 }
 
                 case "draft": {
                   const activeTab = currentTab()
 
-                  if (activeTab?.type !== "draft") return false
+                  if (activeTab?.type !== "draft") return undefined
 
-                  const model = tabs.stateValue<ComposerState>(activeTab, "prompt")?.model.current()
-                  void tabs.newDraft({ server: activeTab.server, directory: activeTab.directory, draftID }, "", model)
-
-                  return true
+                  return { server: activeTab.server, directory: activeTab.directory }
                 }
 
                 case "settings":
@@ -290,20 +270,104 @@ export function Titlebar(props: { verticalTabs?: { mount?: HTMLElement } }) {
                     projects?.last() ??
                     projects?.list()[0]
 
-                  if (conn && project) {
-                    void tabs.newDraft({ server: ServerConnection.key(conn), directory: project.worktree, draftID }, "")
+                  if (conn && project) return { server: ServerConnection.key(conn), directory: project.worktree }
 
-                    return true
-                  }
-
-                  return false
+                  return undefined
                 }
               }
             }
 
-            const openNewTab = () => openDraft(uuid())
+            /** The model a new draft starts with for the current route, when one is already picked. */
+            const draftModel = () => {
+              const route = layout.route()
 
-            const toggleHome = () => tabs.toggleHome({ home: layout.route().type === "home", current: currentTab() })
+              switch (route.type) {
+                case "session": {
+                  const pending = tabs.pendingSession(route.server, route.sessionId)
+
+                  if (pending) return tabs.stateValue<ComposerState>(pending.draft, "prompt")?.model.current()
+
+                  const activeSession = session()
+
+                  if (!activeSession) return undefined
+
+                  const sessionTab = {
+                    type: "session" as const,
+                    server: route.server,
+                    sessionId: activeSession.id,
+                  }
+
+                  return tabs.stateValue<ComposerState>(sessionTab, "prompt")?.model.current()
+                }
+
+                case "draft": {
+                  const activeTab = currentTab()
+
+                  if (activeTab?.type !== "draft") return undefined
+
+                  return tabs.stateValue<ComposerState>(activeTab, "prompt")?.model.current()
+                }
+
+                case "settings":
+                case "connect":
+                case "components":
+                case "home":
+                  return undefined
+              }
+            }
+
+            /** Opens draft `draftID` for the current context. Returns false when there is nothing to open it in. */
+            const openDraft = (draftID: string) => {
+              const target = draftTarget()
+
+              if (!target) return false
+
+              void tabs.newDraft({ server: target.server, directory: target.directory, draftID }, "", draftModel())
+
+              return true
+            }
+
+            /** A draft with no prompt text and no attached context is still the untouched home screen. */
+            const isDraftEmpty = (tab: DraftTab) => {
+              const composer = tabs.stateValue<ComposerState>(tab, "prompt")
+
+              // A draft whose composer never loaded has no typed prompt either.
+              if (!composer) return true
+
+              return promptLength(composer.current()) === 0 && composer.context.items().length === 0
+            }
+
+            /** Opens the home screen: the empty composer for the current project. Reuses an untouched draft for the project instead of piling up new ones; the current session stays open in its tab. */
+            const openHome = () => {
+              const current = currentTab()
+
+              if (current?.type === "draft" && isDraftEmpty(current)) return true
+
+              const target = draftTarget()
+
+              if (!target) return false
+
+              const existing = tabs.store.find(
+                (tab) =>
+                  tab.type === "draft" &&
+                  tab.server === target.server &&
+                  tab.directory === target.directory &&
+                  isDraftEmpty(tab),
+              )
+
+              if (existing) {
+                tabs.select(existing)
+
+                return true
+              }
+
+              return openDraft(uuid())
+            }
+
+            /** The home screen is open: the projects dashboard, or the new-session composer. */
+            const onHomeScreen = () => layout.route().type === "home" || layout.route().type === "draft"
+
+            const openNewTab = () => openDraft(uuid())
 
             const verticalTabStrip = (highlightActive?: () => boolean, onNavigate?: () => void) => (
               <TitlebarTabStrip
@@ -346,10 +410,10 @@ export function Titlebar(props: { verticalTabs?: { mount?: HTMLElement } }) {
                       size="large"
                       class="!w-9 shrink-0"
                       icon={<Icon name="grid-plus" />}
-                      state={layout.route().type === "home" ? "pressed" : undefined}
-                      onClick={toggleHome}
+                      state={onHomeScreen() ? "pressed" : undefined}
+                      onClick={openHome}
                       aria-label={language.t("home.title")}
-                      aria-pressed={layout.route().type === "home"}
+                      aria-pressed={onHomeScreen()}
                     />
                   </Tooltip>
                 }
@@ -358,11 +422,11 @@ export function Titlebar(props: { verticalTabs?: { mount?: HTMLElement } }) {
                   type="button"
                   data-titlebar-tab-action
                   data-action="vertical-tabs-home"
-                  data-state={layout.route().type === "home" ? "pressed" : undefined}
+                  data-state={onHomeScreen() ? "pressed" : undefined}
                   class="group flex h-7 w-full shrink-0 items-center gap-2 rounded-[6px] px-2 text-[13px] leading-4 text-v2-text-text-faint hover:text-v2-text-text-base data-[state=pressed]:text-v2-text-text-base"
-                  onClick={toggleHome}
+                  onClick={openHome}
                   aria-label={language.t("home.title")}
-                  aria-pressed={layout.route().type === "home"}
+                  aria-pressed={onHomeScreen()}
                 >
                   <Icon name="grid-plus" class="shrink-0" />
                   <span class="min-w-0 truncate">{language.t("home.title")}</span>
@@ -423,8 +487,7 @@ export function Titlebar(props: { verticalTabs?: { mount?: HTMLElement } }) {
                 keybind: windows() ? "alt+home" : "mod+b",
                 hidden: true,
                 onSelect: () => {
-                  if (layout.route().type !== "home") layout.home.searchFocus.request()
-                  toggleHome()
+                  openHome()
                 },
               },
               {
@@ -666,11 +729,11 @@ export function Titlebar(props: { verticalTabs?: { mount?: HTMLElement } }) {
                             <button
                               type="button"
                               data-action="mobile-tabs-home"
-                              data-state={layout.route().type === "home" ? "pressed" : undefined}
-                              aria-current={layout.route().type === "home" ? "page" : undefined}
+                              data-state={onHomeScreen() ? "pressed" : undefined}
+                              aria-current={onHomeScreen() ? "page" : undefined}
                               class="flex h-7 w-full items-center gap-2 rounded-[6px] px-2 text-[13px] leading-4 text-v2-text-text-faint data-[state=pressed]:text-v2-text-text-base focus-visible:outline-none"
                               onClick={() => {
-                                if (layout.route().type !== "home") toggleHome()
+                                openHome()
                                 closeMobileTabs()
                               }}
                             >
