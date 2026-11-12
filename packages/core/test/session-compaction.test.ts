@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test"
 import {
   AIError,
+  AuthenticationError,
+  ContentPolicyError,
   InvalidRequestError,
   LLMClient,
   LLMEvent,
@@ -52,6 +54,8 @@ let requests: LLMRequest[] = []
 /** Runs before a request's response streams; tests hold it back to keep a background summary in flight. */
 let beforeResponse: Effect.Effect<void> = Effect.void
 let reject: ((request: LLMRequest) => boolean) | undefined
+/** Fails a request with a chosen error, per model; the hop tests use it to kill the summary model. */
+let failRequest: ((request: LLMRequest) => AIError | undefined) | undefined
 const model = LanguageModel.make({
   id: "summary-model",
   provider: "test",
@@ -70,6 +74,8 @@ const cost = [
 const client = Layer.mock(LLMClient.Service)({
   stream: (request: LLMRequest) => {
     requests.push(request)
+    const failure = failRequest?.(request)
+    if (failure) return Stream.fail(failure)
     if (reject?.(request)) {
       return Stream.fail(
         new AIError({
@@ -1544,5 +1550,168 @@ it.effect("a background summary waits for a response whose prompt is still cache
     expect(yield* summarizedAfterBreak("ses_precompute_cold")).toContain("Third question")
     // A model that keeps its cache for an hour summarizes the older response right away.
     expect(yield* summarizedAfterBreak("ses_precompute_hour", "1h")).not.toContain("Third question")
+  }),
+)
+
+/**
+ * A dead summary model must not kill the compaction: the summary hops to the next model in the chain, falls back
+ * to the session model once when the chain is exhausted, and only then fails. The catalog below is one dead model
+ * plus two working ones, all free, so the chain — rotated past the session model — is working-one, working-two,
+ * then the dead model again.
+ */
+const hopModel = (provider: string, id: string, limit: Model.Info["limit"]) =>
+  SessionRunnerModel.resolved(LanguageModel.make({ id, provider, route: OpenAIChat.route }), {
+    capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
+    cost: [],
+    limit,
+  })
+const deadHopModel = hopModel("dead", "dead-model", { context: 40_000, output: 8_000 })
+const workingOneHopModel = hopModel("test", "working-one", { context: 200_000, output: 32_000 })
+const workingTwoHopModel = hopModel("test", "working-two", { context: 200_000, output: 32_000 })
+const hopResolved = [deadHopModel, workingOneHopModel, workingTwoHopModel]
+const hopCatalog: readonly Model.Info[] = [
+  {
+    ...Model.Info.default(Provider.ID.make("dead"), Model.ID.make("dead-model")),
+    limit: { context: 40_000, output: 8_000 },
+  },
+  Model.Info.default(Provider.ID.make("test"), Model.ID.make("working-one")),
+  Model.Info.default(Provider.ID.make("test"), Model.ID.make("working-two")),
+]
+const hopIt = testEffect(
+  AppNodeBuilder.build(
+    LayerNode.group([
+      Database.node,
+      Bus.node,
+      SessionProjector.node,
+      SessionStore.node,
+      SessionCompaction.node,
+      SessionModelRequest.node,
+      PluginHooks.node,
+    ]),
+    [
+      Bus.node.replace(Bus.configured({ persist: true })),
+      llmClient.replace(client),
+      Location.node.replace(Location.boundNode({ directory: AbsolutePath.make("/project") })),
+      Model.node.replace(
+        Model.node.mapLayer((base) =>
+          Layer.effect(
+            Model.Service,
+            Effect.map(Model.Service, (models) =>
+              Model.Service.of({
+                ...models,
+                available: () => Effect.succeed(hopCatalog),
+              }),
+            ),
+          ).pipe(Layer.provide(base)),
+        ),
+      ),
+      SessionRunnerModel.node.replace(
+        Layer.succeed(SessionRunnerModel.Service, {
+          resolve: (session) => {
+            const ref = session.model
+            if (ref === undefined)
+              return Effect.fail(new SessionRunnerModel.ModelNotSelectedError({ sessionID: session.id }))
+            const found = hopResolved.find(
+              (candidate) => candidate.ref.providerID === ref.providerID && candidate.ref.id === ref.id,
+            )
+            if (found !== undefined) return Effect.succeed(found)
+            return Effect.fail(
+              new SessionRunnerModel.ModelUnavailableError({ providerID: ref.providerID, modelID: ref.id }),
+            )
+          },
+        }),
+      ),
+    ],
+  ),
+)
+
+/** A manual compaction whose session model is the dead one, so the summary must hop to complete. */
+const hopFixture = Effect.fnUntraced(function* (messages: readonly SessionMessage.Info[]) {
+  requests = []
+  const session = yield* insertSession(Session.ID.create(), {
+    model: { id: "dead-model", providerID: "dead" },
+  })
+  const context = {
+    ...loaded(session, messages),
+    model: deadHopModel,
+    tools: {
+      definitions: [ToolDefinition.make({ name: "read", description: "Read files", inputSchema: { type: "object" } })],
+      execute: () => Effect.die("Compaction must not execute tools"),
+    },
+  }
+  const compaction = yield* SessionCompaction.Service
+  yield* compaction.transform((editor) => editor.configure({ buffer: summaryBuffer, precompute: true }))
+  return {
+    context,
+    compaction,
+    run: (input = context) =>
+      compaction.compact({ reason: "manual", context: input, inputID: SessionMessage.ID.create() }),
+  }
+})
+
+/** The production failure: the provider answers 401 with "User not found." */
+const authFailure = () =>
+  new AIError({
+    reason: new AuthenticationError({
+      message: "User not found.",
+      body: '{"error":{"message":"User not found.","code":401}}',
+      http: { url: "https://provider.invalid/v1/chat/completions", status: 401, headers: {} },
+    }),
+  })
+
+hopIt.effect("summary hops to the next model when its model answers 401", () =>
+  Effect.gen(function* () {
+    const fixture = yield* hopFixture([textUser("First question"), measured("First answer", 100)])
+    failRequest = (request) => (request.model.id === "dead-model" ? authFailure() : undefined)
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        failRequest = undefined
+      }),
+    )
+    expect(yield* fixture.run()).toEqual({ status: "completed" })
+    expect(requests.map((request) => `${request.model.provider}/${request.model.id}`)).toEqual([
+      "dead/dead-model",
+      "test/working-one",
+    ])
+  }),
+)
+
+hopIt.effect("summary falls back to the session model once when the chain is exhausted", () =>
+  Effect.gen(function* () {
+    const fixture = yield* hopFixture([textUser("First question"), measured("First answer", 100)])
+    failRequest = () => authFailure()
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        failRequest = undefined
+      }),
+    )
+    const outcome = yield* fixture.run()
+    expect(outcome.status).toBe("failed")
+    if (outcome.status === "failed") expect(outcome.error.type).toBe("provider.auth")
+    expect(requests.map((request) => `${request.model.provider}/${request.model.id}`)).toEqual([
+      "dead/dead-model",
+      "test/working-one",
+      "test/working-two",
+      "dead/dead-model",
+    ])
+  }),
+)
+
+hopIt.effect("summary fails without hopping when the failure is not a hop signal", () =>
+  Effect.gen(function* () {
+    const fixture = yield* hopFixture([textUser("First question"), measured("First answer", 100)])
+    failRequest = (request) =>
+      request.model.id === "dead-model"
+        ? new AIError({ reason: new ContentPolicyError({ message: "Blocked by the provider" }) })
+        : undefined
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        failRequest = undefined
+      }),
+    )
+    const outcome = yield* fixture.run()
+    expect(outcome.status).toBe("failed")
+    if (outcome.status === "failed") expect(outcome.error.type).toBe("provider.content-filter")
+    expect(requests.map((request) => `${request.model.provider}/${request.model.id}`)).toEqual(["dead/dead-model"])
   }),
 )
