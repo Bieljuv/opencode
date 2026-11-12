@@ -2,6 +2,7 @@ import { RpcClient, RpcClientError } from "effect/rpc"
 import { AppRpcs } from "./ipc-rpc/app"
 import { EventRpcs } from "./ipc-rpc/events"
 import { ManosTechClientRpcs } from "./ipc-rpc/manostech-client"
+import { ManosTechConnectionsRpcs } from "./ipc-rpc/manostech-connections"
 import { PluginRpcs } from "./ipc-rpc/plugins"
 import { FileRpcs } from "./ipc-rpc/files"
 import { MenuRpcs } from "./ipc-rpc/menu"
@@ -13,6 +14,8 @@ export { AppRpcs } from "./ipc-rpc/app"
 export { EventRpcs } from "./ipc-rpc/events"
 
 export { ManosTechClientRpcs } from "./ipc-rpc/manostech-client"
+
+export { ManosTechConnectionsRpcs } from "./ipc-rpc/manostech-connections"
 
 export { PluginRpcs } from "./ipc-rpc/plugins"
 
@@ -32,6 +35,7 @@ export const DesktopRpcs = AppRpcs.merge(
   EventRpcs,
   PluginRpcs,
   ManosTechClientRpcs,
+  ManosTechConnectionsRpcs,
 )
 
 export type DesktopRpcClient = RpcClient.FromGroup<typeof DesktopRpcs, RpcClientError.RpcClientError>

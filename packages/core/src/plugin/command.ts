@@ -5,6 +5,7 @@ import { Effect, Stream } from "effect"
 import { Bus } from "../bus.js"
 import { Location } from "../location.js"
 import { Mcp } from "../mcp/index.js"
+import { formatPublishConnectionsBlock, readPublishConnections } from "../publish/connections.js"
 import PROMPT_INITIALIZE from "./command/initialize.txt"
 import PROMPT_PUBLISH from "./command/publish.txt"
 import PROMPT_REVIEW from "./command/review.txt"
@@ -61,7 +62,13 @@ export const Plugin = define({
             .prompt({
               ...input.prompt,
               sessionID: input.sessionID,
-              text: append(PROMPT_PUBLISH, input.prompt.text),
+              text: append(
+                PROMPT_PUBLISH.replaceAll(
+                  "$CONEXOES",
+                  () => formatPublishConnectionsBlock(readPublishConnections(process.env)),
+                ),
+                input.prompt.text,
+              ),
               delivery: input.delivery,
             })
             .pipe(Effect.asVoid),

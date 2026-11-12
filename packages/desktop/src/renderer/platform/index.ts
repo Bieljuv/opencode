@@ -60,6 +60,12 @@ export function createDesktopPlatform(api: ElectronAPI, windowState: DesktopWind
     markWeeklyUsageWarned: () => api.markWeeklyUsageWarned(),
     transcribeClientAudio: (audioDataUrl) => api.transcribeClientAudio(audioDataUrl),
     onClientChanged: (callback) => api.onClientChanged(callback),
+    getConnectionsStatus: () => api.getConnectionsStatus(),
+    saveConnectionToken: (provider, token) => api.saveConnectionToken(provider, token),
+    testConnection: (provider) => api.testConnection(provider),
+    disconnectConnection: (provider) => api.disconnectConnection(provider),
+    setConnectionPermission: (provider, permission) => api.setConnectionPermission(provider, permission),
+    onConnectionsChanged: (callback) => api.onConnectionsChanged(callback),
     onDragCancel: (callback) => {
       window.addEventListener(DragCancelEvent, callback)
 

@@ -8,7 +8,11 @@ import type { Readiness } from "./readiness.js"
  * only: the destination service behind each step (code hosting, database,
  * hosting) is a code-level `provider` that the UI never renders, so the
  * client never has to know a connector name to publish (Gabriel, 13:10
- * 2026-11-11). The user confirms each step; the app never publishes silently.
+ * 2026-11-11). One exception, ordered 2026-11-12: the /publicar guide may
+ * name a connection that is MISSING (GitHub, Vercel or Supabase), so the
+ * client knows where to connect it in the sidebar — the name appears only
+ * then, never as a step label. The user confirms each step; the app never
+ * publishes silently.
  */
 export type PublishStepId = "download" | "save-code" | "database" | "go-live"
 

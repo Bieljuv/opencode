@@ -10,6 +10,7 @@ import { DesktopFiles, openExternalURL } from "./files"
 import { appHandlers } from "./ipc-handlers/app"
 import { eventHandlers } from "./ipc-handlers/events"
 import { manosTechClientHandlers } from "./ipc-handlers/manostech-client"
+import { manosTechConnectionsHandlers } from "./ipc-handlers/manostech-connections"
 import { pluginHandlers } from "./ipc-handlers/plugins"
 import { fileHandlers } from "./ipc-handlers/files"
 import { menuHandlers } from "./ipc-handlers/menu"
@@ -36,6 +37,7 @@ const handlers = Layer.mergeAll(
   eventHandlers,
   pluginHandlers,
   manosTechClientHandlers,
+  manosTechConnectionsHandlers,
 )
 
 export const layer = RpcServer.layer(DesktopRpcs, { disableFatalDefects: true }).pipe(

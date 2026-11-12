@@ -58,6 +58,13 @@ export const api: ElectronAPI = {
   markWeeklyUsageWarned: () => invoke("ManosTechClientWeeklyUsageWarned"),
   transcribeClientAudio: (audio) => invoke("ManosTechClientTranscribe", { audio }),
   onClientChanged: (cb) => listen("ManosTechClientChanged", () => cb()),
+  getConnectionsStatus: () => invoke("ManosTechConnectionsStatus").then(mutable),
+  saveConnectionToken: (provider, token) => invoke("ManosTechConnectionsSave", { provider, token }),
+  testConnection: (provider) => invoke("ManosTechConnectionsTest", { provider }),
+  disconnectConnection: (provider) => invoke("ManosTechConnectionsDisconnect", { provider }),
+  setConnectionPermission: (provider, permission) =>
+    invoke("ManosTechConnectionsPermission", { provider, permission }),
+  onConnectionsChanged: (cb) => listen("ManosTechConnectionsChanged", () => cb()),
 
   openDirectoryPicker: (opts) => invoke("FilesOpenDirectoryPicker", { options: opts }).then(mutable),
   openFilePicker: (opts) => invoke("FilesOpenFilePicker", { options: opts }).then(mutable),

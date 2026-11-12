@@ -82,10 +82,18 @@ export class ManosTechClientChanged extends Schema.TaggedClass<ManosTechClientCh
   {},
 ) {}
 
+// One of the client's publish connections changed (connected, tested, disconnected, permission); the
+// sidebar and the connections panel re-read the status.
+export class ManosTechConnectionsChanged extends Schema.TaggedClass<ManosTechConnectionsChanged>()(
+  "ManosTechConnectionsChanged",
+  {},
+) {}
+
 export const DesktopEvent = Schema.Union([
   DeepLinksOpened,
   SidecarChanged,
   ManosTechClientChanged,
+  ManosTechConnectionsChanged,
   MenuCommandTriggered,
   WindowFullscreenChanged,
   WindowFocusChanged,

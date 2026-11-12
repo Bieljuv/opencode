@@ -4,7 +4,9 @@ import { Context, Effect, FileSystem, Layer, Option, Path, Schema } from "effect
 import { SidecarChanged } from "../../shared/ipc-rpc/events"
 import { CHANNEL } from "../constants"
 import { loadApiKey } from "../client-auth/store"
+import { connectionServerEnv, loadAllConnectionStatuses } from "../connections/store"
 import { emitIpcEvent } from "../ipc-events"
+import { getStore } from "../storage/store"
 import { getMainWindows } from "../windows"
 import { clientFilePath } from "../client-auth/reporter-file"
 import { BackgroundServiceMachine } from "./background-service-machine"
@@ -119,6 +121,12 @@ const ensure = Effect.fn("BackgroundService.ensure")(function* (mode: Background
       env: {
         MANOSTECH_CLIENT_FILE: clientFilePath(),
         ...(ingestApiKey ? { MANOSTECH_INGEST_API_KEY: ingestApiKey } : {}),
+        // ManosTech: as conexões da conta do cliente chegam ao servidor
+        // só como estado (conectado + nome da conta), nunca como token —
+        // o token fica no store do processo principal. O guia /publicar
+        // lê daqui qual conexão falta; a execução via API ainda não
+        // existe e segue guiada/manual.
+        ...connectionServerEnv(loadAllConnectionStatuses(getStore())),
         // ManosTech: the bundled video tools (Node + FFmpeg) go on the
         // sidecar's PATH so the agent's shell finds them without installing
         // anything. Nothing is added when the build did not stage them.
