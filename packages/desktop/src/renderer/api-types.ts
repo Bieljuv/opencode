@@ -8,6 +8,10 @@ import type {
   ManosTechClientTranscribeValue,
   ManosTechClientUsageValue,
 } from "../shared/ipc-rpc/manostech-client"
+import type {
+  ManosTechConnectionResultValue,
+  ManosTechConnectionStatusValue,
+} from "../shared/ipc-rpc/manostech-connections"
 import type { StorageSnapshot } from "../shared/ipc-transport"
 import type { WindowBootstrap } from "../shared/window-bootstrap"
 import type {
@@ -62,6 +66,18 @@ export type ElectronAPI = {
   markWeeklyUsageWarned(): Promise<void>
   transcribeClientAudio(audio: string): Promise<ManosTechClientTranscribeValue>
   onClientChanged(cb: () => void): () => void
+  getConnectionsStatus(): Promise<ManosTechConnectionStatusValue[]>
+  saveConnectionToken(
+    provider: ManosTechConnectionStatusValue["provider"],
+    token: string,
+  ): Promise<ManosTechConnectionResultValue>
+  testConnection(provider: ManosTechConnectionStatusValue["provider"]): Promise<ManosTechConnectionResultValue>
+  disconnectConnection(provider: ManosTechConnectionStatusValue["provider"]): Promise<void>
+  setConnectionPermission(
+    provider: ManosTechConnectionStatusValue["provider"],
+    permission: ManosTechConnectionStatusValue["permission"],
+  ): Promise<void>
+  onConnectionsChanged(cb: () => void): () => void
   openDirectoryPicker(opts?: DirectoryPickerOptions): Promise<string | string[] | null>
   openFilePicker(opts?: FilePickerOptions): Promise<PickedFiles | null>
   readPickedFile(token: string, path: string): Promise<ArrayBuffer>

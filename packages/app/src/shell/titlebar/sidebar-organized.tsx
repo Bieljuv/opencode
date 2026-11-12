@@ -26,6 +26,7 @@ import { useGlobal, useServerCtx } from "@/runtime/server/runtime"
 import type { Project } from "@/runtime/server/types"
 import { ProjectIcon } from "@/shell/layout/project-icon"
 import { useLayout } from "@/shell/state/layout"
+import { ConnectionsSidebarSection } from "@/connections/sidebar-section"
 import { createProjectSessionActions } from "@/shell/tabs/project-sessions"
 import { useTabs, type Tab } from "@/shell/tabs/tabs"
 import { pathKey } from "@/workspaces/path-key"
@@ -148,6 +149,7 @@ export function SidebarOrganized(props: {
               </div>
             </Show>
           </section>
+          <ConnectionsSidebarSection />
           <div class="flex shrink-0 flex-col gap-3" classList={{ hidden: tabs.store.length === 0 }}>
             <Show when={!state.projectsCollapsed}>
               <div role="separator" class="mx-2 h-px shrink-0 bg-v2-border-border-muted" />

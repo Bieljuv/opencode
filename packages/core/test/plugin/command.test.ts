@@ -33,14 +33,13 @@ const it = testEffect(
 )
 
 describe("CommandPlugin.Plugin", () => {
-  it.effect("registers built-in init and review commands", () =>
-    Effect.gen(function* () {
+  function setupPlugin(prompts: {
+    text: string
+    files?: readonly { readonly uri: string }[]
+    delivery?: "steer" | "queue"
+  }[]) {
+    return Effect.gen(function* () {
       const command = yield* Command.Service
-      const prompts: {
-        text: string
-        files?: readonly { readonly uri: string }[]
-        delivery?: "steer" | "queue"
-      }[] = []
       yield* CommandPlugin.Plugin.effect(
         host({
           command: {
@@ -69,6 +68,19 @@ describe("CommandPlugin.Plugin", () => {
           Location.Service.of(location({ directory }, { projectDirectory: project })),
         ),
       )
+
+      return command
+    })
+  }
+
+  it.effect("registers built-in init and review commands", () =>
+    Effect.gen(function* () {
+      const prompts: {
+        text: string
+        files?: readonly { readonly uri: string }[]
+        delivery?: "steer" | "queue"
+      }[] = []
+      const command = yield* setupPlugin(prompts)
 
       expect(yield* command.get("init")).toMatchObject({
         name: "init",
@@ -132,6 +144,70 @@ describe("CommandPlugin.Plugin", () => {
           delivery: "steer",
         },
       ])
+    }),
+  )
+
+  it.effect("publicar injects the connections block from the desktop env", () =>
+    Effect.gen(function* () {
+      const prompts: { text: string }[] = []
+      process.env.MANOSTECH_CONNECTIONS_AVAILABLE = "1"
+      process.env.MANOSTECH_CONN_GITHUB_CONNECTED = "1"
+      process.env.MANOSTECH_CONN_GITHUB_LOGIN = "gabriel"
+
+      try {
+        const command = yield* setupPlugin(prompts)
+
+        expect(yield* command.get("publicar")).toMatchObject({
+          name: "publicar",
+          description: "guided publish: check the project, then publish it step by step with the user",
+        })
+        yield* command.execute({
+          name: "publicar",
+          invocation: {
+            sessionID: Session.ID.make("ses_test"),
+            prompt: { text: "quero publicar" },
+            delivery: "steer",
+          },
+        })
+
+        expect(prompts).toHaveLength(1)
+        expect(prompts[0].text).toContain("## Conexões da conta do cliente")
+        expect(prompts[0].text).toContain("- GitHub: conectado como gabriel")
+        expect(prompts[0].text).toContain("- Vercel: não conectado")
+        expect(prompts[0].text).toContain("- Supabase: não conectado")
+        expect(prompts[0].text).toContain("quero publicar")
+        expect(prompts[0].text).not.toContain("$CONEXOES")
+      } finally {
+        delete process.env.MANOSTECH_CONNECTIONS_AVAILABLE
+        delete process.env.MANOSTECH_CONN_GITHUB_CONNECTED
+        delete process.env.MANOSTECH_CONN_GITHUB_LOGIN
+      }
+    }),
+  )
+
+  it.effect("publicar without the desktop env shows no connections section", () =>
+    Effect.gen(function* () {
+      const prompts: { text: string }[] = []
+      delete process.env.MANOSTECH_CONNECTIONS_AVAILABLE
+      delete process.env.MANOSTECH_CONN_GITHUB_CONNECTED
+      delete process.env.MANOSTECH_CONN_GITHUB_LOGIN
+      delete process.env.MANOSTECH_CONN_VERCEL_CONNECTED
+      delete process.env.MANOSTECH_CONN_SUPABASE_CONNECTED
+
+      const command = yield* setupPlugin(prompts)
+      yield* command.execute({
+        name: "publicar",
+        invocation: {
+          sessionID: Session.ID.make("ses_test"),
+          prompt: { text: "quero publicar" },
+          delivery: "steer",
+        },
+      })
+
+      expect(prompts).toHaveLength(1)
+      expect(prompts[0].text).not.toContain("Conexões da conta do cliente")
+      expect(prompts[0].text).not.toContain("$CONEXOES")
+      expect(prompts[0].text).toContain("quero publicar")
     }),
   )
 })

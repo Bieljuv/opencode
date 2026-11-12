@@ -175,6 +175,39 @@ type PlatformBase = {
 
   /** Listen for client account changes (desktop only) */
   onClientChanged?(cb: () => void): () => void
+
+  /** The client's publish connections (GitHub, Vercel, Supabase), when the desktop stores them (desktop only) */
+  getConnectionsStatus?(): Promise<
+    {
+      provider: "github" | "vercel" | "supabase"
+      connected: boolean
+      login?: string
+      permission: "allow" | "ask" | "block"
+    }[]
+  >
+
+  /** Save a connection token after the main process validates it with the provider (desktop only) */
+  saveConnectionToken?(
+    provider: "github" | "vercel" | "supabase",
+    token: string,
+  ): Promise<{ ok: true; login?: string } | { ok: false }>
+
+  /** Revalidate the stored token of a connection (desktop only) */
+  testConnection?(
+    provider: "github" | "vercel" | "supabase",
+  ): Promise<{ ok: true; login?: string } | { ok: false }>
+
+  /** Remove a connection and its token (desktop only) */
+  disconnectConnection?(provider: "github" | "vercel" | "supabase"): Promise<void>
+
+  /** Change what the agent may do with a connection without asking (desktop only) */
+  setConnectionPermission?(
+    provider: "github" | "vercel" | "supabase",
+    permission: "allow" | "ask" | "block",
+  ): Promise<void>
+
+  /** Listen for connection changes (desktop only) */
+  onConnectionsChanged?(cb: () => void): () => void
 }
 
 export type Platform = PlatformBase &
