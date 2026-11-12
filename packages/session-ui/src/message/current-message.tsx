@@ -74,6 +74,9 @@ export function SessionAssistantContent(props: {
   reasoningDefaultOpen?: boolean
   toolOpen?: boolean
   onToolOpenChange?: (open: boolean) => void
+  /** Whether a long completed text part is open. The timeline owns it so it survives row recycling. */
+  textExpanded?: boolean
+  onTextExpandedChange?: (open: boolean) => void
   onContentRendered?: () => void
 }) {
   return (
@@ -89,6 +92,9 @@ export function SessionAssistantContent(props: {
             turnTokensPerSecond={props.turnTokensPerSecond}
             sources={props.sources}
             onOpenSources={props.onOpenSources}
+            expanded={props.textExpanded}
+            onExpandedChange={props.onTextExpandedChange}
+            onContentRendered={props.onContentRendered}
           />
         )}
       </Match>
