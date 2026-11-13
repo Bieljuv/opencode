@@ -38,7 +38,7 @@ export const ProjectHandler = HttpApiBuilder.group(Api, "server.project", (handl
           const refusal = Project.deleteRefusal(projectID, canonical, home)
           if (refusal)
             return yield* new InvalidRequestError({ message: `Project cannot be deleted: ${refusal.reason}` })
-          // Stop the project's sessions first, paging through them: a running agent must not outlive its directory.
+          // Stop the project's sessions first, paging through them: a running agent must not outlive its project.
           const removeSessions = (cursor: Session.ListCursor | undefined): Effect.Effect<void, InvalidRequestError> =>
             Effect.gen(function* () {
               const page = yield* session.list({ project: projectID, cursor }).pipe(

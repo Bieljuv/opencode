@@ -1319,7 +1319,7 @@ export const dict = {
 
   "project.delete.failed.title": "Failed to delete project",
   "project.delete.title": "Delete project",
-  "project.delete.confirm": 'Delete the project "{{name}}"? The folder below will be permanently deleted from this computer.',
+  "project.delete.confirm": 'Delete the project "{{name}}"? It leaves the list and its sessions are closed. The files stay on this computer, in this folder:',
   "project.delete.button": "Delete project",
 
   "workspace.new": "New worktree",

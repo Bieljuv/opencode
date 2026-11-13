@@ -20,7 +20,7 @@ const options = {
 const ProjectsResponse = Schema.Array(Project.Info)
 const SessionResponse = Schema.Struct({ data: Session.Info })
 
-it.live("deletes the project, its sessions, and its directory from disk", () =>
+it.live("removes the project and its sessions, and leaves its directory on disk", () =>
   Effect.gen(function* () {
     const config = yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("opencode-project-delete-")))
     const directory = path.join(config.path, "project")
@@ -51,7 +51,7 @@ it.live("deletes the project, its sessions, and its directory from disk", () =>
     expect(deleted.status).toBe(204)
 
     const exists = yield* Effect.promise(() => fs.stat(directory).then(() => true, () => false))
-    expect(exists).toBe(false)
+    expect(exists).toBe(true)
     const gone = yield* request(`/api/session/${session.id}`, "GET")
     expect(gone.status).toBe(404)
     expect(((yield* Effect.promise(() => gone.json())) as { _tag: string })._tag).toBe("SessionNotFoundError")

@@ -97,9 +97,9 @@ export interface Interface {
   readonly list: (input?: ListInput) => Effect.Effect<ReadonlyArray<Info>>
   readonly update: (input: UpdateInput) => Effect.Effect<Info, NotFoundError>
   /**
-   * Deletes the project record and its directory from disk. The caller removes the project's sessions first:
-   * this service must not depend on Session (Session resolves through Project), so the server handler owns that
-   * ordering. The directory always comes from the server's own project row, never from client input.
+   * Removes the project record from the app. The files stay on disk: only the registry rows go away. The caller
+   * removes the project's sessions first: this service must not depend on Session (Session resolves through
+   * Project), so the server handler owns that ordering.
    */
   readonly delete: (projectID: ID) => Effect.Effect<Info, NotFoundError | DeleteRefusedError>
   /** Records Project activity for recency ordering, at most once per minute per Project. */
@@ -310,16 +310,6 @@ const layer = Layer.effect(
       const home = yield* fs.resolve(os.homedir())
       const refusal = deleteRefusal(projectID, canonical, home)
       if (refusal) return yield* refusal
-      // Delete the directory before its rows: a failure leaves the project listed, and the sweep archives rows
-      // whose directories are gone, so neither half can strand the other permanently.
-      yield* fs.remove(canonical, { recursive: true, force: true }).pipe(
-        Effect.catchIf(
-          (error) => error.reason._tag === "NotFound",
-          () => Effect.void,
-        ),
-        // Anything else (a permission failure, a locked file) is an infrastructure failure like a database error.
-        Effect.orDie,
-      )
       yield* db.delete(WorktreeTable).where(eq(WorktreeTable.project_id, projectID)).run().pipe(Effect.orDie)
       yield* db.delete(ProjectTable).where(eq(ProjectTable.id, projectID)).run().pipe(Effect.orDie)
       yield* bus.publish(ProjectSchema.Event.Deleted, info)
