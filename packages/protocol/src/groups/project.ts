@@ -1,7 +1,7 @@
 import { Project } from "@opencode/schema/project"
 import { Schema, SchemaGetter, Struct } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
-import { ProjectNotFoundError } from "../errors.js"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
+import { InvalidRequestError, ProjectNotFoundError } from "../errors.js"
 
 const root = "/api/project"
 const UpdatePayload = Schema.Struct(Struct.omit(Project.UpdateInput.fields, ["projectID"]))
@@ -36,6 +36,20 @@ export const ProjectGroup = HttpApiGroup.make("server.project")
         identifier: "project.update",
         summary: "Update project",
         description: "Update the project canonical directory, display metadata, and workspace commands.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.delete("project.delete", `${root}/:projectID`, {
+      params: { projectID: Project.ID },
+      success: HttpApiSchema.NoContent,
+      error: [InvalidRequestError, ProjectNotFoundError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "project.delete",
+        summary: "Delete project",
+        description:
+          "Delete a project, its sessions, and its directory from disk. The directory always comes from the server's own project record, never from the request.",
       }),
     ),
   )

@@ -78,6 +78,7 @@ export type HomeProjectsViewProps = {
   onRevealProject: (server: ServerConnection.Any, project: LocalProject) => void
   onClearNotifications: (server: ServerConnection.Any, project: LocalProject) => void
   onHideProject: (server: ServerConnection.Any, project: LocalProject) => void
+  onDeleteProject: (server: ServerConnection.Any, project: LocalProject) => void
   onOpenSettings: () => void
   onOpenHelp: () => void
 }

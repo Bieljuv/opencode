@@ -775,6 +775,11 @@ export const dict = {
   "session.delete.title": "Excluir sessão",
   "session.delete.confirm": 'Excluir sessão "{{name}}"?',
   "session.delete.button": "Excluir sessão",
+
+  "project.delete.failed.title": "Falha ao excluir projeto",
+  "project.delete.title": "Excluir projeto",
+  "project.delete.confirm": 'Excluir o projeto "{{name}}"? A pasta abaixo será apagada do computador de forma permanente.',
+  "project.delete.button": "Excluir projeto",
   "workspace.new": "Novo espaço de trabalho",
   "workspace.delete.failed.title": "Falha ao excluir espaço de trabalho",
   "workspace.status.checking": "Verificando alterações não mescladas…",

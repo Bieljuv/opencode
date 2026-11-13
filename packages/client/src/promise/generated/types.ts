@@ -1854,6 +1854,24 @@ export type ProjectUpdated = {
   }
 }
 
+export type ProjectDeleted = {
+  id: EventID
+  created: number
+  metadata?: { [x: string]: any }
+  type: "project.deleted"
+  location?: LocationRef
+  data: {
+    id: ProjectID
+    canonical: AbsolutePath
+    vcs?: ProjectVcs
+    name?: string
+    icon?: ProjectIcon
+    commands?: ProjectCommands
+    time: ProjectTime
+    sandboxes: Array<string>
+  }
+}
+
 export type WorktreeUpdated = {
   id: EventID
   created: number
@@ -2910,6 +2928,7 @@ export type V2Event =
   | PermissionReplied
   | PluginUpdated
   | ProjectUpdated
+  | ProjectDeleted
   | WorktreeUpdated
   | WorktreeResolved
   | CommandUpdated
@@ -4230,6 +4249,10 @@ export type ProjectUpdateInput = {
 
 export type ProjectUpdateOutput = Project
 
+export type ProjectDeleteInput = { readonly projectID: string }
+
+export type ProjectDeleteOutput = void
+
 export type FormListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
 
 export type FormListOutput = { location: LocationPublicRef; data: Array<FormInfo> }
@@ -4420,6 +4443,7 @@ export type EventSubscribeInput = {
         | "permission.replied"
         | "plugin.updated"
         | "project.updated"
+        | "project.deleted"
         | "worktree.updated"
         | "worktree.resolved"
         | "command.updated"
