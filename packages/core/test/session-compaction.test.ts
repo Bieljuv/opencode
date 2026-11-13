@@ -1688,10 +1688,12 @@ hopIt.effect("summary falls back to the session model once when the chain is exh
     const outcome = yield* fixture.run()
     expect(outcome.status).toBe("failed")
     if (outcome.status === "failed") expect(outcome.error.type).toBe("provider.auth")
+    // working-two is never tried: its provider died with working-one's
+    // 401, so the chain is exhausted after two attempts and the summary
+    // falls back to the session model once, which fails the same way.
     expect(requests.map((request) => `${request.model.provider}/${request.model.id}`)).toEqual([
       "dead/dead-model",
       "test/working-one",
-      "test/working-two",
       "dead/dead-model",
     ])
   }),

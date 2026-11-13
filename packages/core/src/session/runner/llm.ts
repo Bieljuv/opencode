@@ -287,6 +287,12 @@ const layer = Layer.effect(
         rotateAfter,
       })
       const tried = new Set<string>()
+      // Providers killed for this step: a model that fails with a dead
+      // key or an empty quota condemns its whole provider, not just
+      // itself — every other model of that provider would fail the same
+      // way, so the hop skips them all instead of burning the cascade
+      // budget ping-ponging between dead providers.
+      const deadProviders = new Set<string>()
       // Fall back to the session model once per step: when the chain is
       // exhausted, the session keeps the model it was on instead of dying.
       // The switch is published like any hop, so the loop below
@@ -384,7 +390,16 @@ const layer = Layer.effect(
           // never the provider's own error.
           if (!SessionRouter.isHopSignal(compacted.error))
             return yield* new StepFailedError({ error: compacted.error })
-          const next = SessionRouter.nextHopFor(chain, tried, available, compacted.error, loaded.model)
+          if (SessionRouter.isProviderDead(compacted.error))
+            deadProviders.add(loaded.model.ref.providerID)
+          const next = SessionRouter.nextHopFor(
+            chain,
+            tried,
+            available,
+            compacted.error,
+            loaded.model,
+            deadProviders,
+          )
           if (next !== undefined) {
             tried.add(SessionRouter.refKey(next))
             yield* Effect.logInfo("manostech router hop", {
@@ -505,7 +520,8 @@ const layer = Layer.effect(
               // which model was tried and why the chain stopped.
               if (SessionRouter.isHopSignal(error)) {
                 const exhausted = SessionRouter.isExhaustionError(error)
-                const next = SessionRouter.nextHopFor(chain, tried, available, error, loaded.model)
+                if (SessionRouter.isProviderDead(error)) deadProviders.add(loaded.model.ref.providerID)
+                const next = SessionRouter.nextHopFor(chain, tried, available, error, loaded.model, deadProviders)
                 if (next !== undefined) {
                   tried.add(SessionRouter.refKey(next))
                   yield* Effect.logInfo("manostech router hop", {
@@ -596,7 +612,7 @@ const layer = Layer.effect(
             // retry callback below makes the hop; compaction only runs
             // when no bigger model remains in the chain.
             if (
-              SessionRouter.nextHopWithLargerWindow(available, chain, tried, loaded.model) !==
+              SessionRouter.nextHopWithLargerWindow(available, chain, tried, loaded.model, deadProviders) !==
               undefined
             )
               return Effect.succeed(false)

@@ -246,6 +246,23 @@ export function isExhaustionError(error: { readonly type: string }): boolean {
 }
 
 /**
+ * A failure that kills the whole provider for the rest of the step, not
+ * just the model that failed. An auth failure means the provider's
+ * credential is dead — account-level, and it never heals inside the
+ * turn — so every other model of that provider would fail the same way.
+ * An exhaustion failure means the provider's quota/credit bucket is
+ * empty — the cap covers every model on the account — so another model
+ * of the same provider hits the same wall. A timeout, a provider-side
+ * failure, or a broken reply is transient or per model, and a prompt the
+ * model cannot hold is per model too: those hop without killing the
+ * provider. A plain throttle is per model or per account and keeps its
+ * own hop; it never kills the provider either.
+ */
+export function isProviderDead(error: { readonly type: string }): boolean {
+  return error.type === "provider.auth" || isExhaustionError(error)
+}
+
+/**
  * Every session error type the runner hops away from. Exhaustion hops at
  * once; a plain throttle (`provider.rate-limit`) also hops — a 429 is a
  * per-model or per-account cap (OpenRouter's free 20/min and 50/day caps,
@@ -602,12 +619,13 @@ export function buildChain(
   return [...rotatedFree, ...otherPaid.map(toRef), ...(kimi === undefined ? [] : [toRef(kimi)])]
 }
 
-/** First chain ref not tried yet in this turn, or undefined when exhausted. */
+/** First chain ref not tried yet and not from a dead provider, or undefined when exhausted. */
 export function nextHop(
   chain: readonly Model.Ref[],
   tried: ReadonlySet<string>,
+  deadProviders: ReadonlySet<string> = new Set(),
 ): Model.Ref | undefined {
-  return chain.find((ref) => !tried.has(refKey(ref)))
+  return chain.find((ref) => !tried.has(refKey(ref)) && !deadProviders.has(ref.providerID))
 }
 
 /**
@@ -645,15 +663,19 @@ export function stepHead(
  * A rate limit is usually per account, not per model — OpenRouter's free
  * 20/min cap covers every free model on the account — so hopping to
  * another model of the same provider hits the same wall. A different
- * provider is a different bucket.
+ * provider is a different bucket. A dead provider never comes back: the
+ * fallback only returns a model of a provider that is still alive.
  */
 export function nextHopFromProvider(
   chain: readonly Model.Ref[],
   tried: ReadonlySet<string>,
   providerID: string,
+  deadProviders: ReadonlySet<string> = new Set(),
 ): Model.Ref | undefined {
   return (
-    chain.find((ref) => !tried.has(refKey(ref)) && ref.providerID !== providerID) ?? nextHop(chain, tried)
+    chain.find(
+      (ref) => !tried.has(refKey(ref)) && !deadProviders.has(ref.providerID) && ref.providerID !== providerID,
+    ) ?? nextHop(chain, tried, deadProviders)
   )
 }
 
@@ -671,11 +693,13 @@ export function nextHopWithLargerWindow(
   chain: readonly Model.Ref[],
   tried: ReadonlySet<string>,
   current: Pick<Model.Info, "limit">,
+  deadProviders: ReadonlySet<string> = new Set(),
 ): Model.Ref | undefined {
   const currentWindow = inputWindow(current.limit)
   const byKey = new Map(pool.map((model) => [refKey(model), model]))
   return chain.find((ref) => {
     if (tried.has(refKey(ref))) return false
+    if (deadProviders.has(ref.providerID)) return false
     const model = byKey.get(refKey(ref))
     if (model === undefined) return false
     const window = inputWindow(model.limit)
@@ -691,7 +715,12 @@ export function nextHopWithLargerWindow(
  * dead key is usually per provider, so another model of the same provider
  * hits the same wall. The step's retry callback and the auto-compaction
  * failure in the runner both hop through this one function, so a model
- * that fails anywhere in the step is treated the same way.
+ * that fails anywhere in the step is treated the same way. Providers in
+ * `deadProviders` never come back in this step: once a provider fails
+ * with a dead key or an empty quota, the caller marks it dead and every
+ * hop below skips its models, so the turn cannot burn its cascade
+ * budget ping-ponging between dead providers while live models sit
+ * further down the chain.
  */
 export function nextHopFor(
   chain: readonly Model.Ref[],
@@ -699,10 +728,12 @@ export function nextHopFor(
   available: readonly Model.Info[],
   error: { readonly type: string },
   current: Pick<Model.Info, "limit"> & { readonly ref: Model.Ref },
+  deadProviders: ReadonlySet<string> = new Set(),
 ): Model.Ref | undefined {
-  if (isExhaustionError(error)) return nextHop(chain, tried)
-  if (error.type === CONTEXT_OVERFLOW_TYPE) return nextHopWithLargerWindow(available, chain, tried, current)
-  return nextHopFromProvider(chain, tried, current.ref.providerID)
+  if (isExhaustionError(error)) return nextHop(chain, tried, deadProviders)
+  if (error.type === CONTEXT_OVERFLOW_TYPE)
+    return nextHopWithLargerWindow(available, chain, tried, current, deadProviders)
+  return nextHopFromProvider(chain, tried, current.ref.providerID, deadProviders)
 }
 
 /**
