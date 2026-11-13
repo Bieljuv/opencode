@@ -177,6 +177,8 @@ import type {
   ProjectListOutput,
   ProjectUpdateInput,
   ProjectUpdateOutput,
+  ProjectDeleteInput,
+  ProjectDeleteOutput,
   FormListInput,
   FormListOutput,
   PermissionRequestListInput,
@@ -2115,6 +2117,17 @@ export function make(options: ClientOptions) {
             successStatus: 200,
             declaredStatuses: [400, 401, 404],
             empty: false,
+          },
+          requestOptions,
+        ),
+      delete: (input: ProjectDeleteInput, requestOptions?: RequestOptions) =>
+        request<ProjectDeleteOutput>(
+          {
+            method: "DELETE",
+            path: `/api/project/${encodeURIComponent(input.projectID)}`,
+            successStatus: 204,
+            declaredStatuses: [400, 401, 404],
+            empty: true,
           },
           requestOptions,
         ),

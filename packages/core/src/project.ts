@@ -3,6 +3,7 @@ export * as Project from "./project.js"
 import { Cache, Context, Duration, Effect, Layer, Schedule, Schema, Scope } from "effect"
 import { ChildProcess } from "effect/process"
 import { and, asc, desc, eq, gte, isNotNull, isNull, lt, lte, ne, sql } from "drizzle-orm"
+import os from "os"
 import path from "path"
 import { AbsolutePath } from "./schema.js"
 import { Bus } from "./bus.js"
@@ -35,6 +36,11 @@ export type UpdateInput = ProjectSchema.UpdateInput
 
 export class NotFoundError extends Schema.TaggedError<NotFoundError>()("Project.NotFoundError", {
   projectID: ID,
+}) {}
+
+export class DeleteRefusedError extends Schema.TaggedError<DeleteRefusedError>()("Project.DeleteRefusedError", {
+  projectID: ID,
+  reason: Schema.Literals(["global", "root", "home", "invalid"]),
 }) {}
 
 export interface Resolved {
@@ -90,6 +96,12 @@ export interface ActivateOptions {
 export interface Interface {
   readonly list: (input?: ListInput) => Effect.Effect<ReadonlyArray<Info>>
   readonly update: (input: UpdateInput) => Effect.Effect<Info, NotFoundError>
+  /**
+   * Deletes the project record and its directory from disk. The caller removes the project's sessions first:
+   * this service must not depend on Session (Session resolves through Project), so the server handler owns that
+   * ordering. The directory always comes from the server's own project row, never from client input.
+   */
+  readonly delete: (projectID: ID) => Effect.Effect<Info, NotFoundError | DeleteRefusedError>
   /** Records Project activity for recency ordering, at most once per minute per Project. */
   readonly activate: (projectID: ID, options?: ActivateOptions) => Effect.Effect<void>
   /** Resolves the owning Project, persisting it unless `persist` is false. */
@@ -282,6 +294,36 @@ const layer = Layer.effect(
       const project = fromRow(row)
       yield* bus.publish(ProjectSchema.Event.Updated, project)
       return project
+    })
+
+    const remove = Effect.fn("Project.delete")(function* (projectID: ID) {
+      const row = yield* db
+        .select()
+        .from(ProjectTable)
+        .where(eq(ProjectTable.id, projectID))
+        .get()
+        .pipe(Effect.orDie)
+      if (!row) return yield* new NotFoundError({ projectID })
+      const info = fromRow(row)
+      if (!row.worktree.trim()) return yield* new DeleteRefusedError({ projectID, reason: "invalid" })
+      const canonical = AbsolutePath.make(yield* fs.resolve(row.worktree))
+      const home = yield* fs.resolve(os.homedir())
+      const refusal = deleteRefusal(projectID, canonical, home)
+      if (refusal) return yield* refusal
+      // Delete the directory before its rows: a failure leaves the project listed, and the sweep archives rows
+      // whose directories are gone, so neither half can strand the other permanently.
+      yield* fs.remove(canonical, { recursive: true, force: true }).pipe(
+        Effect.catchIf(
+          (error) => error.reason._tag === "NotFound",
+          () => Effect.void,
+        ),
+        // Anything else (a permission failure, a locked file) is an infrastructure failure like a database error.
+        Effect.orDie,
+      )
+      yield* db.delete(WorktreeTable).where(eq(WorktreeTable.project_id, projectID)).run().pipe(Effect.orDie)
+      yield* db.delete(ProjectTable).where(eq(ProjectTable.id, projectID)).run().pipe(Effect.orDie)
+      yield* bus.publish(ProjectSchema.Event.Deleted, info)
+      return info
     })
 
     const activated = new Map<ID, number>()
@@ -504,9 +546,21 @@ const layer = Layer.effect(
       )
     })
 
-    return Service.of({ list, update, activate, resolve, sweep })
+    return Service.of({ list, update, delete: remove, activate, resolve, sweep })
   }),
 )
+
+/**
+ * Pure guard shared by the service and the server handler, so the handler refuses before removing any session:
+ * the service re-checks it before deleting anything.
+ */
+export function deleteRefusal(projectID: ID, canonical: string, home: string) {
+  if (projectID === ID.global) return new DeleteRefusedError({ projectID, reason: "global" })
+  if (path.parse(canonical).root === canonical) return new DeleteRefusedError({ projectID, reason: "root" })
+  const isHome = process.platform === "win32" ? canonical.toLowerCase() === home.toLowerCase() : canonical === home
+  if (isHome) return new DeleteRefusedError({ projectID, reason: "home" })
+  return undefined
+}
 
 export function configured(options?: Options) {
   return makeGlobalNode({

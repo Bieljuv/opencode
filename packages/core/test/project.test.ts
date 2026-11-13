@@ -1,6 +1,7 @@
 import { describe, expect } from "bun:test"
 import { $ } from "bun"
 import fs from "fs/promises"
+import os from "os"
 import path from "path"
 import { Effect, Layer, Stream } from "effect"
 import { AppNodeBuilder } from "@opencode/core/effect/app-node-builder"
@@ -299,6 +300,112 @@ describe("Project archiving", () => {
       yield* project.sweep()
 
       expect((yield* project.list()).map((item) => item.id)).toEqual([Project.ID.global])
+    }),
+  )
+})
+
+describe("Project.delete", () => {
+  const exists = (dir: string) => Effect.promise(() => fs.stat(dir).then(() => true, () => false))
+
+  it.live("deletes the directory from disk, its rows, and publishes project.deleted", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      const target = path.join(tmp.path, "project")
+      const nested = path.join(target, "nested", "file.txt")
+      yield* Effect.promise(() => fs.mkdir(path.dirname(nested), { recursive: true }))
+      yield* Effect.promise(() => fs.writeFile(nested, "keep"))
+      const project = yield* Project.Service
+      const bus = yield* Bus.Service
+      const info = yield* project.resolve(abs(target))
+      const canonical = yield* real(target)
+      const deleted: Project.Info[] = []
+      yield* bus.subscribe(ProjectSchema.Event.Deleted).pipe(
+        Stream.runForEach((event) => Effect.sync(() => deleted.push(event.data))),
+        Effect.forkScoped({ startImmediately: true }),
+      )
+
+      expect(yield* project.delete(info.id)).toMatchObject({ id: info.id, canonical })
+      yield* Effect.yieldNow
+
+      expect(yield* exists(target)).toBe(false)
+      expect((yield* project.list()).map((item) => item.id)).not.toContain(info.id)
+      expect(deleted.map((item) => item.id)).toEqual([info.id])
+    }),
+  )
+
+  it.live("deletes the row when the directory is already gone", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      const target = path.join(tmp.path, "project")
+      yield* Effect.promise(() => fs.mkdir(target))
+      const project = yield* Project.Service
+      const info = yield* project.resolve(abs(target))
+      yield* Effect.promise(() => fs.rm(target, { recursive: true }))
+
+      expect((yield* project.delete(info.id)).id).toBe(info.id)
+      expect((yield* project.list()).map((item) => item.id)).not.toContain(info.id)
+    }),
+  )
+
+  it.live("refuses the global project and leaves its directory alone", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      const target = path.join(tmp.path, "project")
+      yield* Effect.promise(() => fs.mkdir(target))
+      const db = (yield* Database.Service).db
+      const project = yield* Project.Service
+      yield* db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: abs(target), sandboxes: [], time_active: 1 })
+        .run()
+
+      const error = yield* project.delete(Project.ID.global).pipe(Effect.flip)
+
+      expect(error).toMatchObject({ _tag: "Project.DeleteRefusedError", reason: "global" })
+      expect(yield* exists(target)).toBe(true)
+      expect((yield* project.list()).map((item) => item.id)).toContain(Project.ID.global)
+    }),
+  )
+
+  it.live("refuses the filesystem root", () =>
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const project = yield* Project.Service
+      const root = path.parse(process.cwd()).root
+      yield* db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.make("root"), worktree: abs(root), sandboxes: [], time_active: 1 })
+        .run()
+
+      const error = yield* project.delete(Project.ID.make("root")).pipe(Effect.flip)
+
+      expect(error).toMatchObject({ _tag: "Project.DeleteRefusedError", reason: "root" })
+      expect((yield* project.list()).map((item) => item.id)).toContain(Project.ID.make("root"))
+    }),
+  )
+
+  it.live("refuses the home directory", () =>
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const project = yield* Project.Service
+      yield* db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.make("home"), worktree: abs(os.homedir()), sandboxes: [], time_active: 1 })
+        .run()
+
+      const error = yield* project.delete(Project.ID.make("home")).pipe(Effect.flip)
+
+      expect(error).toMatchObject({ _tag: "Project.DeleteRefusedError", reason: "home" })
+      expect((yield* project.list()).map((item) => item.id)).toContain(Project.ID.make("home"))
+    }),
+  )
+
+  it.effect("fails with NotFoundError for an unknown project", () =>
+    Effect.gen(function* () {
+      const project = yield* Project.Service
+      const error = yield* project.delete(Project.ID.make("missing")).pipe(Effect.flip)
+
+      expect(error._tag).toBe("Project.NotFoundError")
     }),
   )
 })

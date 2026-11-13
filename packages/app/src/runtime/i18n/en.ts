@@ -1317,6 +1317,11 @@ export const dict = {
   "session.delete.confirm": 'Delete session "{{name}}"?',
   "session.delete.button": "Delete session",
 
+  "project.delete.failed.title": "Failed to delete project",
+  "project.delete.title": "Delete project",
+  "project.delete.confirm": 'Delete the project "{{name}}"? The folder below will be permanently deleted from this computer.',
+  "project.delete.button": "Delete project",
+
   "workspace.new": "New worktree",
   "common.viewAll": "View all",
   "session.new.workspace.local.tooltip": "Uses project’s current checkout",

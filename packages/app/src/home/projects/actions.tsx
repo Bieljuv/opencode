@@ -183,6 +183,16 @@ export function createProjectActions() {
     },
     hide: (conn: ServerConnection.Any, project: LocalProject) =>
       global.serverCtx(ServerConnection.key(conn))?.projects.hide(project),
+    delete(conn: ServerConnection.Any, project: LocalProject) {
+      // The server deletes by project ID; a project without one never reached the server.
+      if (!project.id)
+        return showToast({
+          title: language.t("project.delete.failed.title"),
+        })
+      void import("./delete-dialog").then(({ ProjectDeleteDialog }) => {
+        void dialog.show(() => <ProjectDeleteDialog conn={conn} project={project} />)
+      })
+    },
     canReveal: revealProject.available,
     reveal: revealProject.reveal,
   }

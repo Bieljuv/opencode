@@ -96,6 +96,7 @@ export function createHomeProjectsController(home: HomeController) {
         choose(conn)
       },
       hide: actions.hide,
+      delete: actions.delete,
       canReveal: actions.canReveal,
       reveal: actions.reveal,
     },
