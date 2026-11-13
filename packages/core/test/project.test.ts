@@ -307,7 +307,7 @@ describe("Project archiving", () => {
 describe("Project.delete", () => {
   const exists = (dir: string) => Effect.promise(() => fs.stat(dir).then(() => true, () => false))
 
-  it.live("deletes the directory from disk, its rows, and publishes project.deleted", () =>
+  it.live("removes its rows, keeps the directory on disk, and publishes project.deleted", () =>
     Effect.gen(function* () {
       const tmp = yield* tmpdirScoped()
       const target = path.join(tmp.path, "project")
@@ -327,13 +327,14 @@ describe("Project.delete", () => {
       expect(yield* project.delete(info.id)).toMatchObject({ id: info.id, canonical })
       yield* Effect.yieldNow
 
-      expect(yield* exists(target)).toBe(false)
+      expect(yield* exists(target)).toBe(true)
+      expect(yield* Effect.promise(() => fs.readFile(nested, "utf8"))).toBe("keep")
       expect((yield* project.list()).map((item) => item.id)).not.toContain(info.id)
       expect(deleted.map((item) => item.id)).toEqual([info.id])
     }),
   )
 
-  it.live("deletes the row when the directory is already gone", () =>
+  it.live("removes the row when the directory is already gone", () =>
     Effect.gen(function* () {
       const tmp = yield* tmpdirScoped()
       const target = path.join(tmp.path, "project")

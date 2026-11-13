@@ -778,7 +778,7 @@ export const dict = {
 
   "project.delete.failed.title": "Falha ao excluir projeto",
   "project.delete.title": "Excluir projeto",
-  "project.delete.confirm": 'Excluir o projeto "{{name}}"? A pasta abaixo será apagada do computador de forma permanente.',
+  "project.delete.confirm": 'Excluir o projeto "{{name}}"? Ele sai da lista e as sessões dele são fechadas. Os arquivos continuam no computador, nesta pasta:',
   "project.delete.button": "Excluir projeto",
   "workspace.new": "Novo espaço de trabalho",
   "workspace.delete.failed.title": "Falha ao excluir espaço de trabalho",
