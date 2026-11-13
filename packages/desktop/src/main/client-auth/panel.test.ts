@@ -72,6 +72,7 @@ const server = Bun.serve({
             origin: "desktop",
             device_id: "dev-1",
             expires_at: "2026-12-09T03:27:00Z",
+            trial_ends_at: null,
             api_key: "key-2",
             gateway_url: "https://gw.exemplo/v1",
           })
@@ -307,6 +308,64 @@ describe("validateSession", () => {
     const result = await validateSession(base, "tok-revogado")
 
     expect(result).toEqual({ ok: false, error: { tag: "invalid-credentials" } })
+  })
+
+  test("a converted account (trial null on the server) validates with no trial end", async () => {
+    // O caso do Gabriel: a conta foi convertida para paga no painel, mas
+    // a sessão guardada no PC ainda tem o fim do trial antigo. A
+    // validação tem que devolver o null do servidor — é ele que o
+    // getStatus usa para liberar o editor.
+    const result = await validateSession(base, "tok-1")
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.trialEndsAt).toBeNull()
+    }
+  })
+
+  test("a live trial validates with the trial end the server reports", async () => {
+    const live = Bun.serve({
+      port: 0,
+      fetch: () =>
+        Response.json({
+          client,
+          mustChange: false,
+          origin: "desktop",
+          device_id: "dev-1",
+          expires_at: "2026-12-09T03:27:00Z",
+          trial_ends_at: "2026-11-20T06:00:00Z",
+        }),
+    })
+
+    try {
+      const result = await validateSession(`http://127.0.0.1:${live.port}`, "tok-1")
+
+      expect(result.ok).toBe(true)
+      if (result.ok) {
+        expect(result.value.trialEndsAt).toBe("2026-11-20T06:00:00Z")
+      }
+    } finally {
+      live.stop()
+    }
+  })
+
+  test("an expired trial still maps to trial-expired", async () => {
+    const expired = Bun.serve({
+      port: 0,
+      fetch: () =>
+        Response.json(
+          { erro: "teste_expirado", mensagem: "O período de teste de 5 horas terminou." },
+          { status: 403 },
+        ),
+    })
+
+    try {
+      const result = await validateSession(`http://127.0.0.1:${expired.port}`, "tok-1")
+
+      expect(result).toEqual({ ok: false, error: { tag: "trial-expired" } })
+    } finally {
+      expired.stop()
+    }
   })
 })
 
