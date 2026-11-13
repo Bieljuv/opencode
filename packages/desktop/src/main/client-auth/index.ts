@@ -360,9 +360,11 @@ export async function getStatus(): Promise<ClientStatus> {
   if (result.ok) {
     const info = result.value
     const keyBefore = loadApiKey()
-    // A /sessao não reemite token nem trial: o guardado continua valendo.
+    // A /sessao não reemite token: o guardado continua valendo. Ela
+    // devolve o fim do trial — o servidor é a fonte quando a conta
+    // muda de plano (ex.: trial convertido para pago vira null).
     // Ela também nunca devolve a chave — só o fim do ciclo mensal.
-    updateSession({ mustChange: info.mustChange, expires_at: info.expires_at })
+    updateSession({ mustChange: info.mustChange, expires_at: info.expires_at, trial_ends_at: info.trialEndsAt })
     storeGatewayCredentials(info.apiKey, info.gatewayUrl)
     // O arquivo de identidade só era escrito no login: se ele sumiu ou
     // corrompeu desde então, o repórter fica mudo até o próximo login.
@@ -382,7 +384,7 @@ export async function getStatus(): Promise<ClientStatus> {
         token: stored.token,
         mustChange: info.mustChange,
         client: info.client,
-        trial_ends_at: stored.trial_ends_at,
+        trial_ends_at: info.trialEndsAt,
         expires_at: info.expires_at,
         apiKey: info.apiKey,
         gatewayUrl: info.gatewayUrl,

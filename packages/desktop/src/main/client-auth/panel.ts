@@ -78,6 +78,8 @@ export type SessionInfo = {
   readonly gatewayUrl: string | undefined
   /** Fim do ciclo mensal da chave (`api_key_renews_at`); null = sem chave. */
   readonly apiKeyRenewsAt: string | null
+  /** Fim do trial devolvido pela /sessao; null = conta paga (ou sem teste). */
+  readonly trialEndsAt: string | null
 }
 
 /** Uso diário do plano, como o painel expõe em GET /api/uso. */
@@ -166,6 +168,7 @@ const SessaoResponse = Schema.Struct({
   tem_chave_api: Schema.optional(Schema.Boolean),
   key_prefix: Schema.optional(Schema.NullOr(Schema.String)),
   api_key_renews_at: Schema.optional(Schema.NullOr(Schema.String)),
+  trial_ends_at: Schema.optional(Schema.NullOr(Schema.String)),
   api_key: Schema.optional(Schema.NullOr(Schema.String)),
   gateway_url: Schema.optional(Schema.NullOr(Schema.String)),
 })
@@ -372,6 +375,7 @@ export async function validateSession(baseUrl: string, token: string): Promise<R
       apiKey: value.api_key ?? undefined,
       gatewayUrl: value.gateway_url ?? undefined,
       apiKeyRenewsAt: value.api_key_renews_at ?? null,
+      trialEndsAt: value.trial_ends_at ?? null,
     },
   }
 }
