@@ -15,6 +15,7 @@ import {
   HIDE_MODEL_IDENTITY,
   MANDATORY_TOKEN_SAVING,
   MULTI_AGENT,
+  STRIX_AUTO,
   unsupportedParts,
   WEB_SEARCH_FIRST,
 } from "@opencode/core/session/model-request"
@@ -446,6 +447,7 @@ describe("SessionModelRequest.baseTranscript mandatory token saving and arena au
     // gutting their text, fails this test.
     expect(system).toContain(MANDATORY_TOKEN_SAVING)
     expect(system).toContain(ARENA_AUTO)
+    expect(system).toContain(STRIX_AUTO)
     expect(system).toContain(WEB_SEARCH_FIRST)
     // Distinctive phrases, so an emptied constant fails too.
     expect(system).toContain("search the web with the websearch tool")
@@ -460,6 +462,9 @@ describe("SessionModelRequest.baseTranscript mandatory token saving and arena au
     expect(system).toContain("Never run the tournament for a trivial request")
     expect(system).toContain("offer the tournament and ask")
     expect(system).toContain("tell the user in chat that the tournament is running")
+    expect(system).toContain("auditoria de segurança")
+    expect(system).toContain("Never run the full audit unasked")
+    expect(system).toContain("tell the user in chat that the security audit is running")
   })
 
   test("the mandatory rules also ride along on a coding turn", () => {
@@ -473,6 +478,7 @@ describe("SessionModelRequest.baseTranscript mandatory token saving and arena au
     const system = transcript.system.map((part) => part.text).join("\n")
     expect(system).toContain(MANDATORY_TOKEN_SAVING)
     expect(system).toContain(ARENA_AUTO)
+    expect(system).toContain(STRIX_AUTO)
   })
 })
 

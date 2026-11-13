@@ -106,6 +106,8 @@ export const SettingsExtensions: Component<{
         return language.t("settings.extensions.skills.descriptions.ponytail")
       case "real-sfx":
         return language.t("settings.extensions.skills.descriptions.real-sfx")
+      case "strix":
+        return language.t("settings.extensions.skills.descriptions.strix")
       default:
         return description?.split("Gatilhos:")[0]?.split("Triggers:")[0]?.trim() ?? ""
     }
