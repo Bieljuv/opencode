@@ -8,10 +8,14 @@ import { ToolServer } from "../tools/server.js"
 import type { ClaudeIO } from "./io.js"
 
 // Claude Code features that duplicate opencode's. opencode's version wins (specs/v2/claude-agent-provider.md, "Turned Off").
+// Auto-compact is the exception: opencode's compaction cannot shrink the long-lived Claude process's transcript
+// (it only replaces opencode's own record), so Claude compacts itself at the window below instead.
 const ISOLATION_ENV = {
   CLAUDE_CODE_DISABLE_CLAUDE_MDS: "1",
   CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
-  DISABLE_AUTO_COMPACT: "1",
+  // Cleared, not "1": a value from the user's shell would otherwise keep auto-compact off, and the SDK settings
+  // below are what turn it on. Same clear-pattern as CLAUDE_CODE_SIMPLE below.
+  DISABLE_AUTO_COMPACT: undefined,
   CLAUDE_CODE_ENABLE_AWAY_SUMMARY: "0",
   ENABLE_TOOL_SEARCH: "false",
   CLAUDE_CODE_DISABLE_ADVISOR_TOOL: "1",
@@ -25,6 +29,25 @@ const ISOLATION_ENV = {
   CLAUDE_CODE_EFFORT_LEVEL: undefined,
   // Caps every OpenCode tool call, which would fail subagents and permission prompts that run longer
   MCP_TOOL_TIMEOUT: undefined,
+}
+
+/**
+ * The auto-compact window opencode applies to Claude sessions, in tokens. Claude compacts its own long-lived
+ * transcript at this window, so a session never needs a manual /autocompact. The window never exceeds 85% of the
+ * model's known context window (a small-window model still compacts before it hits the limit) and never goes below
+ * the 100k the SDK accepts; an unknown window takes the 500k default.
+ */
+export const AUTO_COMPACT_WINDOW_TOKENS = 500_000
+const AUTO_COMPACT_WINDOW_MIN = 100_000
+const AUTO_COMPACT_WINDOW_SHARE = 0.85
+
+export function autoCompactWindowFor(contextWindow: number | undefined): number {
+  if (contextWindow === undefined || !Number.isFinite(contextWindow) || contextWindow <= 0)
+    return AUTO_COMPACT_WINDOW_TOKENS
+  return Math.max(
+    AUTO_COMPACT_WINDOW_MIN,
+    Math.min(AUTO_COMPACT_WINDOW_TOKENS, Math.floor(AUTO_COMPACT_WINDOW_SHARE * contextWindow)),
+  )
 }
 
 export function connectionEnv(connection: {
@@ -78,6 +101,8 @@ export async function session(input: {
   readonly connection?: Readonly<Record<string, string>>
   readonly directory: string
   readonly model: string
+  // The model's context window, when the last probe reported it; unknown takes the 500k default.
+  readonly contextWindow?: number
   readonly effort?: Options["effort"]
   readonly maxOutputTokens?: number
   readonly system: NonNullable<Options["systemPrompt"]>
@@ -95,6 +120,16 @@ export async function session(input: {
     systemPrompt: input.system,
     includePartialMessages: true,
     persistSession: input.persist,
+    // Auto-compact on, at the window for this model. The SDK loads these into the flag-settings layer (highest
+    // priority), so the default survives even though no settings files are loaded (settingSources: []). A
+    // /autocompact typed in the session still changes the live window for that session; the default returns on
+    // the next session. Opencode's own auto-compaction stays on as a backstop (it fires on opencode's recorded
+    // estimate and restarts the process from its own summary when it does).
+    settings: {
+      disableAllHooks: true,
+      autoCompactEnabled: true,
+      autoCompactWindow: autoCompactWindowFor(input.contextWindow),
+    },
     hooks: ToolHooks.make(input.pending),
     mcpServers: {},
   }

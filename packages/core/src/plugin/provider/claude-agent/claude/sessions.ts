@@ -7,7 +7,7 @@ import type {
   LanguageModelV3TextPart,
   LanguageModelV3ToolCallPart,
 } from "@ai-sdk/provider"
-import { Effect, Fiber, Semaphore } from "effect"
+import { Effect, Fiber, Semaphore, SubscriptionRef } from "effect"
 import { ClaudeIO } from "./io.js"
 import type { ClaudeStatus } from "./status.js"
 import { ClaudeQueryOptions } from "./query-options.js"
@@ -164,6 +164,13 @@ export function registry() {
               return yield* Effect.fail(new Error("Install Claude Code and run `claude auth login` first"))
             }
             const pending = PendingTools.make()
+            // The probe's context window for this model, when the last check reported it; the first launch of
+            // a session takes the 500k default instead.
+            const state = yield* SubscriptionRef.get(input.status.state)
+            const contextWindow =
+              state.type === "ready"
+                ? state.probe.models.find((model) => model.value === request.model)?.contextWindow
+                : undefined
             const session = yield* attempt(async () =>
               ClaudeSession.start(
                 await ClaudeQueryOptions.session({
@@ -172,6 +179,7 @@ export function registry() {
                   connection: request.connection,
                   directory: input.directory,
                   model: request.model,
+                  contextWindow,
                   effort: request.effort,
                   maxOutputTokens: request.maxOutputTokens,
                   system: request.system,
