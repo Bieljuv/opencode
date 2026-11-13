@@ -79,6 +79,7 @@ export type HomeProjectsViewProps = {
   onClearNotifications: (server: ServerConnection.Any, project: LocalProject) => void
   onHideProject: (server: ServerConnection.Any, project: LocalProject) => void
   onDeleteProject: (server: ServerConnection.Any, project: LocalProject) => void
+  onOpenTrash: (server: ServerConnection.Any) => void
   onOpenSettings: () => void
   onOpenHelp: () => void
 }
@@ -151,6 +152,10 @@ export function HomeProjectsView(props: HomeProjectsViewProps) {
               onOpenProjectNewSession={(server, directory) => {
                 setState("open", false)
                 props.onOpenProjectNewSession(server, directory)
+              }}
+              onOpenTrash={(server) => {
+                setState("open", false)
+                props.onOpenTrash(server)
               }}
             />
           </Popover.Content>
@@ -269,6 +274,16 @@ function HomeProjectsPanel(props: HomeProjectsViewProps) {
                         </HomeProjectNavButton>
                       </Show>
                     </Show>
+                    <HomeProjectNavButton
+                      type="button"
+                      data-action="home-open-trash"
+                      class="mt-1 disabled:opacity-60 [&>[data-slot=icon-svg]]:text-v2-icon-icon-muted"
+                      disabled={isServerFailed(props.serverHealth(server()))}
+                      onClick={() => props.onOpenTrash(server())}
+                    >
+                      <Icon name="trash" size="small" />
+                      <span class={HOME_PROJECT_NAV_LABEL}>{props.language.t("project.trash.title")}</span>
+                    </HomeProjectNavButton>
                   </div>
                 )}
               </Show>
@@ -317,6 +332,16 @@ function HomeProjectsPanel(props: HomeProjectsViewProps) {
                       <Show when={healthy() && !authentication() && !connecting(item) && hasProjects() && !collapsed()}>
                         <div class="mx-3 h-px bg-v2-border-border-base" />
                         <HomeProjectList {...props} {...contextMenuProps} server={item} items={projects()} />
+                      </Show>
+                      <Show when={healthy() && !authentication() && !connecting(item)}>
+                        <HomeProjectNavButton
+                          type="button"
+                          data-action="home-open-trash"
+                          onClick={() => props.onOpenTrash(item)}
+                        >
+                          <Icon name="trash" size="small" />
+                          <span class={HOME_PROJECT_NAV_LABEL}>{props.language.t("project.trash.title")}</span>
+                        </HomeProjectNavButton>
                       </Show>
                     </div>
                   )

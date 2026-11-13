@@ -97,6 +97,7 @@ export function createHomeProjectsController(home: HomeController) {
       },
       hide: actions.hide,
       delete: actions.delete,
+      openTrash: actions.openTrash,
       canReveal: actions.canReveal,
       reveal: actions.reveal,
     },

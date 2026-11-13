@@ -21,6 +21,20 @@ export const ProjectHandler = HttpApiBuilder.group(Api, "server.project", (handl
 
     return handlers
       .handle("project.list", (ctx) => project.list(ctx.query))
+      .handle("trash.list", () => project.trashList())
+      .handle("trash.restore", (ctx) =>
+        project.trashRestore(ctx.params.projectID).pipe(
+          Effect.catchTag("Project.NotFoundError", () => missingProject(ctx.params.projectID)),
+          Effect.catchTag(
+            "Project.TrashMissingError",
+            (error) =>
+              new InvalidRequestError({
+                message: `Project trash folder is missing: ${error.projectID}`,
+              }),
+          ),
+        ),
+      )
+      .handle("trash.empty", () => project.trashEmpty().pipe(Effect.as(HttpApiSchema.NoContent.make())))
       .handle("project.update", (ctx) =>
         project.update({ ...ctx.payload, projectID: ctx.params.projectID }).pipe(
           Effect.mapError(() => missingProject(ctx.params.projectID)),

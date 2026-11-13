@@ -397,6 +397,8 @@ export type LocationPublicInfo = {
   project: { id: ProjectID; directory: AbsolutePath; canonical: AbsolutePath }
 }
 
+export type ProjectTrashed = { id: ProjectID; name?: string; directory: AbsolutePath; trashedAt: number }
+
 export type ModelRef = { id: string; providerID: ProviderID; variant?: string }
 
 export type ProviderCache = { ttl?: ProviderCacheTTL; warming?: ProviderCacheWarming }
@@ -1872,6 +1874,33 @@ export type ProjectDeleted = {
   }
 }
 
+export type ProjectTrashed2 = {
+  id: EventID
+  created: number
+  metadata?: { [x: string]: any }
+  type: "project.trashed"
+  location?: LocationRef
+  data: { id: ProjectID; name?: string; directory: AbsolutePath; trashedAt: number }
+}
+
+export type ProjectRestored = {
+  id: EventID
+  created: number
+  metadata?: { [x: string]: any }
+  type: "project.restored"
+  location?: LocationRef
+  data: {
+    id: ProjectID
+    canonical: AbsolutePath
+    vcs?: ProjectVcs
+    name?: string
+    icon?: ProjectIcon
+    commands?: ProjectCommands
+    time: ProjectTime
+    sandboxes: Array<string>
+  }
+}
+
 export type WorktreeUpdated = {
   id: EventID
   created: number
@@ -2929,6 +2958,8 @@ export type V2Event =
   | PluginUpdated
   | ProjectUpdated
   | ProjectDeleted
+  | ProjectTrashed2
+  | ProjectRestored
   | WorktreeUpdated
   | WorktreeResolved
   | CommandUpdated
@@ -4239,6 +4270,14 @@ export type ProjectListInput = { readonly archived?: boolean | undefined }
 
 export type ProjectListOutput = Array<Project>
 
+export type ProjectTrashListOutput = Array<ProjectTrashed>
+
+export type ProjectTrashRestoreInput = { readonly projectID: string }
+
+export type ProjectTrashRestoreOutput = Project
+
+export type ProjectTrashEmptyOutput = void
+
 export type ProjectUpdateInput = {
   readonly projectID: string
   readonly canonical?: string | undefined
@@ -4444,6 +4483,8 @@ export type EventSubscribeInput = {
         | "plugin.updated"
         | "project.updated"
         | "project.deleted"
+        | "project.trashed"
+        | "project.restored"
         | "worktree.updated"
         | "worktree.resolved"
         | "command.updated"

@@ -74,4 +74,12 @@ export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
 
 const Updated = ephemeral({ type: "project.updated", schema: Info.fields })
 const Deleted = ephemeral({ type: "project.deleted", schema: Info.fields })
-export const Event = { Updated, Deleted, Definitions: inventory(Updated, Deleted) }
+const TrashedEvent = ephemeral({ type: "project.trashed", schema: Trashed.fields })
+const RestoredEvent = ephemeral({ type: "project.restored", schema: Info.fields })
+export const Event = {
+  Updated,
+  Deleted,
+  Trashed: TrashedEvent,
+  Restored: RestoredEvent,
+  Definitions: inventory(Updated, Deleted, TrashedEvent, RestoredEvent),
+}

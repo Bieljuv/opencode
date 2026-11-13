@@ -16,6 +16,9 @@ export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const UpdateInput = Project.UpdateInput
 export type UpdateInput = typeof UpdateInput.Type
 
+export const Trashed = Project.Trashed
+export interface Trashed extends Schema.Schema.Type<typeof Trashed> {}
+
 export const Event = Project.Event
 
 export const Vcs = Schema.Struct({

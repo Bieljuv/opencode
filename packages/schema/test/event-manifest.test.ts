@@ -41,6 +41,8 @@ describe("public event manifest", () => {
     expect(EventManifest.Server.get("session.deleted")).toBe(SessionEvent.Deleted)
     expect(EventManifest.Server.get("project.updated")).toBe(Project.Event.Updated)
     expect(EventManifest.Server.get("project.deleted")).toBe(Project.Event.Deleted)
+    expect(EventManifest.Server.get("project.trashed")).toBe(Project.Event.Trashed)
+    expect(EventManifest.Server.get("project.restored")).toBe(Project.Event.Restored)
     expect(EventManifest.Server.has("mcp.tools.changed")).toBe(false)
     expect(Agent.Event.Updated.durable).toBeUndefined()
     expect(EventManifest.Durable.has("agent.updated")).toBe(false)
@@ -56,7 +58,16 @@ describe("public event manifest", () => {
     expect(EventManifest.Latest.get("project.updated")).toBe(Project.Event.Updated)
     expect(Agent.Event.Definitions).toEqual([Agent.Event.Updated])
     expect(Credential.Event.Definitions).toEqual([Credential.Event.Updated, Credential.Event.Switched])
-    expect(Project.Event.Definitions).toEqual([Project.Event.Updated, Project.Event.Deleted])
+    expect(Project.Event.Definitions).toEqual([
+      Project.Event.Updated,
+      Project.Event.Deleted,
+      Project.Event.Trashed,
+      Project.Event.Restored,
+    ])
+    // toEqual ignores undefined array slots, so pin the new events explicitly: this must fail without them.
+    expect(Project.Event.Trashed).toBeDefined()
+    expect(Project.Event.Restored).toBeDefined()
+    expect(Project.Event.Definitions).toHaveLength(4)
     expect(Config.Event.Definitions).toEqual([Config.Event.Updated])
     expect(FileSystem.Event.Definitions).toEqual([FileSystem.Event.Changed])
     expect(FileSystemV1.Event.Definitions).toEqual([FileSystemV1.Event.Edited])

@@ -1891,6 +1891,18 @@ export type ProjectListInput = { readonly archived?: boolean | undefined }
 export type ProjectListOutput = ReadonlyArray<Project.Info>
 export type ProjectListOperation<E = never> = (input?: ProjectListInput) => Effect.Effect<ProjectListOutput, E>
 
+export type ProjectTrashListOutput = ReadonlyArray<Project.Trashed>
+export type ProjectTrashListOperation<E = never> = () => Effect.Effect<ProjectTrashListOutput, E>
+
+export type ProjectTrashRestoreInput = { readonly projectID: Project.ID }
+export type ProjectTrashRestoreOutput = Project.Info
+export type ProjectTrashRestoreOperation<E = never> = (
+  input: ProjectTrashRestoreInput,
+) => Effect.Effect<ProjectTrashRestoreOutput, E>
+
+export type ProjectTrashEmptyOutput = void
+export type ProjectTrashEmptyOperation<E = never> = () => Effect.Effect<ProjectTrashEmptyOutput, E>
+
 export type ProjectUpdateInput = {
   readonly projectID: Project.ID
   readonly canonical?: AbsolutePath | undefined
@@ -1907,6 +1919,11 @@ export type ProjectDeleteOperation<E = never> = (input: ProjectDeleteInput) => E
 
 export interface ProjectApi<E = never> {
   readonly list: ProjectListOperation<E>
+  readonly trash: {
+    readonly list: ProjectTrashListOperation<E>
+    readonly restore: ProjectTrashRestoreOperation<E>
+    readonly empty: ProjectTrashEmptyOperation<E>
+  }
   readonly update: ProjectUpdateOperation<E>
   readonly delete: ProjectDeleteOperation<E>
 }
@@ -2157,6 +2174,8 @@ export type EventSubscribeInput = {
         | "plugin.updated"
         | "project.updated"
         | "project.deleted"
+        | "project.trashed"
+        | "project.restored"
         | "worktree.updated"
         | "worktree.resolved"
         | "command.updated"

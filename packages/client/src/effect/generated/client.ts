@@ -181,6 +181,10 @@ import type {
   CredentialRemoveOutput,
   ProjectListInput,
   ProjectListOutput,
+  ProjectTrashListOutput,
+  ProjectTrashRestoreInput,
+  ProjectTrashRestoreOutput,
+  ProjectTrashEmptyOutput,
   ProjectUpdateInput,
   ProjectUpdateOutput,
   ProjectDeleteInput,
@@ -1283,6 +1287,17 @@ const EndpointProjectList = (raw: RawClient["server.project"]) => (input?: Proje
     raw["project.list"]({ query: { archived: input?.["archived"] } }).pipe(Effect.mapError(mapClientError)),
   )
 
+const EndpointProjectTrashList = (raw: RawClient["server.project"]) => () =>
+  preserveEffect<ProjectTrashListOutput>()(raw["trash.list"]({}).pipe(Effect.mapError(mapClientError)))
+
+const EndpointProjectTrashRestore = (raw: RawClient["server.project"]) => (input: ProjectTrashRestoreInput) =>
+  preserveEffect<ProjectTrashRestoreOutput>()(
+    raw["trash.restore"]({ params: { projectID: input["projectID"] } }).pipe(Effect.mapError(mapClientError)),
+  )
+
+const EndpointProjectTrashEmpty = (raw: RawClient["server.project"]) => () =>
+  preserveEffect<ProjectTrashEmptyOutput>()(raw["trash.empty"]({}).pipe(Effect.mapError(mapClientError)))
+
 const EndpointProjectUpdate = (raw: RawClient["server.project"]) => (input: ProjectUpdateInput) =>
   preserveEffect<ProjectUpdateOutput>()(
     raw["project.update"]({
@@ -1298,6 +1313,11 @@ const EndpointProjectDelete = (raw: RawClient["server.project"]) => (input: Proj
 
 const adaptGroupProject = (raw: RawClient["server.project"]) => ({
   list: EndpointProjectList(raw),
+  trash: {
+    list: EndpointProjectTrashList(raw),
+    restore: EndpointProjectTrashRestore(raw),
+    empty: EndpointProjectTrashEmpty(raw),
+  },
   update: EndpointProjectUpdate(raw),
   delete: EndpointProjectDelete(raw),
 })

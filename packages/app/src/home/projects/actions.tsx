@@ -193,6 +193,11 @@ export function createProjectActions() {
         void dialog.show(() => <ProjectDeleteDialog conn={conn} project={project} />)
       })
     },
+    openTrash(conn: ServerConnection.Any) {
+      void import("./trash-dialog").then(({ ProjectTrashDialog }) => {
+        void dialog.show(() => <ProjectTrashDialog conn={conn} />)
+      })
+    },
     canReveal: revealProject.available,
     reveal: revealProject.reveal,
   }

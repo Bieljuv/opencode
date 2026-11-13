@@ -13,12 +13,13 @@ import { ProjectSchema } from "@opencode/core/project/schema"
 import { ProjectTable } from "@opencode/core/project/sql"
 import { AbsolutePath } from "@opencode/core/schema"
 import { Hash } from "@opencode/util/hash"
+import { Global } from "@opencode/util/global"
 import { initGit } from "./fixture/git"
 import { countingSpawner } from "./fixture/spawn"
 import { tmpdirScoped } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
 
-const it = testEffect(AppNodeBuilder.build(LayerNode.group([Project.node, Database.node, Bus.node])))
+const it = testEffect(AppNodeBuilder.build(LayerNode.group([Project.node, Database.node, Bus.node, Global.node])))
 
 describe("Project.list", () => {
   it.effect("returns complete projects ordered by recent activity", () =>
@@ -307,7 +308,7 @@ describe("Project archiving", () => {
 describe("Project.delete", () => {
   const exists = (dir: string) => Effect.promise(() => fs.stat(dir).then(() => true, () => false))
 
-  it.live("removes its rows, keeps the directory on disk, and publishes project.deleted", () =>
+  it.live("moves the directory to the trash, removes its rows, and publishes project.trashed", () =>
     Effect.gen(function* () {
       const tmp = yield* tmpdirScoped()
       const target = path.join(tmp.path, "project")
@@ -318,6 +319,11 @@ describe("Project.delete", () => {
       const bus = yield* Bus.Service
       const info = yield* project.resolve(abs(target))
       const canonical = yield* real(target)
+      const trashed: ProjectSchema.Trashed[] = []
+      yield* bus.subscribe(ProjectSchema.Event.Trashed).pipe(
+        Stream.runForEach((event) => Effect.sync(() => trashed.push(event.data))),
+        Effect.forkScoped({ startImmediately: true }),
+      )
       const deleted: Project.Info[] = []
       yield* bus.subscribe(ProjectSchema.Event.Deleted).pipe(
         Stream.runForEach((event) => Effect.sync(() => deleted.push(event.data))),
@@ -327,24 +333,177 @@ describe("Project.delete", () => {
       expect(yield* project.delete(info.id)).toMatchObject({ id: info.id, canonical })
       yield* Effect.yieldNow
 
-      expect(yield* exists(target)).toBe(true)
-      expect(yield* Effect.promise(() => fs.readFile(nested, "utf8"))).toBe("keep")
+      expect(yield* exists(target)).toBe(false)
       expect((yield* project.list()).map((item) => item.id)).not.toContain(info.id)
-      expect(deleted.map((item) => item.id)).toEqual([info.id])
+      expect(yield* project.trashList()).toEqual([{ id: info.id, directory: canonical, trashedAt: expect.any(Number) }])
+      expect(trashed).toEqual([{ id: info.id, directory: canonical, trashedAt: expect.any(Number) }])
+      expect(deleted).toEqual([])
     }),
   )
 
-  it.live("removes the row when the directory is already gone", () =>
+  it.live("restores a trashed project with its files and metadata, and publishes project.restored", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      const target = path.join(tmp.path, "project")
+      const nested = path.join(target, "nested", "file.txt")
+      yield* Effect.promise(() => fs.mkdir(path.dirname(nested), { recursive: true }))
+      yield* Effect.promise(() => fs.writeFile(nested, "keep"))
+      const project = yield* Project.Service
+      const bus = yield* Bus.Service
+      const info = yield* project.resolve(abs(target))
+      yield* project.update({ projectID: info.id, name: "Trashed name", commands: { start: "bun dev" } })
+      const canonical = yield* real(target)
+      const restoredEvents: Project.Info[] = []
+      yield* bus.subscribe(ProjectSchema.Event.Restored).pipe(
+        Stream.runForEach((event) => Effect.sync(() => restoredEvents.push(event.data))),
+        Effect.forkScoped({ startImmediately: true }),
+      )
+
+      yield* project.delete(info.id)
+      expect(yield* exists(target)).toBe(false)
+
+      const restored = yield* project.trashRestore(info.id)
+      yield* Effect.yieldNow
+
+      expect(restored).toMatchObject({ id: info.id, canonical, name: "Trashed name", commands: { start: "bun dev" } })
+      expect(yield* exists(target)).toBe(true)
+      expect(yield* Effect.promise(() => fs.readFile(nested, "utf8"))).toBe("keep")
+      expect((yield* project.list()).map((item) => item.id)).toContain(info.id)
+      expect(yield* project.trashList()).toEqual([])
+      expect(restoredEvents.map((item) => item.id)).toEqual([info.id])
+    }),
+  )
+
+  it.live("restores to a suffixed directory when the original path is taken again", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      const target = path.join(tmp.path, "project")
+      yield* Effect.promise(() => fs.mkdir(target))
+      yield* Effect.promise(() => fs.writeFile(path.join(target, "original.txt"), "original"))
+      const project = yield* Project.Service
+      const info = yield* project.resolve(abs(target))
+      const canonical = yield* real(target)
+
+      yield* project.delete(info.id)
+      yield* Effect.promise(() => fs.mkdir(target))
+      yield* Effect.promise(() => fs.writeFile(path.join(target, "replacement.txt"), "replacement"))
+
+      const restored = yield* project.trashRestore(info.id)
+
+      expect(restored.canonical).toBe(AbsolutePath.make(`${canonical}-1`))
+      expect(yield* Effect.promise(() => fs.readFile(path.join(`${canonical}-1`, "original.txt"), "utf8"))).toBe(
+        "original",
+      )
+      expect(yield* Effect.promise(() => fs.readFile(path.join(target, "replacement.txt"), "utf8"))).toBe("replacement")
+      expect(yield* project.trashList()).toEqual([])
+    }),
+  )
+
+  it.live("empties the trash permanently and publishes project.deleted for each project", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      const first = path.join(tmp.path, "first")
+      const second = path.join(tmp.path, "second")
+      yield* Effect.promise(() => Promise.all([fs.mkdir(first), fs.mkdir(second)]))
+      const project = yield* Project.Service
+      const bus = yield* Bus.Service
+      const one = yield* project.resolve(abs(first))
+      const two = yield* project.resolve(abs(second))
+      const deleted: Project.Info[] = []
+      yield* bus.subscribe(ProjectSchema.Event.Deleted).pipe(
+        Stream.runForEach((event) => Effect.sync(() => deleted.push(event.data))),
+        Effect.forkScoped({ startImmediately: true }),
+      )
+
+      yield* project.delete(one.id)
+      yield* project.delete(two.id)
+      expect((yield* project.trashList()).map((item) => item.id).toSorted()).toEqual([one.id, two.id].toSorted())
+
+      expect(yield* project.trashEmpty()).toBe(2)
+      yield* Effect.yieldNow
+
+      expect(yield* project.trashList()).toEqual([])
+      expect(deleted.map((item) => item.id).toSorted()).toEqual([one.id, two.id].toSorted())
+    }),
+  )
+
+  it.live("restores the VCS type on the next resolve after restoring a git project", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      yield* Effect.promise(() => initRepo(tmp.path, { commit: true }))
+      const project = yield* Project.Service
+      const info = yield* project.resolve(abs(tmp.path))
+      expect(info.vcs?.type).toBe("git")
+
+      yield* project.delete(info.id)
+      const restored = yield* project.trashRestore(info.id)
+      expect(restored.vcs).toBeUndefined()
+
+      const resolved = yield* project.resolve(abs(tmp.path))
+      expect(resolved.vcs?.type).toBe("git")
+      expect((yield* project.list()).find((item) => item.id === info.id)?.vcs).toBe("git")
+    }),
+  )
+
+  it.live("fails to restore when the trash folder was removed by hand, and empty clears the stale row", () =>
     Effect.gen(function* () {
       const tmp = yield* tmpdirScoped()
       const target = path.join(tmp.path, "project")
       yield* Effect.promise(() => fs.mkdir(target))
       const project = yield* Project.Service
+      const global = yield* Global.Service
+      const info = yield* project.resolve(abs(target))
+
+      const trashDir = path.join(global.data, "trash")
+      // The trash directory is shared by every test in this run: take the entry this delete adds.
+      const before = yield* Effect.promise(() => fs.readdir(trashDir).catch(() => [] as string[]))
+      yield* project.delete(info.id)
+      const after = yield* Effect.promise(() => fs.readdir(trashDir))
+      const added = after.filter((entry) => !before.includes(entry))
+      expect(added).toHaveLength(1)
+      yield* Effect.promise(() => fs.rm(path.join(trashDir, added[0]!), { recursive: true, force: true }))
+
+      const error = yield* project.trashRestore(info.id).pipe(Effect.flip)
+      expect(error._tag).toBe("Project.TrashMissingError")
+      expect((yield* project.trashList()).map((item) => item.id)).toEqual([info.id])
+      expect((yield* project.list()).map((item) => item.id)).not.toContain(info.id)
+
+      expect(yield* project.trashEmpty()).toBe(1)
+      expect(yield* project.trashList()).toEqual([])
+    }),
+  )
+
+  it.live("fails with NotFoundError when restoring or emptying an unknown trash entry", () =>
+    Effect.gen(function* () {
+      const project = yield* Project.Service
+      const error = yield* project.trashRestore(Project.ID.make("missing")).pipe(Effect.flip)
+
+      expect(error._tag).toBe("Project.NotFoundError")
+      expect(yield* project.trashEmpty()).toBe(0)
+    }),
+  )
+
+  it.live("removes the row when the directory is already gone, publishing project.deleted and no trash entry", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      const target = path.join(tmp.path, "project")
+      yield* Effect.promise(() => fs.mkdir(target))
+      const project = yield* Project.Service
+      const bus = yield* Bus.Service
       const info = yield* project.resolve(abs(target))
       yield* Effect.promise(() => fs.rm(target, { recursive: true }))
+      const deleted: Project.Info[] = []
+      yield* bus.subscribe(ProjectSchema.Event.Deleted).pipe(
+        Stream.runForEach((event) => Effect.sync(() => deleted.push(event.data))),
+        Effect.forkScoped({ startImmediately: true }),
+      )
 
       expect((yield* project.delete(info.id)).id).toBe(info.id)
+      yield* Effect.yieldNow
+
       expect((yield* project.list()).map((item) => item.id)).not.toContain(info.id)
+      expect(yield* project.trashList()).toEqual([])
+      expect(deleted.map((item) => item.id)).toEqual([info.id])
     }),
   )
 

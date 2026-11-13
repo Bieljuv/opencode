@@ -2,8 +2,8 @@ export * as Project from "./project.js"
 
 import { Cache, Context, Duration, Effect, Layer, Schedule, Schema, Scope } from "effect"
 import { ChildProcess } from "effect/process"
-import type { PlatformError } from "effect/PlatformError"
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, sql } from "drizzle-orm"
+import { and, asc, desc, eq, gte, isNotNull, isNull, lt, lte, ne, sql } from "drizzle-orm"
+import nodeFs from "node:fs/promises"
 import os from "os"
 import path from "path"
 import { AbsolutePath } from "./schema.js"
@@ -43,6 +43,11 @@ export class NotFoundError extends Schema.TaggedError<NotFoundError>()("Project.
 export class DeleteRefusedError extends Schema.TaggedError<DeleteRefusedError>()("Project.DeleteRefusedError", {
   projectID: ID,
   reason: Schema.Literals(["global", "root", "home", "invalid"]),
+}) {}
+
+/** The trash folder for a trashed project was removed by hand; the row stays so "empty trash" can clear it. */
+export class TrashMissingError extends Schema.TaggedError<TrashMissingError>()("Project.TrashMissingError", {
+  projectID: ID,
 }) {}
 
 export interface Resolved {
@@ -99,11 +104,23 @@ export interface Interface {
   readonly list: (input?: ListInput) => Effect.Effect<ReadonlyArray<Info>>
   readonly update: (input: UpdateInput) => Effect.Effect<Info, NotFoundError>
   /**
-   * Removes the project record from the app. The files stay on disk: only the registry rows go away. The caller
+   * Moves the project to the trash: the directory moves under the server's trash directory and the registry rows
+   * go away, so the project leaves the list but can be restored. When the directory is already gone there is
+   * nothing to recover, so the rows just go away and the project is permanently deleted instead. The caller
    * removes the project's sessions first: this service must not depend on Session (Session resolves through
    * Project), so the server handler owns that ordering.
    */
   readonly delete: (projectID: ID) => Effect.Effect<Info, NotFoundError | DeleteRefusedError>
+  /** Lists the trashed projects, most recently trashed first. */
+  readonly trashList: () => Effect.Effect<ReadonlyArray<ProjectSchema.Trashed>>
+  /**
+   * Moves a trashed project back to its original directory (or a suffixed one when something already lives
+   * there) and back into the list. Its sessions do not come back: they were removed when the project was
+   * trashed. The VCS type is not restored either; the next resolve of the directory re-discovers it.
+   */
+  readonly trashRestore: (projectID: ID) => Effect.Effect<Info, NotFoundError | TrashMissingError>
+  /** Permanently deletes every trashed project folder from disk and returns how many were emptied. */
+  readonly trashEmpty: () => Effect.Effect<number>
   /** Records Project activity for recency ordering, at most once per minute per Project. */
   readonly activate: (projectID: ID, options?: ActivateOptions) => Effect.Effect<void>
   /** Resolves the owning Project, persisting it unless `persist` is false. */
@@ -140,6 +157,58 @@ function fromRow(row: typeof ProjectTable.$inferSelect): Info {
   }
 }
 
+// The snapshot holds everything the row had, so a trashed project that is permanently deleted still publishes a
+// complete `project.deleted` event.
+function trashRowToInfo(row: typeof TrashTable.$inferSelect): Info {
+  const snapshot = row.snapshot
+  const icon =
+    snapshot.icon_url || snapshot.icon_url_override || snapshot.icon_color
+      ? {
+          url: snapshot.icon_url ?? undefined,
+          override: snapshot.icon_url_override ?? undefined,
+          color: snapshot.icon_color ?? undefined,
+        }
+      : undefined
+  return {
+    id: row.id,
+    canonical: row.directory,
+    vcs: snapshot.vcs ?? undefined,
+    name: row.name ?? undefined,
+    icon,
+    commands: snapshot.commands ?? undefined,
+    time: {
+      created: snapshot.time_created ?? row.time_trashed,
+      updated: snapshot.time_updated ?? row.time_trashed,
+      active: snapshot.time_active,
+    },
+    sandboxes: snapshot.sandboxes,
+  }
+}
+
+// rename() fails across volumes (the trash usually lives on another drive than the project), so fall back to a
+// copy followed by a remove. `to` must not exist yet: on a fallback failure the half-copied destination is
+// removed again, so a pre-existing directory there would be destroyed.
+const moveDirectory = (from: string, to: string) =>
+  Effect.tryPromise({
+    try: () => nodeFs.rename(from, to),
+    catch: (error) => error,
+  }).pipe(
+    Effect.catch(() =>
+      Effect.tryPromise({
+        try: async () => {
+          try {
+            await nodeFs.cp(from, to, { recursive: true })
+            await nodeFs.rm(from, { recursive: true, force: true })
+          } catch (error) {
+            await nodeFs.rm(to, { recursive: true, force: true }).catch(() => undefined)
+            throw error
+          }
+        },
+        catch: (error) => error,
+      }),
+    ),
+  )
+
 const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -149,6 +218,8 @@ const layer = Layer.effect(
     const proc = yield* AppProcess.Service
     const bus = yield* Bus.Service
     const db = (yield* Database.Service).db
+    const globalService = yield* Global.Service
+    const trashDir = path.join(globalService.data, "trash")
     const scope = yield* Scope.Scope
 
     const announcing = new Set<string>()
@@ -312,10 +383,169 @@ const layer = Layer.effect(
       const home = yield* fs.resolve(os.homedir())
       const refusal = deleteRefusal(projectID, canonical, home)
       if (refusal) return yield* refusal
-      yield* db.delete(WorktreeTable).where(eq(WorktreeTable.project_id, projectID)).run().pipe(Effect.orDie)
-      yield* db.delete(ProjectTable).where(eq(ProjectTable.id, projectID)).run().pipe(Effect.orDie)
-      yield* bus.publish(ProjectSchema.Event.Deleted, info)
+      // The directory is already gone: nothing to recover, so the rows just go away and the project is
+      // permanently deleted, exactly like 3.4.46 did.
+      if (!(yield* fs.exists(canonical).pipe(Effect.orElseSucceed(() => true)))) {
+        yield* db.delete(WorktreeTable).where(eq(WorktreeTable.project_id, projectID)).run().pipe(Effect.orDie)
+        yield* db.delete(ProjectTable).where(eq(ProjectTable.id, projectID)).run().pipe(Effect.orDie)
+        yield* bus.publish(ProjectSchema.Event.Deleted, info)
+        return info
+      }
+      const trashedAt = now()
+      const segment = projectID.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 64).replace(/^\.+$/, "_") || "project"
+      let trashPath = AbsolutePath.make(path.join(trashDir, `${segment}-${trashedAt}`))
+      let attempt = 1
+      while (yield* fs.exists(trashPath).pipe(Effect.orElseSucceed(() => true))) {
+        trashPath = AbsolutePath.make(path.join(trashDir, `${segment}-${trashedAt}-${attempt}`))
+        attempt += 1
+      }
+      yield* Effect.promise(() => nodeFs.mkdir(trashDir, { recursive: true })).pipe(Effect.orDie)
+      yield* moveDirectory(canonical, trashPath).pipe(Effect.orDie)
+      // If the database writes fail after the move, put the folder back so the project stays usable and the
+      // delete can be retried.
+      yield* Effect.gen(function* () {
+        const worktrees = yield* db
+          .select()
+          .from(WorktreeTable)
+          .where(eq(WorktreeTable.project_id, projectID))
+          .all()
+          .pipe(Effect.orDie)
+        const snapshot: TrashSnapshot = {
+          icon_url: row.icon_url,
+          icon_url_override: row.icon_url_override,
+          icon_color: row.icon_color,
+          commands: row.commands ?? undefined,
+          sandboxes: row.sandboxes,
+          vcs: row.vcs ?? undefined,
+          worktrees: worktrees.map((item) => item.directory),
+          time_created: row.time_created,
+          time_updated: row.time_updated,
+          time_active: row.time_active,
+        }
+        yield* db
+          .insert(TrashTable)
+          .values({
+            id: projectID,
+            name: row.name,
+            directory: canonical,
+            trash_path: trashPath,
+            snapshot,
+            time_trashed: trashedAt,
+          })
+          .run()
+          .pipe(Effect.orDie)
+        yield* db.delete(WorktreeTable).where(eq(WorktreeTable.project_id, projectID)).run().pipe(Effect.orDie)
+        yield* db.delete(ProjectTable).where(eq(ProjectTable.id, projectID)).run().pipe(Effect.orDie)
+      }).pipe(Effect.onError(() => moveDirectory(trashPath, canonical).pipe(Effect.ignore)))
+      yield* bus.publish(ProjectSchema.Event.Trashed, {
+        id: projectID,
+        name: info.name,
+        directory: canonical,
+        trashedAt,
+      })
       return info
+    })
+
+    const trashList = Effect.fn("Project.trashList")(function* () {
+      const rows = yield* db
+        .select()
+        .from(TrashTable)
+        .orderBy(desc(TrashTable.time_trashed))
+        .all()
+        .pipe(Effect.orDie)
+      return rows.map((row) => ({
+        id: row.id,
+        name: row.name ?? undefined,
+        directory: row.directory,
+        trashedAt: row.time_trashed,
+      }))
+    })
+
+    // The original directory may be taken again by the time the project is restored; suffix it like the old
+    // editor did instead of overwriting whatever lives there now.
+    const freeDirectory = Effect.fn("Project.freeDirectory")(function* (directory: AbsolutePath) {
+      let candidate = directory
+      let suffix = 1
+      while (yield* fs.exists(candidate).pipe(Effect.orElseSucceed(() => true))) {
+        candidate = AbsolutePath.make(`${directory}-${suffix}`)
+        suffix += 1
+      }
+      return candidate
+    })
+
+    const trashRestore = Effect.fn("Project.trashRestore")(function* (projectID: ID) {
+      const row = yield* db
+        .select()
+        .from(TrashTable)
+        .where(eq(TrashTable.id, projectID))
+        .get()
+        .pipe(Effect.orDie)
+      if (!row) return yield* new NotFoundError({ projectID })
+      if (!(yield* fs.exists(row.trash_path).pipe(Effect.orElseSucceed(() => true)))) return yield* new TrashMissingError({ projectID })
+      const target = yield* freeDirectory(row.directory)
+      yield* Effect.promise(() => nodeFs.mkdir(path.dirname(target), { recursive: true })).pipe(Effect.orDie)
+      yield* moveDirectory(row.trash_path, target).pipe(Effect.orDie)
+      // If the database writes fail after the move, put the folder back in the trash so the restore can be
+      // retried.
+      const restored = yield* Effect.gen(function* () {
+        yield* upsertProject(db, { id: projectID, canonical: target }).pipe(Effect.orDie)
+        const updated = yield* db
+          .update(ProjectTable)
+          .set({
+            name: row.name,
+            icon_url: row.snapshot.icon_url ?? null,
+            icon_url_override: row.snapshot.icon_url_override ?? null,
+            icon_color: row.snapshot.icon_color ?? null,
+            commands: row.snapshot.commands ?? null,
+            sandboxes: row.snapshot.sandboxes.map((directory) => AbsolutePath.make(directory)),
+            time_created: row.snapshot.time_created ?? row.time_trashed,
+            time_updated: row.snapshot.time_updated ?? row.time_trashed,
+            time_active: row.snapshot.time_active,
+          })
+          .where(eq(ProjectTable.id, projectID))
+          .returning()
+          .get()
+          .pipe(Effect.orDie)
+        if (!updated) return yield* new NotFoundError({ projectID })
+        if (row.snapshot.worktrees.length > 0) {
+          yield* db
+            .insert(WorktreeTable)
+            .values(
+              row.snapshot.worktrees.map((directory) => ({
+                project_id: projectID,
+                directory: AbsolutePath.make(directory),
+              })),
+            )
+            .onConflictDoNothing()
+            .run()
+            .pipe(Effect.orDie)
+        }
+        yield* db.delete(TrashTable).where(eq(TrashTable.id, projectID)).run().pipe(Effect.orDie)
+        return fromRow(updated)
+      }).pipe(Effect.onError(() => moveDirectory(target, row.trash_path).pipe(Effect.ignore)))
+      yield* bus.publish(ProjectSchema.Event.Restored, restored)
+      return restored
+    })
+
+    const trashEmpty = Effect.fn("Project.trashEmpty")(function* () {
+      const rows = yield* db.select().from(TrashTable).all().pipe(Effect.orDie)
+      const removed = yield* Effect.forEach(
+        rows,
+        Effect.fnUntraced(function* (row) {
+          // A folder that cannot be removed (a file locked by another program, for example) stays in the
+          // trash with its row, so the next empty can retry it instead of losing the record.
+          const deleted = yield* Effect.tryPromise({
+            try: () => nodeFs.rm(row.trash_path, { recursive: true, force: true }),
+            catch: (error) => error,
+          }).pipe(Effect.as(true), Effect.orElseSucceed(() => false))
+          if (!deleted) return false
+          yield* db.delete(TrashTable).where(eq(TrashTable.id, row.id)).run().pipe(Effect.orDie)
+          yield* bus.publish(ProjectSchema.Event.Deleted, trashRowToInfo(row))
+          return true
+        }),
+        { concurrency: 1 },
+      )
+      return removed.filter(Boolean).length
     })
 
     const activated = new Map<ID, number>()
@@ -538,7 +768,7 @@ const layer = Layer.effect(
       )
     })
 
-    return Service.of({ list, update, delete: remove, activate, resolve, sweep })
+    return Service.of({ list, update, delete: remove, trashList, trashRestore, trashEmpty, activate, resolve, sweep })
   }),
 )
 
@@ -558,7 +788,7 @@ export function configured(options?: Options) {
   return makeGlobalNode({
     service: Service,
     layer: options?.now ? layer.pipe(Layer.provide(Layer.succeed(Now, options.now))) : layer,
-    deps: [Bus.node, Database.node, FSUtil.node, Git.node, AppProcess.node],
+    deps: [Bus.node, Database.node, FSUtil.node, Git.node, AppProcess.node, Global.node],
   })
 }
 
