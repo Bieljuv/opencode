@@ -65,6 +65,37 @@ test("a delete closes the dialog and leaves the project, even when it lands afte
   ).toEqual([{ type: "project.removed", target }])
 })
 
+test("a delete that leaves the original directory behind warns about it", () => {
+  const deleting = replay([{ type: "confirm.requested", target }])
+
+  const done = transitionProjectDelete(deleting, {
+    type: "delete.succeeded",
+    attempt: deleting.attempt,
+    target,
+    leftoverDirectory: "D:\\Rota do forte",
+  })
+
+  expect(done.effects).toEqual([
+    { type: "timer.cancel" },
+    { type: "dialog.close" },
+    { type: "project.removed", target },
+    { type: "toast.delete-leftover", directory: "D:\\Rota do forte" },
+  ])
+
+  const disposed = transitionProjectDelete(deleting, { type: "disposed" })
+  expect(
+    transitionProjectDelete(disposed.state, {
+      type: "delete.succeeded",
+      attempt: deleting.attempt,
+      target,
+      leftoverDirectory: "D:\\Rota do forte",
+    }).effects,
+  ).toEqual([
+    { type: "project.removed", target },
+    { type: "toast.delete-leftover", directory: "D:\\Rota do forte" },
+  ])
+})
+
 test("confirming a project that is already gone closes the dialog", () => {
   const next = transitionProjectDelete(createProjectDeleteState(), {
     type: "confirm.requested",

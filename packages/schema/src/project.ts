@@ -63,6 +63,16 @@ export const Trashed = Schema.Struct({
 }).annotate({ identifier: "Project.Trashed" })
 export interface Trashed extends Schema.Schema.Type<typeof Trashed> {}
 
+/**
+ * What `project.delete` returns: the project left the list for the trash, and when the original
+ * directory could not be removed (a program holding it open, for example) its path comes back so
+ * the app can tell the user to remove it by hand instead of failing the delete.
+ */
+export const DeleteResult = Schema.Struct({
+  leftoverDirectory: optional(Schema.String),
+}).annotate({ identifier: "Project.DeleteResult" })
+export interface DeleteResult extends Schema.Schema.Type<typeof DeleteResult> {}
+
 export const UpdateInput = Schema.Struct({
   projectID: ID,
   canonical: optional(AbsolutePath),

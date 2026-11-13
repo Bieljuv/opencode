@@ -67,14 +67,22 @@ export const ProjectHandler = HttpApiBuilder.group(Api, "server.project", (handl
               if (page.cursor.next) yield* removeSessions(page.cursor.next)
             })
           yield* removeSessions(undefined)
-          yield* project.delete(projectID).pipe(
+          const result = yield* project.delete(projectID).pipe(
             Effect.catchTag("Project.NotFoundError", () => missingProject(projectID)),
             Effect.catchTag(
               "Project.DeleteRefusedError",
               (error) => new InvalidRequestError({ message: `Project cannot be deleted: ${error.reason}` }),
             ),
+            // The trash copy failed because the directory is locked: a stable kind the app maps to a clear
+            // message instead of a generic 500.
+            Effect.catchTag("Project.DeleteBusyError", () =>
+              new InvalidRequestError({
+                message: "Project directory is in use by another program",
+                kind: "project.directory-busy",
+              }),
+            ),
           )
-          return HttpApiSchema.NoContent.make()
+          return { leftoverDirectory: result.leftoverDirectory }
         }),
       )
   }),

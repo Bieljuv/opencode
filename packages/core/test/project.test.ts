@@ -1,9 +1,10 @@
 import { describe, expect } from "bun:test"
 import { $ } from "bun"
 import fs from "fs/promises"
+import { existsSync } from "node:fs"
 import os from "os"
 import path from "path"
-import { Effect, Layer, Stream } from "effect"
+import { Cause, Effect, Exit, Fiber, Layer, Stream } from "effect"
 import { AppNodeBuilder } from "@opencode/core/effect/app-node-builder"
 import { LayerNode } from "@opencode/util/effect/layer-node"
 import { Bus } from "@opencode/core/bus"
@@ -17,6 +18,7 @@ import { Global } from "@opencode/util/global"
 import { initGit } from "./fixture/git"
 import { countingSpawner } from "./fixture/spawn"
 import { tmpdirScoped } from "./fixture/tmpdir"
+import { advance } from "./lib/clock"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(AppNodeBuilder.build(LayerNode.group([Project.node, Database.node, Bus.node, Global.node])))
@@ -569,6 +571,249 @@ describe("Project.delete", () => {
     }),
   )
 })
+
+describe("Project.delete move helpers", () => {
+  const errnoError = (code: string) => Object.assign(new Error(`mock ${code}`), { code })
+
+  it.effect("retries a transient EBUSY remove until it succeeds", () =>
+    Effect.gen(function* () {
+      let calls = 0
+      const fiber = yield* Project.removeDirectoryWithRetry(
+        () => {
+          calls += 1
+          return calls < 3 ? Promise.reject(errnoError("EBUSY")) : Promise.resolve()
+        },
+        "/nope",
+      ).pipe(Effect.forkChild({ startImmediately: true }))
+      yield* advance(() => calls >= 3)
+      const exit = yield* Fiber.await(fiber)
+
+      expect(Exit.isSuccess(exit)).toBe(true)
+      expect(calls).toBe(3)
+    }),
+  )
+
+  it.effect("gives up after five attempts when the remove stays locked", () =>
+    Effect.gen(function* () {
+      let calls = 0
+      const fiber = yield* Project.removeDirectoryWithRetry(() => {
+        calls += 1
+        return Promise.reject(errnoError("EBUSY"))
+      }, "/nope").pipe(Effect.forkChild({ startImmediately: true }))
+      yield* advance(() => calls >= 5)
+      const error = yield* Fiber.join(fiber).pipe(Effect.flip)
+
+      expect((error as NodeJS.ErrnoException).code).toBe("EBUSY")
+      expect(calls).toBe(5)
+    }),
+  )
+
+  it.effect("does not retry a remove that fails for another reason", () =>
+    Effect.gen(function* () {
+      let calls = 0
+      const fiber = yield* Project.removeDirectoryWithRetry(() => {
+        calls += 1
+        return Promise.reject(errnoError("ENOENT"))
+      }, "/nope").pipe(Effect.forkChild({ startImmediately: true }))
+      yield* advance(() => calls >= 1)
+      const error = yield* Fiber.join(fiber).pipe(Effect.flip)
+
+      expect((error as NodeJS.ErrnoException).code).toBe("ENOENT")
+      expect(calls).toBe(1)
+    }),
+  )
+
+  it.effect("retries a copy that fails with ENOENT once and removes the partial destination", () =>
+    Effect.gen(function* () {
+      let copies = 0
+      let removes = 0
+      const fiber = yield* Project.copyDirectoryWithRetry(
+        () => {
+          copies += 1
+          return copies < 2 ? Promise.reject(errnoError("ENOENT")) : Promise.resolve()
+        },
+        () => {
+          removes += 1
+          return Promise.resolve()
+        },
+        "/from",
+        "/to",
+      ).pipe(Effect.forkChild({ startImmediately: true }))
+      yield* advance(() => copies >= 2)
+      const exit = yield* Fiber.await(fiber)
+
+      expect(Exit.isSuccess(exit)).toBe(true)
+      expect(copies).toBe(2)
+      expect(removes).toBe(1)
+    }),
+  )
+
+  it.effect("gives up after two attempts when the copy keeps failing", () =>
+    Effect.gen(function* () {
+      let copies = 0
+      let removes = 0
+      const fiber = yield* Project.copyDirectoryWithRetry(
+        () => {
+          copies += 1
+          return Promise.reject(errnoError("ENOENT"))
+        },
+        () => {
+          removes += 1
+          return Promise.resolve()
+        },
+        "/from",
+        "/to",
+      ).pipe(Effect.forkChild({ startImmediately: true }))
+      yield* advance(() => copies >= 2)
+      const error = yield* Fiber.join(fiber).pipe(Effect.flip)
+
+      expect((error as NodeJS.ErrnoException).code).toBe("ENOENT")
+      expect(copies).toBe(2)
+      expect(removes).toBe(2)
+    }),
+  )
+
+  it.effect("does not retry a copy that fails for another reason", () =>
+    Effect.gen(function* () {
+      let copies = 0
+      let removes = 0
+      const fiber = yield* Project.copyDirectoryWithRetry(
+        () => {
+          copies += 1
+          return Promise.reject(errnoError("EACCES"))
+        },
+        () => {
+          removes += 1
+          return Promise.resolve()
+        },
+        "/from",
+        "/to",
+      ).pipe(Effect.forkChild({ startImmediately: true }))
+      yield* advance(() => copies >= 1)
+      const error = yield* Fiber.join(fiber).pipe(Effect.flip)
+
+      expect((error as NodeJS.ErrnoException).code).toBe("EACCES")
+      expect(copies).toBe(1)
+      expect(removes).toBe(1)
+    }),
+  )
+
+  it.effect("maps a locked copy failure to DeleteBusyError", () =>
+    Effect.gen(function* () {
+      const error = yield* Project.deleteMoveError(errnoError("EBUSY"), Project.ID.make("x"), abs("/x")).pipe(
+        Effect.flip,
+      )
+
+      expect(error).toMatchObject({ _tag: "Project.DeleteBusyError" })
+    }),
+  )
+
+  it.effect("lets any other copy failure die", () =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(Project.deleteMoveError(new Error("boom"), Project.ID.make("x"), abs("/x")))
+
+      expect(Exit.isFailure(exit) && Cause.hasDies(exit.cause)).toBe(true)
+    }),
+  )
+})
+
+// The copy fallback only runs when rename crosses volumes, and the leftover path only runs when the remove
+// then fails: both need a project on another filesystem than the trash, and the remove failure needs POSIX
+// permissions, which root bypasses and Windows does not honor the same way.
+describe.skipIf(process.platform !== "linux" || !existsSync("/dev/shm") || (typeof process.getuid === "function" && process.getuid() === 0))(
+  "Project.delete cross-volume fallback",
+  () => {
+    const exists = (dir: string) => Effect.promise(() => fs.stat(dir).then(() => true, () => false))
+
+    it.live("moves the directory to the trash through the copy fallback when rename crosses volumes", () =>
+      Effect.gen(function* () {
+        const shm = yield* Effect.acquireRelease(
+          Effect.promise(() => fs.mkdtemp(path.join("/dev/shm", "opencode-project-"))),
+          (dir) => Effect.promise(() => fs.rm(dir, { recursive: true, force: true })),
+        )
+        const target = path.join(shm, "project")
+        const nested = path.join(target, "nested", "file.txt")
+        yield* Effect.promise(() => fs.mkdir(path.dirname(nested), { recursive: true }))
+        yield* Effect.promise(() => fs.writeFile(nested, "keep"))
+        const project = yield* Project.Service
+        const bus = yield* Bus.Service
+        const info = yield* project.resolve(abs(target))
+        const canonical = yield* real(target)
+        const trashed: ProjectSchema.Trashed[] = []
+        yield* bus.subscribe(ProjectSchema.Event.Trashed).pipe(
+          Stream.runForEach((event) => Effect.sync(() => trashed.push(event.data))),
+          Effect.forkScoped({ startImmediately: true }),
+        )
+
+        const result = yield* project.delete(info.id)
+        yield* Effect.yieldNow
+
+        expect(result).toMatchObject({ id: info.id, canonical })
+        expect(result.leftoverDirectory).toBeUndefined()
+        expect(yield* exists(target)).toBe(false)
+        expect((yield* project.list()).map((item) => item.id)).not.toContain(info.id)
+        expect(yield* project.trashList()).toEqual([
+          { id: info.id, directory: canonical, trashedAt: expect.any(Number) },
+        ])
+        expect(trashed).toEqual([{ id: info.id, directory: canonical, trashedAt: expect.any(Number) }])
+        // The trash copy holds the files; empty it so the shared trash dir stays clean.
+        expect(yield* project.trashEmpty()).toBe(1)
+      }),
+    )
+
+    it.live("keeps the trash copy and warns when the original directory cannot be removed", () =>
+      Effect.gen(function* () {
+        const shm = yield* Effect.acquireRelease(
+          Effect.promise(() => fs.mkdtemp(path.join("/dev/shm", "opencode-project-"))),
+          (dir) => Effect.promise(() => fs.rm(dir, { recursive: true, force: true }).catch(() => undefined)),
+        )
+        const target = path.join(shm, "project")
+        const nestedDir = path.join(target, "nested")
+        const nested = path.join(nestedDir, "file.txt")
+        yield* Effect.promise(() => fs.mkdir(nestedDir, { recursive: true }))
+        yield* Effect.promise(() => fs.writeFile(nested, "keep"))
+        const project = yield* Project.Service
+        const bus = yield* Bus.Service
+        const info = yield* project.resolve(abs(target))
+        const canonical = yield* real(target)
+        const trashed: ProjectSchema.Trashed[] = []
+        yield* bus.subscribe(ProjectSchema.Event.Trashed).pipe(
+          Stream.runForEach((event) => Effect.sync(() => trashed.push(event.data))),
+          Effect.forkScoped({ startImmediately: true }),
+        )
+        // Read-only directories: the copy reads fine, but removing them fails, so the delete leaves the
+        // original behind instead of throwing the good copy away.
+        yield* Effect.promise(() => fs.chmod(target, 0o555))
+        yield* Effect.promise(() => fs.chmod(nestedDir, 0o555))
+        const result = yield* project.delete(info.id).pipe(
+          Effect.ensuring(
+            Effect.promise(() =>
+              Promise.all([fs.chmod(target, 0o755), fs.chmod(nestedDir, 0o755)]).catch(() => undefined),
+            ),
+          ),
+        )
+        yield* Effect.yieldNow
+
+        expect(result).toMatchObject({ id: info.id, canonical, leftoverDirectory: canonical })
+        expect(yield* exists(target)).toBe(true)
+        expect(yield* Effect.promise(() => fs.readFile(nested, "utf8"))).toBe("keep")
+        expect((yield* project.list()).map((item) => item.id)).not.toContain(info.id)
+        expect(yield* project.trashList()).toEqual([
+          { id: info.id, directory: canonical, trashedAt: expect.any(Number) },
+        ])
+        expect(trashed).toEqual([{ id: info.id, directory: canonical, trashedAt: expect.any(Number) }])
+
+        // The original is still there, so restoring lands on a suffixed directory with the files intact.
+        const restored = yield* project.trashRestore(info.id)
+        expect(restored.canonical).toBe(AbsolutePath.make(`${canonical}-1`))
+        expect(
+          yield* Effect.promise(() => fs.readFile(path.join(`${canonical}-1`, "nested", "file.txt"), "utf8")),
+        ).toBe("keep")
+        expect(yield* project.trashList()).toEqual([])
+      }),
+    )
+  },
+)
 
 // Backdates every Project past the sweep's recent-activity window.
 const idle = Effect.fn(function* () {

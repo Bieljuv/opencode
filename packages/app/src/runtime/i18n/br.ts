@@ -777,6 +777,10 @@ export const dict = {
   "session.delete.button": "Excluir sessão",
 
   "project.delete.failed.title": "Falha ao excluir projeto",
+  "project.delete.busy.title": "Pasta em uso",
+  "project.delete.busy.description": "Não foi possível excluir o projeto porque a pasta {{directory}} está em uso por outro programa. Feche o programa e tente de novo.",
+  "project.delete.leftover.title": "Projeto na lixeira, pasta original ficou para trás",
+  "project.delete.leftover.description": "O projeto foi para a lixeira, mas a pasta original não pôde ser removida porque está em uso. Apague {{directory}} manualmente.",
   "project.delete.title": "Excluir projeto",
   "project.delete.confirm": 'Excluir o projeto "{{name}}"? Ele sai da lista e vai para a lixeira, e as sessões dele são fechadas. Dá para restaurar depois. Os arquivos saem desta pasta:',
   "project.delete.button": "Excluir projeto",

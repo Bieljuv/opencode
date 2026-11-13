@@ -21,6 +21,16 @@ import {
   type ProjectDeleteTarget,
 } from "./delete-machine"
 
+/** The server maps a locked directory to InvalidRequestError with this kind; see Project.DeleteBusyError. */
+const DIRECTORY_BUSY_KIND = "project.directory-busy"
+
+const isDirectoryBusyError = (cause: unknown): boolean => {
+  if (!cause || typeof cause !== "object" || !("data" in cause)) return false
+  const data = (cause as { data?: unknown }).data
+
+  return !!data && typeof data === "object" && "kind" in data && data.kind === DIRECTORY_BUSY_KIND
+}
+
 export function ProjectDeleteDialog(props: { conn: ServerConnection.Any; project: LocalProject }) {
   const dialog = useDialog()
   const language = useLanguage()
@@ -57,7 +67,13 @@ export function ProjectDeleteDialog(props: { conn: ServerConnection.Any; project
       if (!ctx) return dispatch({ type: "delete.failed", attempt: effect.attempt, cause: undefined })
       const request = Promise.try(() => ctx.sdk.api.project.delete({ projectID: effect.target.projectID }))
       void request.then(
-        () => dispatch({ type: "delete.succeeded", attempt: effect.attempt, target: effect.target }),
+        (result) =>
+          dispatch({
+            type: "delete.succeeded",
+            attempt: effect.attempt,
+            target: effect.target,
+            leftoverDirectory: result.leftoverDirectory,
+          }),
         (cause: unknown) => dispatch({ type: "delete.failed", attempt: effect.attempt, cause }),
       )
 
@@ -79,13 +95,26 @@ export function ProjectDeleteDialog(props: { conn: ServerConnection.Any; project
       return
     }
 
-    if (effect.type === "toast.delete-failed")
+    if (effect.type === "toast.delete-failed") {
+      if (isDirectoryBusyError(effect.cause))
+        return showToast({
+          title: language.t("project.delete.busy.title"),
+          description: language.t("project.delete.busy.description", { directory: props.project.worktree }),
+        })
+
       return showToast({
         title: language.t("project.delete.failed.title"),
         description:
           effect.cause === undefined
             ? undefined
             : errorMessage(effect.cause, language.t("project.delete.failed.title")),
+      })
+    }
+
+    if (effect.type === "toast.delete-leftover")
+      return showToast({
+        title: language.t("project.delete.leftover.title"),
+        description: language.t("project.delete.leftover.description", { directory: effect.directory }),
       })
 
     clearTimeout(timer)

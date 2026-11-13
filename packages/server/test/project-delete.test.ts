@@ -49,7 +49,8 @@ it.live("moves the project to the trash and its sessions away, and restores it b
     expect(info).toBeDefined()
 
     const deleted = yield* request(`/api/project/${info!.id}`, "DELETE")
-    expect(deleted.status).toBe(204)
+    expect(deleted.status).toBe(200)
+    expect(Schema.decodeUnknownSync(Project.DeleteResult)(yield* Effect.promise(() => deleted.json()))).toEqual({})
 
     const exists = yield* Effect.promise(() => fs.stat(directory).then(() => true, () => false))
     expect(exists).toBe(false)
@@ -110,7 +111,8 @@ it.live("empties the trash permanently", () =>
 
     for (const item of projects) {
       const deleted = yield* request(`/api/project/${item.id}`, "DELETE")
-      expect(deleted.status).toBe(204)
+      expect(deleted.status).toBe(200)
+      expect(Schema.decodeUnknownSync(Project.DeleteResult)(yield* Effect.promise(() => deleted.json()))).toEqual({})
     }
     const trashedResponse = yield* request("/api/project/trash", "GET")
     const trashed = Schema.decodeUnknownSync(TrashResponse)(yield* Effect.promise(() => trashedResponse.json()))

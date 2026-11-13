@@ -79,14 +79,17 @@ export const ProjectGroup = HttpApiGroup.make("server.project")
   .add(
     HttpApiEndpoint.delete("project.delete", `${root}/:projectID`, {
       params: { projectID: Project.ID },
-      success: HttpApiSchema.NoContent,
+      // Returns the delete result instead of NoContent: when the trash copy is complete but the original
+      // directory could not be removed (locked by another program), the result carries its path so the
+      // app can warn the user to remove it by hand instead of failing the delete.
+      success: Project.DeleteResult,
       error: [InvalidRequestError, ProjectNotFoundError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "project.delete",
         summary: "Delete project",
         description:
-          "Move a project to the trash, closing its sessions first. The directory moves under the server's trash directory and can be restored; nothing is deleted from disk yet. When the directory is already gone there is nothing to recover, so the project is permanently deleted instead.",
+          "Move a project to the trash, closing its sessions first. The directory moves under the server's trash directory and can be restored; nothing is deleted from disk yet. When the directory is already gone there is nothing to recover, so the project is permanently deleted instead. When the trash copy is complete but the original directory could not be removed because it is in use, the delete still succeeds and the result carries the leftover directory.",
       }),
     ),
   )

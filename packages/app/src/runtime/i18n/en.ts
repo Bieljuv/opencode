@@ -1320,6 +1320,10 @@ export const dict = {
   "session.delete.button": "Delete session",
 
   "project.delete.failed.title": "Failed to delete project",
+  "project.delete.busy.title": "Folder in use",
+  "project.delete.busy.description": "The project could not be deleted because the folder {{directory}} is in use by another program. Close the program and try again.",
+  "project.delete.leftover.title": "Project trashed, original folder left behind",
+  "project.delete.leftover.description": "The project went to the trash, but the original folder could not be removed because it is in use. Delete {{directory}} manually.",
   "project.delete.title": "Delete project",
   "project.delete.confirm": 'Delete the project "{{name}}"? It leaves the list and goes to the trash, and its sessions are closed. It can be restored later. The files leave this folder:',
   "project.delete.button": "Delete project",
