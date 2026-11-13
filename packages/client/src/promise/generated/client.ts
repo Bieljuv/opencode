@@ -175,6 +175,10 @@ import type {
   CredentialRemoveOutput,
   ProjectListInput,
   ProjectListOutput,
+  ProjectTrashListOutput,
+  ProjectTrashRestoreInput,
+  ProjectTrashRestoreOutput,
+  ProjectTrashEmptyOutput,
   ProjectUpdateInput,
   ProjectUpdateOutput,
   ProjectDeleteInput,
@@ -2103,6 +2107,41 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+      trash: {
+        list: (requestOptions?: RequestOptions) =>
+          request<ProjectTrashListOutput>(
+            {
+              method: "GET",
+              path: `/api/project/trash`,
+              successStatus: 200,
+              declaredStatuses: [400, 401],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        restore: (input: ProjectTrashRestoreInput, requestOptions?: RequestOptions) =>
+          request<ProjectTrashRestoreOutput>(
+            {
+              method: "POST",
+              path: `/api/project/trash/${encodeURIComponent(input.projectID)}/restore`,
+              successStatus: 200,
+              declaredStatuses: [400, 401, 404],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        empty: (requestOptions?: RequestOptions) =>
+          request<ProjectTrashEmptyOutput>(
+            {
+              method: "DELETE",
+              path: `/api/project/trash`,
+              successStatus: 204,
+              declaredStatuses: [400, 401],
+              empty: true,
+            },
+            requestOptions,
+          ),
+      },
       update: (input: ProjectUpdateInput, requestOptions?: RequestOptions) =>
         request<ProjectUpdateOutput>(
           {

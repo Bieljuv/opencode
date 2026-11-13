@@ -28,6 +28,35 @@ export const ProjectTable = sqliteTable("project", {
   commands: text({ mode: "json" }).$type<{ start?: string }>(),
 })
 
+/**
+ * Everything `Project.delete` needs to bring a trashed project back:
+ * the project row's restorable fields plus the worktree directories the
+ * delete removed. `directory` is where the project lived, `trash_path`
+ * where its moved directory waits; both stay server-side, only the
+ * `Project.Trashed` wire view (id, name, directory, trashedAt) leaves it.
+ */
+export type TrashSnapshot = {
+  readonly icon_url?: string | null
+  readonly icon_url_override?: string | null
+  readonly icon_color?: string | null
+  readonly commands?: { readonly start?: string } | null
+  readonly sandboxes: readonly string[]
+  readonly vcs?: string | null
+  readonly worktrees: readonly string[]
+  readonly time_created?: number | null
+  readonly time_updated?: number | null
+  readonly time_active: number
+}
+
+export const TrashTable = sqliteTable("trash", {
+  id: text().$type<ProjectSchema.ID>().primaryKey(),
+  name: text(),
+  directory: absoluteColumn().notNull(),
+  trash_path: absoluteColumn().notNull(),
+  snapshot: text({ mode: "json" }).$type<TrashSnapshot>().notNull(),
+  time_trashed: integer().notNull(),
+})
+
 /** @deprecated Use WorktreeTable from worktree/sql instead. */
 export const ProjectDirectoryTable = sqliteTable(
   "project_directory",

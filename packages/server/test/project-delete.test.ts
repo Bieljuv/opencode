@@ -18,9 +18,10 @@ const options = {
 } as const
 
 const ProjectsResponse = Schema.Array(Project.Info)
+const TrashResponse = Schema.Array(Project.Trashed)
 const SessionResponse = Schema.Struct({ data: Session.Info })
 
-it.live("removes the project and its sessions, and leaves its directory on disk", () =>
+it.live("moves the project to the trash and its sessions away, and restores it back", () =>
   Effect.gen(function* () {
     const config = yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("opencode-project-delete-")))
     const directory = path.join(config.path, "project")
@@ -51,7 +52,7 @@ it.live("removes the project and its sessions, and leaves its directory on disk"
     expect(deleted.status).toBe(204)
 
     const exists = yield* Effect.promise(() => fs.stat(directory).then(() => true, () => false))
-    expect(exists).toBe(true)
+    expect(exists).toBe(false)
     const gone = yield* request(`/api/session/${session.id}`, "GET")
     expect(gone.status).toBe(404)
     expect(((yield* Effect.promise(() => gone.json())) as { _tag: string })._tag).toBe("SessionNotFoundError")
@@ -60,6 +61,94 @@ it.live("removes the project and its sessions, and leaves its directory on disk"
       yield* Effect.promise(() => remainingResponse.json()),
     )
     expect(remaining.map((item) => item.id)).not.toContain(info!.id)
+
+    const trashedResponse = yield* request("/api/project/trash", "GET")
+    expect(trashedResponse.status).toBe(200)
+    const trashed = Schema.decodeUnknownSync(TrashResponse)(yield* Effect.promise(() => trashedResponse.json()))
+    expect(trashed.map((item) => item.id)).toEqual([info!.id])
+    expect(`${trashed[0]?.directory}`).toBe(canonical)
+
+    const restoredResponse = yield* request(`/api/project/trash/${info!.id}/restore`, "POST")
+    expect(restoredResponse.status).toBe(200)
+    const restored = Schema.decodeUnknownSync(Project.Info)(yield* Effect.promise(() => restoredResponse.json()))
+    expect(restored).toMatchObject({ id: info!.id, canonical })
+
+    expect(yield* Effect.promise(() => fs.stat(directory).then(() => true, () => false))).toBe(true)
+    const backResponse = yield* request("/api/project", "GET")
+    const back = Schema.decodeUnknownSync(ProjectsResponse)(yield* Effect.promise(() => backResponse.json()))
+    expect(back.map((item) => item.id)).toContain(info!.id)
+    const emptyTrashResponse = yield* request("/api/project/trash", "GET")
+    const emptyTrash = Schema.decodeUnknownSync(TrashResponse)(yield* Effect.promise(() => emptyTrashResponse.json()))
+    expect(emptyTrash).toEqual([])
+  }),
+)
+
+it.live("empties the trash permanently", () =>
+  Effect.gen(function* () {
+    const config = yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("opencode-project-delete-")))
+    const first = path.join(config.path, "first")
+    const second = path.join(config.path, "second")
+    yield* Effect.promise(() => Promise.all([fs.mkdir(first), fs.mkdir(second)]))
+    const handler = yield* ServerFetch.make({ ...options, config: { directory: config.path } })
+    const request = (endpoint: string, method: string, body?: unknown) =>
+      Effect.promise(() =>
+        handler(
+          new Request(`http://opencode.local${endpoint}`, {
+            method,
+            headers: { "content-type": "application/json" },
+            body: body === undefined ? undefined : JSON.stringify(body),
+          }),
+        ),
+      )
+    for (const directory of [first, second]) {
+      const created = yield* request("/api/session", "POST", { location: { directory } })
+      expect(created.status).toBe(200)
+    }
+    const listed = yield* request("/api/project", "GET")
+    const projects = Schema.decodeUnknownSync(ProjectsResponse)(yield* Effect.promise(() => listed.json()))
+    expect(projects).toHaveLength(2)
+
+    for (const item of projects) {
+      const deleted = yield* request(`/api/project/${item.id}`, "DELETE")
+      expect(deleted.status).toBe(204)
+    }
+    const trashedResponse = yield* request("/api/project/trash", "GET")
+    const trashed = Schema.decodeUnknownSync(TrashResponse)(yield* Effect.promise(() => trashedResponse.json()))
+    expect(trashed).toHaveLength(2)
+
+    const emptied = yield* request("/api/project/trash", "DELETE")
+    expect(emptied.status).toBe(204)
+
+    const afterResponse = yield* request("/api/project/trash", "GET")
+    const after = Schema.decodeUnknownSync(TrashResponse)(yield* Effect.promise(() => afterResponse.json()))
+    expect(after).toEqual([])
+    for (const directory of [first, second]) {
+      expect(yield* Effect.promise(() => fs.stat(directory).then(() => true, () => false))).toBe(false)
+    }
+  }),
+)
+
+it.live("returns 404 when restoring an unknown trashed project, and 204 when emptying an empty trash", () =>
+  Effect.gen(function* () {
+    const config = yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("opencode-project-delete-")))
+    const handler = yield* ServerFetch.make({ ...options, config: { directory: config.path } })
+    const request = (endpoint: string, method: string, body?: unknown) =>
+      Effect.promise(() =>
+        handler(
+          new Request(`http://opencode.local${endpoint}`, {
+            method,
+            headers: { "content-type": "application/json" },
+            body: body === undefined ? undefined : JSON.stringify(body),
+          }),
+        ),
+      )
+
+    const missing = yield* request("/api/project/trash/prj_missing/restore", "POST")
+    expect(missing.status).toBe(404)
+    expect(((yield* Effect.promise(() => missing.json())) as { _tag: string })._tag).toBe("ProjectNotFoundError")
+
+    const emptied = yield* request("/api/project/trash", "DELETE")
+    expect(emptied.status).toBe(204)
   }),
 )
 

@@ -26,6 +26,43 @@ export const ProjectGroup = HttpApiGroup.make("server.project")
     ),
   )
   .add(
+    HttpApiEndpoint.get("trash.list", `${root}/trash`, {
+      success: Schema.Array(Project.Trashed),
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "trash.list",
+        summary: "List trashed projects",
+        description: "List projects moved to the trash, most recently trashed first.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("trash.restore", `${root}/trash/:projectID/restore`, {
+      params: { projectID: Project.ID },
+      success: Project.Info,
+      error: [InvalidRequestError, ProjectNotFoundError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "trash.restore",
+        summary: "Restore trashed project",
+        description:
+          "Move a trashed project back to its original directory and back into the project list. Its sessions do not come back: they were removed when the project was trashed.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.delete("trash.empty", `${root}/trash`, {
+      success: HttpApiSchema.NoContent,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "trash.empty",
+        summary: "Empty trash",
+        description:
+          "Permanently delete every trashed project folder from disk. This cannot be undone: the trash folders do not go through the operating system recycle bin.",
+      }),
+    ),
+  )
+  .add(
     HttpApiEndpoint.patch("project.update", `${root}/:projectID`, {
       params: { projectID: Project.ID },
       payload: UpdatePayload,
@@ -49,7 +86,7 @@ export const ProjectGroup = HttpApiGroup.make("server.project")
         identifier: "project.delete",
         summary: "Delete project",
         description:
-          "Delete a project, its sessions, and its directory from disk. The directory always comes from the server's own project record, never from the request.",
+          "Move a project to the trash, closing its sessions first. The directory moves under the server's trash directory and can be restored; nothing is deleted from disk yet. When the directory is already gone there is nothing to recover, so the project is permanently deleted instead.",
       }),
     ),
   )

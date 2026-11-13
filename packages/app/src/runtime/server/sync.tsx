@@ -153,8 +153,10 @@ function createServerSyncContextInner(serverSDK: ServerSDK, data: Data) {
 
     if (event.type === "project.updated") applyProjectUpdate(event.data)
 
-    if (event.type === "project.deleted")
+    if (event.type === "project.deleted" || event.type === "project.trashed")
       setGlobalStore("project", (projects) => projects.filter((project) => project.id !== event.data.id))
+
+    if (event.type === "project.restored") applyProjectUpdate(event.data)
 
     if (event.type === "worktree.updated") {
       void worktrees.list(event.data.projectID)

@@ -1321,8 +1321,16 @@ export const dict = {
 
   "project.delete.failed.title": "Failed to delete project",
   "project.delete.title": "Delete project",
-  "project.delete.confirm": 'Delete the project "{{name}}"? It leaves the list and its sessions are closed. The files stay on this computer, in this folder:',
+  "project.delete.confirm": 'Delete the project "{{name}}"? It leaves the list and goes to the trash, and its sessions are closed. It can be restored later. The files leave this folder:',
   "project.delete.button": "Delete project",
+  "project.trash.title": "Trash",
+  "project.trash.empty": "The trash is empty.",
+  "project.trash.restore": "Restore",
+  "project.trash.empty.button": "Empty trash",
+  "project.trash.empty.confirm": "Empty the trash? The projects are permanently deleted from this computer and cannot be restored.",
+  "project.trash.load.failed.title": "Failed to open trash",
+  "project.trash.restore.failed.title": "Failed to restore project",
+  "project.trash.empty.failed.title": "Failed to empty trash",
 
   "workspace.new": "New worktree",
   "common.viewAll": "View all",
