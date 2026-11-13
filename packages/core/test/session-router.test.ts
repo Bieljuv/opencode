@@ -23,6 +23,7 @@ import {
   isFreeModel,
   isGatewayModel,
   isHopSignal,
+  isProviderDead,
   isRoutable,
   multiAgentFromMetadata,
   nextHop,
@@ -1007,6 +1008,180 @@ describe("nextHopFor", () => {
     ).toBe(Model.ID.make("big-free"))
     const bigResolved = resolved(big)
     expect(nextHopFor(chain2, new Set(), pool2, { type: "provider.context-too-long" }, bigResolved)).toBeUndefined()
+  })
+})
+
+describe("dead providers", () => {
+  const ref = (providerID: string, id: string) =>
+    Model.Ref.make({ providerID: Provider.ID.make(providerID), id: Model.ID.make(id) })
+  // The shape the runner hands over: a catalog model plus its resolved ref.
+  const resolved = (info: Model.Info) => ({
+    ...info,
+    ref: Model.Ref.make({ providerID: info.providerID, id: info.id }),
+  })
+  // Interleaved chain, like the live failure: the dead provider's models
+  // keep coming back unless the hop skips the whole provider.
+  const chain = [
+    ref("openrouter", "a1"),
+    ref("nvidia", "b1"),
+    ref("openrouter", "a2"),
+    ref("nvidia", "b2"),
+    ref("openrouter", "a3"),
+    ref("google", "c1"),
+  ]
+  const pool = [
+    free("openrouter", "a1"),
+    free("nvidia", "b1"),
+    free("openrouter", "a2"),
+    free("nvidia", "b2"),
+    free("openrouter", "a3"),
+    free("google", "c1"),
+  ]
+
+  test("only auth and exhaustion kill a provider; timeout, internal, throttle and overflow do not", () => {
+    for (const type of [
+      "provider.auth",
+      "provider.exhausted",
+      "provider.free-limit",
+      "provider.quota",
+      "provider.budget-limit",
+    ])
+      expect(isProviderDead({ type })).toBe(true)
+    for (const type of [
+      "provider.timeout",
+      "provider.internal",
+      "provider.invalid-output",
+      "provider.rate-limit",
+      "provider.context-too-long",
+      "provider.key-expired",
+    ])
+      expect(isProviderDead({ type })).toBe(false)
+  })
+
+  test("an auth failure skips every remaining model of that provider", () => {
+    // Gabriel's session (2026-11-12 23:48, 3.4.44): a complex turn
+    // tried 167 models in 90s and died on the cascade budget without
+    // reaching the free models at the end of the chain. The hop only
+    // preferred another provider for one hop, then came back to the
+    // dead provider's next model.
+    const current = resolved(free("openrouter", "a1"))
+    const dead = new Set(["openrouter"])
+    const tried = new Set(["openrouter/a1"])
+    expect(nextHopFor(chain, tried, pool, { type: "provider.auth" }, current, dead)).toEqual(
+      ref("nvidia", "b1"),
+    )
+    // The next hop — even on a failure that does not kill its own
+    // provider — never returns to the dead one.
+    tried.add("nvidia/b1")
+    const b1 = resolved(free("nvidia", "b1"))
+    expect(nextHopFor(chain, tried, pool, { type: "provider.timeout" }, b1, dead)).toEqual(
+      ref("google", "c1"),
+    )
+  })
+
+  test("an exhaustion failure skips every remaining model of that provider", () => {
+    const current = resolved(free("openrouter", "a1"))
+    const dead = new Set(["openrouter"])
+    expect(
+      nextHopFor(chain, new Set(["openrouter/a1"]), pool, { type: "provider.exhausted" }, current, dead),
+    ).toEqual(ref("nvidia", "b1"))
+  })
+
+  test("the exhaustion branch skips dead providers instead of taking the next model", () => {
+    // Without the dead set, exhaustion takes the plain next model — the
+    // dead provider's next model.
+    const current = resolved(free("openrouter", "a1"))
+    expect(
+      nextHopFor(
+        chain,
+        new Set(["openrouter/a1"]),
+        pool,
+        { type: "provider.exhausted" },
+        current,
+        new Set(["nvidia"]),
+      ),
+    ).toEqual(ref("openrouter", "a2"))
+  })
+
+  test("a timeout keeps the provider in the chain: the fallback still returns to it when alone", () => {
+    const chain2 = [ref("openrouter", "a1"), ref("nvidia", "b1"), ref("openrouter", "a2")]
+    const pool2 = [free("openrouter", "a1"), free("nvidia", "b1"), free("openrouter", "a2")]
+    const current = resolved(free("openrouter", "a1"))
+    expect(
+      nextHopFor(chain2, new Set(["openrouter/a1"]), pool2, { type: "provider.timeout" }, current),
+    ).toEqual(ref("nvidia", "b1"))
+    const b1 = resolved(free("nvidia", "b1"))
+    expect(
+      nextHopFor(
+        chain2,
+        new Set(["openrouter/a1", "nvidia/b1"]),
+        pool2,
+        { type: "provider.timeout" },
+        b1,
+      ),
+    ).toEqual(ref("openrouter", "a2"))
+  })
+
+  test("the larger-window branch skips dead providers", () => {
+    const small = free("openrouter", "small-free", { limit: { context: 32_000, output: 8_000 } })
+    const mid = free("openrouter", "mid-free", { limit: { context: 128_000, output: 32_000 } })
+    const big = free("nvidia", "big-free", { limit: { context: 200_000, output: 32_000 } })
+    const pool2 = [small, mid, big]
+    const chain2 = buildChain(pool2, { complexity: "simple", effort: "automatico" })
+    const smallResolved = resolved(small)
+    expect(
+      nextHopFor(
+        chain2,
+        new Set(["openrouter/small-free"]),
+        pool2,
+        { type: "provider.context-too-long" },
+        smallResolved,
+        new Set(["openrouter"]),
+      ),
+    ).toEqual(ref("nvidia", "big-free"))
+  })
+
+  test("the same-provider fallback never returns a dead provider", () => {
+    const chain2 = [ref("openrouter", "a1"), ref("openrouter", "a2")]
+    expect(
+      nextHopFromProvider(chain2, new Set(["openrouter/a1"]), "openrouter", new Set(["openrouter"])),
+    ).toBeUndefined()
+    expect(nextHop(chain2, new Set(["openrouter/a1"]), new Set(["openrouter"]))).toBeUndefined()
+  })
+
+  test("with every provider dead there is no hop left, on any branch", () => {
+    const dead = new Set(["openrouter", "nvidia", "google"])
+    const tried = new Set(["openrouter/a1"])
+    const current = resolved(free("openrouter", "a1"))
+    expect(nextHopFor(chain, tried, pool, { type: "provider.auth" }, current, dead)).toBeUndefined()
+    expect(nextHopFor(chain, tried, pool, { type: "provider.exhausted" }, current, dead)).toBeUndefined()
+    expect(nextHopFor(chain, tried, pool, { type: "provider.timeout" }, current, dead)).toBeUndefined()
+  })
+
+  test("the live failure ends after two hops instead of walking the whole chain", () => {
+    // The runner loop, step by step: each failure that kills its
+    // provider marks it dead before the next hop is computed, exactly
+    // like the retry callback does. Before this fix the same loop
+    // walked all six models — auth hopped to the other provider, the
+    // next failure hopped straight back — and the 167-model live chain
+    // died on the cascade budget the same way.
+    const tried = new Set<string>()
+    const dead = new Set<string>()
+    let current = nextHop(chain, tried, dead)
+    expect(current).toEqual(ref("openrouter", "a1"))
+    if (current === undefined) return
+    tried.add(refKey(current))
+    if (isProviderDead({ type: "provider.auth" })) dead.add(current.providerID)
+    const fromA1 = resolved(free("openrouter", "a1"))
+    current = nextHopFor(chain, tried, pool, { type: "provider.auth" }, fromA1, dead)
+    expect(current).toEqual(ref("nvidia", "b1"))
+    if (current === undefined) return
+    tried.add(refKey(current))
+    if (isProviderDead({ type: "provider.exhausted" })) dead.add(current.providerID)
+    const fromB1 = resolved(free("nvidia", "b1"))
+    current = nextHopFor(chain, tried, pool, { type: "provider.exhausted" }, fromB1, dead)
+    expect(current).toEqual(ref("google", "c1"))
+    expect(tried.size).toBe(2)
   })
 })
 

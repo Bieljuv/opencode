@@ -578,12 +578,17 @@ export const layer = Layer.effect(
         rotateAfter: context.session.model,
       })
       const tried = new Set<string>([SessionRouter.refKey(context.model.ref)])
+      // Providers killed for this summary: a model that fails with a
+      // dead key or an empty quota condemns its whole provider, not just
+      // itself — the hop skips them all instead of burning time
+      // ping-ponging between dead providers.
+      const deadProviders = new Set<string>()
       // The next hop that resolves to a usable model, or undefined when the chain is exhausted. An unresolvable
       // ref is marked tried and the following hop is tried instead, so one dead catalog entry cannot stall the hop.
       const nextHop = (from: SessionContext.Loaded["model"], error: SessionError.Error) =>
         Effect.gen(function* () {
           while (true) {
-            const next = SessionRouter.nextHopFor(chain, tried, available, error, from)
+            const next = SessionRouter.nextHopFor(chain, tried, available, error, from, deadProviders)
             if (next === undefined) return undefined
             tried.add(SessionRouter.refKey(next))
             const resolved = yield* models
@@ -602,6 +607,8 @@ export const layer = Layer.effect(
         const failure = outcome.failure
         // Only a failure that names a model problem hops: anything else (the summary itself cannot run) fails now.
         if (!SessionRouter.isHopSignal(failure.error)) return yield* Effect.fail(failure)
+        if (SessionRouter.isProviderDead(failure.error))
+          deadProviders.add(current.context.model.ref.providerID)
         const next = yield* nextHop(current.context.model, failure.error)
         if (next !== undefined) {
           yield* Effect.logInfo("manostech router compaction hop", {
