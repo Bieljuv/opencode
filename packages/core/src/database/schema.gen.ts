@@ -133,6 +133,16 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`trash\` (
+          \`id\` text PRIMARY KEY,
+          \`name\` text,
+          \`directory\` text NOT NULL,
+          \`trash_path\` text NOT NULL,
+          \`snapshot\` text NOT NULL,
+          \`time_trashed\` integer NOT NULL
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`schedule\` (
           \`id\` text PRIMARY KEY,
           \`session_id\` text,

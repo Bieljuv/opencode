@@ -49,6 +49,20 @@ export const Info = Schema.Struct({
 }).annotate({ identifier: "Project" })
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 
+/**
+ * A project moved to the trash: the directory left the project list and
+ * waits under the server's trash directory until restored or emptied.
+ * `directory` is where the project lived; the trash path itself stays
+ * server-internal and is never exposed on the wire.
+ */
+export const Trashed = Schema.Struct({
+  id: ID,
+  name: optional(Schema.String),
+  directory: AbsolutePath,
+  trashedAt: NonNegativeInt,
+}).annotate({ identifier: "Project.Trashed" })
+export interface Trashed extends Schema.Schema.Type<typeof Trashed> {}
+
 export const UpdateInput = Schema.Struct({
   projectID: ID,
   canonical: optional(AbsolutePath),
