@@ -10,6 +10,7 @@ import hyperframesMd from "./skills/hyperframes/SKILL.md" with { type: "text" }
 import openverseMd from "./skills/openverse/SKILL.md" with { type: "text" }
 import ponytailMd from "./skills/ponytail/SKILL.md" with { type: "text" }
 import realSfxMd from "./skills/real-sfx/SKILL.md" with { type: "text" }
+import strixMd from "./skills/strix/SKILL.md" with { type: "text" }
 import { runArena } from "./src/bracket.ts"
 
 /**
@@ -67,6 +68,17 @@ import { runArena } from "./src/bracket.ts"
  * this app — Node and FFmpeg come bundled with the installer (on the
  * server's PATH), never assumed from the user's machine, and the first
  * render still downloads the browser once.
+ *
+ * Strix: the security audit, as the `skill://strix` virtual skill and the
+ * `/strix` command. The skill is ported from the old Forge editor's Strix
+ * template: find vulnerabilities with reproducible proof, prioritize by
+ * real impact, fix and retest, then report. It is on-demand only — the
+ * agent loads it when the user asks for a security audit (or runs /strix)
+ * and offers it before delivering a system or site, never on every turn.
+ * The delivery-gate sentence of the old template was softened to that
+ * offer, and the install instruction for the Strix platform was dropped:
+ * the agent uses the platform's findings only when the client already
+ * has access, and never installs anything.
  */
 
 export const ARENA_SKILL_ID = "arena"
@@ -81,6 +93,8 @@ export const PONYTAIL_SKILL_ID = "ponytail"
 export const PONYTAIL_SKILL_PATH = "skill://ponytail/SKILL.md"
 export const REAL_SFX_SKILL_ID = "real-sfx"
 export const REAL_SFX_SKILL_PATH = "skill://real-sfx/SKILL.md"
+export const STRIX_SKILL_ID = "strix"
+export const STRIX_SKILL_PATH = "skill://strix/SKILL.md"
 
 /** Commands that write under `.arena/` and therefore need edit permission first. */
 const MUTATING_COMMANDS = new Set(["init", "prompts", "record", "collect", "advance"])
@@ -153,6 +167,18 @@ export function buildRealSfxSkill(): Skill.Info {
     description: parsed.data.description,
     autoinvoke: parsed.data["disable-model-invocation"] !== true,
     path: Skill.Info.fields.path.make(REAL_SFX_SKILL_PATH),
+    content: parsed.content,
+  })
+}
+
+export function buildStrixSkill(): Skill.Info {
+  const parsed = matter(strixMd)
+  return Skill.Info.make({
+    id: Skill.ID.make(STRIX_SKILL_ID),
+    name: Skill.Name.make("Strix"),
+    description: parsed.data.description,
+    autoinvoke: parsed.data["disable-model-invocation"] !== true,
+    path: Skill.Info.fields.path.make(STRIX_SKILL_PATH),
     content: parsed.content,
   })
 }
@@ -339,6 +365,31 @@ export function buildRealSfxCommand(session: Pick<SessionDomain, "prompt">) {
   }
 }
 
+export function strixCommandText(args: string): string {
+  const trimmed = args.trim()
+  return [
+    "Execute a auditoria de segurança com a skill \"strix\". Primeiro carregue a skill \"strix\" com a ferramenta skill (id \"strix\") e siga as instruções dela à risca, sem pular passos.",
+    "",
+    `O que auditar: ${trimmed ? trimmed : "(nenhum — use o projeto atual.)"}`,
+  ].join("\n")
+}
+
+export function buildStrixCommand(session: Pick<SessionDomain, "prompt">) {
+  return {
+    name: "strix",
+    description: "Strix: audita a segurança do projeto antes de entregar — acha falhas com prova, corrige e retesta",
+    execute: async (input: CommandInvocation) => {
+      await session.prompt({
+        ...input.prompt,
+        sessionID: input.sessionID,
+        text: strixCommandText(input.prompt.text),
+        skills: [{ id: STRIX_SKILL_ID }],
+        delivery: input.delivery,
+      })
+    },
+  }
+}
+
 export function videoCommandText(args: string): string {
   const trimmed = args.trim()
   return [
@@ -381,6 +432,8 @@ export default Plugin.define({
       if (!editor.get(openverse.id)) editor.add(openverse)
       const realSfx = buildRealSfxSkill()
       if (!editor.get(realSfx.id)) editor.add(realSfx)
+      const strix = buildStrixSkill()
+      if (!editor.get(strix.id)) editor.add(strix)
     })
     await ctx.tool.transform((editor) => {
       if (editor.get("arena")) return
@@ -404,6 +457,7 @@ export default Plugin.define({
       editor.add(buildGraphifyCommand(ctx.session))
       editor.add(buildOpenverseCommand(ctx.session))
       editor.add(buildRealSfxCommand(ctx.session))
+      editor.add(buildStrixCommand(ctx.session))
       editor.add(buildVideoCommand(ctx.session))
     })
   },

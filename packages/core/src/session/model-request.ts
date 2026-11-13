@@ -140,6 +140,17 @@ export const ARENA_AUTO =
   "Arena (automatic, only when the request justifies it): invoke the arena tool when (a) the user is unhappy with a previous answer (\"resposta ruim\", \"tenta de novo\", \"não gostei\", \"faz de novo\", \"errado\" after your answer), (b) the request is a high-stakes decision that is hard to reverse (choosing between approaches, architecture, or a library), or (c) the task is complex and your first attempt was weak (it failed, or the user had to correct it). Never run the tournament for a trivial request (a greeting, a quick question, a small fix). When unsure, offer the tournament and ask instead of running it silently. When you run it, tell the user in chat that the tournament is running and why, so they know why it takes longer. The user can always start it directly with /arena."
 
 /**
+ * ManosTech Strix auto-activation, appended to the system prompt of every
+ * turn. The security audit is a tool the agent fires when the request
+ * justifies it, not on every turn. The triggers are an explicit audit
+ * request or a delivery the user wants checked; the full audit never
+ * runs unasked. Before delivering a system or site, offer the audit
+ * instead of running it silently; when unsure, offer it instead.
+ */
+export const STRIX_AUTO =
+  "Strix (automatic, only when the request justifies it): load the \"strix\" skill when (a) the user asks for a security audit, a pentest, or to harden the project (\"auditoria de segurança\", \"pentest\", \"blindar o projeto\", \"acha as falhas\", \"revisar a segurança\", \"vulnerabilidade\"), or (b) the user asks to check the security of a system or site before delivering it. Never run the full audit unasked: before delivering a system or site, offer the audit instead of running it silently. When unsure, offer it and ask instead of running it silently. When you run it, tell the user in chat that the security audit is running and why, so they know why it takes longer. The user can always start it directly with /strix."
+
+/**
  * ManosTech identity masking, appended to the system prompt of every turn.
  * The user must never learn which model or provider is answering, what tier
  * it runs on, or that models are switched behind the scenes. The rule covers
@@ -291,6 +302,11 @@ export const baseTranscript = (input: {
       // a weak first attempt), never for a trivial request, and offers it
       // instead when unsure.
       SystemPart.make(ARENA_AUTO),
+      // ManosTech Strix auto-activation: embedded in every message,
+      // invisible to the user. The agent loads the security audit when
+      // the user asks for one (or to check a delivery), never unasked,
+      // and offers it before delivering instead of running it silently.
+      SystemPart.make(STRIX_AUTO),
       // ManosTech approval before building: embedded in every message,
       // invisible to the user. The agent shows a short plan and asks the
       // user to confirm it with the question tool before creating or

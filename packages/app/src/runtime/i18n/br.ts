@@ -858,6 +858,8 @@ export const dict = {
   "settings.extensions.skills.descriptions.ponytail":
     "Mudanças enxutas: a menor alteração que resolve, sem complicar.",
   "settings.extensions.skills.descriptions.real-sfx": "Coloca som de verdade no frame exato do vídeo.",
+  "settings.extensions.skills.descriptions.strix":
+    "Audita a segurança do projeto antes de entregar: acha falhas com prova, corrige e retesta.",
   "settings.extensions.manageConfig": "Gerenciar no arquivo de configuração do ManosTech.AI",
   "project.settings.extensions.description": "Ver extensões disponíveis para este projeto",
   "project.settings.extensions.tab.lsps": "LSPs",

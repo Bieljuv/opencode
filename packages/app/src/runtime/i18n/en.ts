@@ -1045,6 +1045,8 @@ export const dict = {
   "settings.extensions.skills.descriptions.ponytail":
     "Lean changes: the smallest change that solves it, without overcomplicating.",
   "settings.extensions.skills.descriptions.real-sfx": "Puts real sound on the exact video frame.",
+  "settings.extensions.skills.descriptions.strix":
+    "Audits the project's security before delivery: finds flaws with proof, fixes and retests them.",
   "settings.extensions.manageConfig": "Manage in the ManosTech.AI configuration file",
   "settings.extensions.plugins.loadFailed": "Could not load plugins",
   "project.settings.title": "Edit project",

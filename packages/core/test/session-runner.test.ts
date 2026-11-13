@@ -1847,7 +1847,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.session.prompt({ sessionID: forked.id, text: "Forked", resume: false })
     yield* s.session.resume(forked.id)
 
-    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Latest context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT])
+    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Latest context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT])
     // Copied history keeps the frozen chronological update; no new update is emitted.
     expect(systemTexts(s.requests.at(-1)!)).toContain("Changed context")
     expect(systemTexts(s.requests.at(-1)!)).not.toContain("Latest context")
@@ -1910,7 +1910,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.resume
 
     expect(s.requests).toHaveLength(1)
-    expect(s.requests[0]?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT])
+    expect(s.requests[0]?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT])
     expect(messageRoles(s.requests[0])).toEqual(["user", "user"])
     // The projected row is authoritative: a missing row admits a fresh baseline
     // instead of rebuilding from durable events.
@@ -1954,8 +1954,8 @@ describe("SessionRunnerLLM", () => {
     expect(s.requests[0].messages).toHaveLength(1)
     expect(s.requests[1].messages.slice(0, 1)).toEqual([...s.requests[0].messages])
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
     ])
     expect(messageRoles(s.requests[1])).toEqual(["user", "system", "user"])
     expect(s.requests[1]?.messages.at(1)?.content).toEqual([Expected.text("Changed context")])
@@ -1991,7 +1991,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Second")
     const third = yield* s.runPrompt("Third")
     const before = s.requests.at(-1)?.system.map((part) => part.text)
-    expect(before).toEqual([defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT])
+    expect(before).toEqual([defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT])
 
     yield* s.bus.publish(SessionEvent.RevertEvent.Committed, { sessionID, to: third.id })
     yield* s.runPrompt("Fourth")
@@ -2010,7 +2010,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.bus.publish(SessionEvent.RevertEvent.Committed, { sessionID, to: second.id })
     yield* s.runPrompt("Fourth")
 
-    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Latest context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT])
+    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Latest context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT])
   })
 
   scenario("uses the selected model family prompt when the agent does not override it", function* (s) {
@@ -2030,6 +2030,7 @@ describe("SessionRunnerLLM", () => {
       SessionModelRequest.FAILED_TOOL_RETRY,
       SessionModelRequest.MANDATORY_TOKEN_SAVING,
       SessionModelRequest.ARENA_AUTO,
+      SessionModelRequest.STRIX_AUTO,
       SessionModelRequest.APPROVAL_BEFORE_BUILD,
       SessionModelRequest.DELIVERY_RULES,
       SessionModelRequest.MULTI_AGENT,
@@ -2060,6 +2061,7 @@ describe("SessionRunnerLLM", () => {
       SessionModelRequest.FAILED_TOOL_RETRY,
       SessionModelRequest.MANDATORY_TOKEN_SAVING,
       SessionModelRequest.ARENA_AUTO,
+      SessionModelRequest.STRIX_AUTO,
       SessionModelRequest.APPROVAL_BEFORE_BUILD,
       SessionModelRequest.DELIVERY_RULES,
       SessionModelRequest.MULTI_AGENT,
@@ -2089,6 +2091,7 @@ describe("SessionRunnerLLM", () => {
       SessionModelRequest.FAILED_TOOL_RETRY,
       SessionModelRequest.MANDATORY_TOKEN_SAVING,
       SessionModelRequest.ARENA_AUTO,
+      SessionModelRequest.STRIX_AUTO,
       SessionModelRequest.APPROVAL_BEFORE_BUILD,
       SessionModelRequest.DELIVERY_RULES,
       SessionModelRequest.MULTI_AGENT,
@@ -2123,6 +2126,7 @@ describe("SessionRunnerLLM", () => {
       SessionModelRequest.FAILED_TOOL_RETRY,
       SessionModelRequest.MANDATORY_TOKEN_SAVING,
       SessionModelRequest.ARENA_AUTO,
+      SessionModelRequest.STRIX_AUTO,
       SessionModelRequest.APPROVAL_BEFORE_BUILD,
       SessionModelRequest.DELIVERY_RULES,
       SessionModelRequest.MULTI_AGENT,
@@ -2159,6 +2163,7 @@ describe("SessionRunnerLLM", () => {
       SessionModelRequest.FAILED_TOOL_RETRY,
       SessionModelRequest.MANDATORY_TOKEN_SAVING,
       SessionModelRequest.ARENA_AUTO,
+      SessionModelRequest.STRIX_AUTO,
       SessionModelRequest.APPROVAL_BEFORE_BUILD,
       SessionModelRequest.DELIVERY_RULES,
       SessionModelRequest.MULTI_AGENT,
@@ -2204,8 +2209,8 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Second")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, genericIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
-      [defaultSystem, genericIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
+      [defaultSystem, genericIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
+      [defaultSystem, genericIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
     ])
     expect(systemTexts(s.requests[1])).toContainEqual(expect.stringContaining("Reviewer skills"))
   })
@@ -2227,7 +2232,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("First")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, genericIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
+      [defaultSystem, genericIdentity, "Build skills\n\nInitial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
     ])
   })
 
@@ -2246,7 +2251,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("First")
     expect(s.requests.map((request) => request.model)).toEqual([model])
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
     ])
   })
 
@@ -2278,6 +2283,7 @@ describe("SessionRunnerLLM", () => {
       SessionModelRequest.FAILED_TOOL_RETRY,
       SessionModelRequest.MANDATORY_TOKEN_SAVING,
       SessionModelRequest.ARENA_AUTO,
+      SessionModelRequest.STRIX_AUTO,
       SessionModelRequest.APPROVAL_BEFORE_BUILD,
       SessionModelRequest.DELIVERY_RULES,
       SessionModelRequest.MULTI_AGENT,
@@ -2378,9 +2384,9 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Third")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
     ])
     expect(messageRoles(s.requests[1])).toEqual(["user", "system", "user"])
     expect(s.requests[2]?.messages.filter((message) => message.role === "system")).toHaveLength(2)
@@ -2442,9 +2448,9 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Third")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
     ])
   })
 
@@ -2460,9 +2466,9 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Second")
 
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES],
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
     ])
     expect(messageRoles(s.requests[2])).toEqual(["user", "system", "user"])
     expect(s.requests[2]?.messages.at(1)?.content).toEqual([Expected.text("Replacement context")])
@@ -3810,6 +3816,7 @@ describe("SessionRunnerLLM", () => {
       SessionModelRequest.FAILED_TOOL_RETRY,
       SessionModelRequest.MANDATORY_TOKEN_SAVING,
       SessionModelRequest.ARENA_AUTO,
+      SessionModelRequest.STRIX_AUTO,
       SessionModelRequest.APPROVAL_BEFORE_BUILD,
       SessionModelRequest.DELIVERY_RULES,
       SessionModelRequest.MULTI_AGENT,
@@ -4066,7 +4073,7 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Third")
 
     // Compaction already moved current values into the new epoch before the unavailable read.
-    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Changed context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT])
+    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, genericIdentity, "Changed context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT])
     expect(systemTexts(s.requests.at(-1)!)).not.toContain("Changed context")
   })
 
@@ -4201,8 +4208,8 @@ describe("SessionRunnerLLM", () => {
 
     expect(s.requests.map((request) => request.model)).toEqual([model, replacementModel])
     expect(s.requests.map((request) => request.system.map((part) => part.text))).toEqual([
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
-      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
+      [defaultSystem, genericIdentity, "Initial context", SessionModelRequest.TOKEN_ECONOMY, SessionModelRequest.HIDE_MODEL_IDENTITY, SessionModelRequest.DIRECT_REPLY, SessionModelRequest.FAILED_TOOL_RETRY, SessionModelRequest.MANDATORY_TOKEN_SAVING, SessionModelRequest.ARENA_AUTO, SessionModelRequest.STRIX_AUTO, SessionModelRequest.APPROVAL_BEFORE_BUILD, SessionModelRequest.DELIVERY_RULES, SessionModelRequest.MULTI_AGENT],
     ])
     expect(systemTexts(s.requests[1])).toContain("Replacement context")
   })

@@ -17,12 +17,15 @@ import plugin, {
   buildPonytailSkill,
   buildRealSfxCommand,
   buildRealSfxSkill,
+  buildStrixCommand,
+  buildStrixSkill,
   buildVideoCommand,
   graphifyCommandText,
   openverseCommandText,
   ponytailCommandText,
   ponytailLevel,
   realSfxCommandText,
+  strixCommandText,
   videoCommandText,
 } from "../index.ts"
 import { ArenaError } from "../src/bracket.ts"
@@ -280,11 +283,12 @@ describe("ponytail skill", () => {
     const { ctx, skills, commands } = makeCtx(dir)
     await plugin.setup(ctx as unknown as Context)
     await plugin.setup(ctx as unknown as Context)
-    // Six skills (arena, ponytail, graphify, hyperframes, openverse,
-    // real-sfx) and six commands (arena, ponytail, graphify, openverse,
-    // real-sfx, video): setup twice still registers each one once.
-    expect(skills.size).toBe(6)
-    expect(commands.size).toBe(6)
+    // Seven skills (arena, ponytail, graphify, hyperframes, openverse,
+    // real-sfx, strix) and seven commands (arena, ponytail, graphify,
+    // openverse, real-sfx, strix, video): setup twice still registers each
+    // one once.
+    expect(skills.size).toBe(7)
+    expect(commands.size).toBe(7)
   })
 
   test("user-visible descriptions and command texts stay in pt-BR and name nothing internal", async () => {
@@ -799,6 +803,117 @@ describe("real-sfx command", () => {
     } as never)
     expect(prompts[0]?.["skills"]).toEqual([{ id: "real-sfx" }])
     expect(String(prompts[0]?.["text"])).toContain("video.mp4 cues.json")
+  })
+})
+
+describe("strix skill", () => {
+  test("skill strix is the old Forge editor's Strix template, adapted to offer the audit", async () => {
+    const dir = await makeTmp()
+    const { ctx, skills, tools, commands } = makeCtx(dir)
+    await plugin.setup(ctx as unknown as Context)
+
+    const skill = skills.get("strix")
+    expect(skill).toBeDefined()
+    const info = buildStrixSkill()
+    expect(String(info.id)).toBe("strix")
+    expect(String(info.name)).toBe("Strix")
+    expect(String(info.path)).toBe("skill://strix/SKILL.md")
+    expect(info.autoinvoke).toBe(true)
+    for (const trigger of ["strix", "auditoria de segurança", "pentest", "blindar o projeto", "vulnerabilidade", "revisar a segurança"]) {
+      expect(info.description ?? "").toContain(trigger)
+    }
+    // Ported from the old Forge editor's Strix template: the five-step
+    // method (find, prove, prioritize, fix and retest, report) and the
+    // hard rules are kept, but the delivery-gate sentence is softened —
+    // the audit is offered before delivery and runs only when the user
+    // asks or accepts, never on every turn — and the platform install
+    // instruction is dropped: the agent uses the Strix platform's
+    // findings only when the client already has access, and never
+    // installs anything.
+    expect(info.content).toContain("# /strix")
+    expect(info.content).toContain("OFEREÇA a auditoria ao usuário")
+    expect(info.content).toContain("ACHE:")
+    expect(info.content).toContain("PROVE:")
+    expect(info.content).toContain("PRIORIZE")
+    expect(info.content).toContain("CORRIJA")
+    expect(info.content).toContain("REGRAS DURAS")
+    expect(info.content).toContain("só audite sistemas que o usuário possui")
+    expect(info.content).not.toContain("opencode")
+    // The masking words stay out of the skill text. The adaptation
+    // removes the install instruction, so "install" is locked out too.
+    for (const word of ["Claude", "OpenCode", "python3", "Python", "Shift+Tab", "free", "paid", "model", "provider", "grátis", "pago", "cota", "install", "instal"]) {
+      expect(info.content).not.toContain(word)
+      expect(info.description ?? "").not.toContain(word)
+    }
+
+    // Strix is a behavior instruction: no tool, only the skill and the command.
+    expect(tools.get("strix")).toBeUndefined()
+    expect(commands.get("strix")).toBeDefined()
+  })
+
+  test("user-visible descriptions and command texts stay in pt-BR and name nothing internal", async () => {
+    const dir = await makeTmp()
+    const { ctx, commands } = makeCtx(dir)
+    await plugin.setup(ctx as unknown as Context)
+    const forbidden = ["Claude", "OpenCode", "Nexus", "grátis", "gratuito", "pago", "cota", "crédito", "roteamento", "US$", "free", "paid", "model", "provider"]
+    const info = buildStrixSkill()
+    for (const word of forbidden) {
+      expect(info.description ?? "").not.toContain(word)
+    }
+    const command = buildStrixCommand({ prompt: async () => undefined } as never)
+    expect(command.description).toMatch(/Strix/)
+    for (const word of forbidden) {
+      expect(command.description).not.toContain(word)
+      expect((commands.get("strix") as unknown as { description: string }).description).not.toContain(word)
+    }
+    for (const args of ["", "a rota de login", "o sistema atual"]) {
+      for (const word of forbidden) {
+        expect(strixCommandText(args)).not.toContain(word)
+      }
+    }
+  })
+})
+
+describe("strix command", () => {
+  test("blank arguments load the skill for the current project", async () => {
+    const prompts: Array<Record<string, unknown>> = []
+    const session = {
+      prompt: async (input: Record<string, unknown>) => {
+        prompts.push(input)
+        return undefined
+      },
+    }
+    const command = buildStrixCommand(session as never)
+    await command.execute({
+      sessionID: "ses_strix_command_test",
+      prompt: { text: "   " },
+      delivery: "steer",
+    } as never)
+    expect(prompts).toHaveLength(1)
+    const sent = prompts[0]
+    expect(sent["sessionID"]).toBe("ses_strix_command_test")
+    expect(sent["delivery"]).toBe("steer")
+    expect(sent["skills"]).toEqual([{ id: "strix" }])
+    expect(String(sent["text"])).toContain('skill "strix"')
+    expect(String(sent["text"])).toContain("(nenhum")
+  })
+
+  test("the audit target passes through to the skill", async () => {
+    const prompts: Array<Record<string, unknown>> = []
+    const session = {
+      prompt: async (input: Record<string, unknown>) => {
+        prompts.push(input)
+        return undefined
+      },
+    }
+    const command = buildStrixCommand(session as never)
+    await command.execute({
+      sessionID: "ses_strix_command_args",
+      prompt: { text: "a rota de login" },
+      delivery: "steer",
+    } as never)
+    expect(prompts[0]?.["skills"]).toEqual([{ id: "strix" }])
+    expect(String(prompts[0]?.["text"])).toContain("a rota de login")
   })
 })
 
