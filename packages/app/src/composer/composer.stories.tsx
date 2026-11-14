@@ -1,8 +1,9 @@
-import { Show, createEffect, createMemo, on, onMount, type JSX } from "solid-js"
+import { Show, createEffect, createMemo, createSignal, on, onMount, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { ModelSelection } from "@/providers/models/selection"
 import { STORY_MODEL, emptySessionDocument, pendingAndQueuedDocument } from "@opencode/session-ui/storybook"
 import { Composer } from "./composer"
+import { PreviewButton } from "./preview-button"
 import type { ComposerModel } from "./model"
 import { createComposerEditor } from "./editor/interaction"
 import type { ComposerPersistedState, ComposerSuggestion } from "./types"
@@ -66,9 +67,12 @@ function ComposerStory(props: {
   fileSearch?: boolean
   /** The plan is blocked: the composer locks and shows only the generic message plus the release time. */
   planBlocked?: boolean
+  /** Show the preview button in the composer footer, with local open state. */
+  preview?: boolean
   suggestionBoundary?: () => HTMLElement | undefined
 }) {
   const [fileSearch, setFileSearch] = createStore<{ pending?: string }>({})
+  const [previewOpened, setPreviewOpened] = createSignal(false)
   let returnFiles: (() => void) | undefined
 
   const [draft, setDraft] = createStore<ComposerPersistedState>({
@@ -334,7 +338,16 @@ function ComposerStory(props: {
       <output class="text-12-regular text-text-weak" aria-live="polite">
         {story.activity}
       </output>
-      <Composer model={model} borderUnderlay suggestionBoundary={props.suggestionBoundary} />
+      <Composer
+        model={model}
+        borderUnderlay
+        suggestionBoundary={props.suggestionBoundary}
+        previewControl={
+          props.preview ? (
+            <PreviewButton opened={previewOpened} onToggle={() => setPreviewOpened((opened) => !opened)} />
+          ) : undefined
+        }
+      />
       <Show when={props.fileSearch}>
         <button
           type="button"
@@ -378,6 +391,7 @@ type FlowArgs = {
   label: string
   suggestions: "command" | "context" | "none"
   planBlocked: boolean
+  preview: boolean
 }
 
 export default {
@@ -385,12 +399,14 @@ export default {
   component: Composer,
   parameters: { layout: "centered" },
   // States that only change the composer's props share this render, so moving between them keeps one composer.
-  args: { working: false, stopping: false, failure: false, label: "Ready", suggestions: "none", planBlocked: false },
+  args: { working: false, stopping: false, failure: false, label: "Ready", suggestions: "none", planBlocked: false, preview: false },
   argTypes: { suggestions: { control: "select", options: ["none", "command", "context"] } },
   render: (args: FlowArgs) => <ComposerStory {...args} />,
 }
 
 export const EmptyDraft = {}
+
+export const PreviewToggle = { args: { preview: true } }
 
 export const PromptHistory = {
   args: { many: false },

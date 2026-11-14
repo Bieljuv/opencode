@@ -154,6 +154,8 @@ export const dict = {
   "composer.quickActions.publish.description": "Publishes the project with the publishing guide.",
   "composer.quickActions.download.title": "Download the project",
   "composer.quickActions.download.description": "Downloads the project as a zip file.",
+  "composer.preview.label": "Preview",
+  "composer.preview.tooltip": "View preview — split the screen with the project's browser",
   "command.mcp.toggle": "Toggle MCPs",
   "command.mcp.toggle.description": "Toggle MCPs",
   "command.agent.cycle": "Cycle agent",

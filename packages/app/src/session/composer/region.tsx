@@ -7,6 +7,7 @@ import { makeEventListener } from "@solid-primitives/event-listener"
 import { useNavigate } from "@solidjs/router"
 import { createEffect, createMemo, on, onMount, Show, type Accessor } from "solid-js"
 import { Composer } from "@/composer/composer"
+import { PreviewButton } from "@/composer/preview-button"
 import { VoiceComposer } from "@/voice/composer"
 import { useComposerState } from "@/composer/persistence"
 import { createComposerControls } from "@/composer/selection"
@@ -28,6 +29,7 @@ import { useWorkspaceLocation } from "@/workspaces/location"
 import { requireServerKey, sessionHref } from "@/shell/routes/session"
 import { useComposerCommands } from "@/composer/commands"
 import { useSessionCommands } from "../commands/use-session-commands"
+import { useSessionLayout } from "../session-layout"
 import type { SessionModel } from "../model"
 import type { SessionScreenLayout } from "../screen-layout"
 import { syncPromptModel } from "../session-model-helpers"
@@ -384,6 +386,10 @@ export function ActiveSessionComposerRegion(props: {
   const server = useServerSDK()
   const language = useLanguage()
   const openRoute = useOpenSessionRoute()
+  const command = useCommand()
+  // The preview button reads the same side-region state the session header toggle shows, and triggers the same
+  // `review.toggle` command it and the keybind use, so opening the preview here and there is the same panel.
+  const { view } = useSessionLayout()
 
   // Only the server's LocationNotFoundError for the session's own Location replaces the composer.
   // A refetched session info (on reconnect) must not remount the keyed view and close its open menu.
@@ -555,6 +561,12 @@ export function ActiveSessionComposerRegion(props: {
                   borderUnderlay
                   readOnly={props.model.queue.undoing()}
                   suggestionBoundary={props.suggestionBoundary}
+                  previewControl={
+                    <PreviewButton
+                      opened={() => view().side.opened()}
+                      onToggle={() => command.trigger("review.toggle")}
+                    />
+                  }
                 />
               </VoiceComposer>
             </div>

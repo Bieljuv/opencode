@@ -1037,6 +1037,8 @@ export const dict = {
   "composer.quickActions.publish.description": "Publica o projeto com o guia de publicação.",
   "composer.quickActions.download.title": "Baixar o projeto",
   "composer.quickActions.download.description": "Baixa o projeto em um arquivo zip.",
+  "composer.preview.label": "Prévia",
+  "composer.preview.tooltip": "Ver prévia — divide a tela com o navegador do projeto",
   "desktop.contextMenu.spellcheck": "Verificação ortográfica",
   "desktop.contextMenu.spellcheckLanguages": "Idiomas da correção ortográfica",
   "desktop.desktopFolderUsage": "O Editor IA ManosTech usa arquivos da sua Área de Trabalho para os projetos que você abre e os comandos que executa nela.",

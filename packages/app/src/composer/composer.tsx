@@ -1,4 +1,4 @@
-import { For, Show } from "solid-js"
+import { For, Show, type JSX } from "solid-js"
 import { formatKeybind, useCommand } from "@/shell/commands/command"
 import { useLanguage } from "@/runtime/i18n/language"
 import { DictationButton } from "@/voice/dictation"
@@ -17,6 +17,8 @@ export function Composer(props: {
   borderUnderlay?: boolean
   readOnly?: boolean
   suggestionBoundary?: () => HTMLElement | undefined
+  /** The preview button, rendered before "IA Automática". Only the session composer passes it: the new-session screen has no side region to toggle. */
+  previewControl?: JSX.Element
 }) {
   const command = useCommand()
   const language = useLanguage()
@@ -58,6 +60,7 @@ export function Composer(props: {
         suggestionBoundary={props.suggestionBoundary}
         modelControl={
           <>
+            {props.previewControl}
             <span class="flex h-[28px] items-center text-[13px] font-[440] leading-4 text-v2-text-text-faint">
               {"✦ "}
               {language.t("composer.model.automatic")}
