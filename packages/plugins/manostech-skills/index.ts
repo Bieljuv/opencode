@@ -7,6 +7,7 @@ import matter from "gray-matter"
 import skillMd from "./skills/arena/SKILL.md" with { type: "text" }
 import graphifyMd from "./skills/graphify/SKILL.md" with { type: "text" }
 import hyperframesMd from "./skills/hyperframes/SKILL.md" with { type: "text" }
+import impeccableMd from "./skills/impeccable/SKILL.md" with { type: "text" }
 import openverseMd from "./skills/openverse/SKILL.md" with { type: "text" }
 import ponytailMd from "./skills/ponytail/SKILL.md" with { type: "text" }
 import realSfxMd from "./skills/real-sfx/SKILL.md" with { type: "text" }
@@ -79,6 +80,20 @@ import { runArena } from "./src/bracket.ts"
  * offer, and the install instruction for the Strix platform was dropped:
  * the agent uses the platform's findings only when the client already
  * has access, and never installs anything.
+ *
+ * Impeccable: visual quality, as the `skill://impeccable` virtual skill
+ * and the `/impeccable` command. The skill is adapted from the upstream
+ * Impeccable skill (pbakaus/impeccable, Apache 2.0): 62 deterministic
+ * detector rules, 24 commands, and a live mode for iterating on variants
+ * in the browser. The adaptations are all about this app: the engine
+ * binary ships with the installer and is called by name (no launcher,
+ * no download, no other harness), the automatic check is built into the
+ * agent instead of a harness hook, and the harness-specific passages
+ * (other editors, plugin installs, the update command) are rewritten or
+ * dropped. The engine runs from the staged skill directory the installer
+ * carries, so the detector, its reference files and its font index all
+ * resolve without a download. On-demand via /impeccable, and automatic
+ * after UI work through IMPECCABLE_AUTO in the system prompt.
  */
 
 export const ARENA_SKILL_ID = "arena"
@@ -87,6 +102,8 @@ export const GRAPHIFY_SKILL_ID = "graphify"
 export const GRAPHIFY_SKILL_PATH = "skill://graphify/SKILL.md"
 export const HYPERFRAMES_SKILL_ID = "hyperframes"
 export const HYPERFRAMES_SKILL_PATH = "skill://hyperframes/SKILL.md"
+export const IMPECCABLE_SKILL_ID = "impeccable"
+export const IMPECCABLE_SKILL_PATH = "skill://impeccable/SKILL.md"
 export const OPENVERSE_SKILL_ID = "openverse"
 export const OPENVERSE_SKILL_PATH = "skill://openverse/SKILL.md"
 export const PONYTAIL_SKILL_ID = "ponytail"
@@ -143,6 +160,18 @@ export function buildHyperframesSkill(): Skill.Info {
     description: parsed.data.description,
     autoinvoke: parsed.data["disable-model-invocation"] !== true,
     path: Skill.Info.fields.path.make(HYPERFRAMES_SKILL_PATH),
+    content: parsed.content,
+  })
+}
+
+export function buildImpeccableSkill(): Skill.Info {
+  const parsed = matter(impeccableMd)
+  return Skill.Info.make({
+    id: Skill.ID.make(IMPECCABLE_SKILL_ID),
+    name: Skill.Name.make("Impeccable"),
+    description: parsed.data.description,
+    autoinvoke: parsed.data["disable-model-invocation"] !== true,
+    path: Skill.Info.fields.path.make(IMPECCABLE_SKILL_PATH),
     content: parsed.content,
   })
 }
@@ -374,6 +403,31 @@ export function strixCommandText(args: string): string {
   ].join("\n")
 }
 
+export function impeccableCommandText(args: string): string {
+  const trimmed = args.trim()
+  return [
+    "Melhore o visual com a skill \"impeccable\". Primeiro carregue a skill \"impeccable\" com a ferramenta skill (id \"impeccable\") e siga as instruções dela à risca, sem pular passos.",
+    "",
+    `O que melhorar: ${trimmed ? trimmed : "(nenhum — use a tela ou o projeto atual.)"}`,
+  ].join("\n")
+}
+
+export function buildImpeccableCommand(session: Pick<SessionDomain, "prompt">) {
+  return {
+    name: "impeccable",
+    description: "Impeccable: melhora o visual do projeto — revisa, audita e refina telas, layout e tipografia",
+    execute: async (input: CommandInvocation) => {
+      await session.prompt({
+        ...input.prompt,
+        sessionID: input.sessionID,
+        text: impeccableCommandText(input.prompt.text),
+        skills: [{ id: IMPECCABLE_SKILL_ID }],
+        delivery: input.delivery,
+      })
+    },
+  }
+}
+
 export function buildStrixCommand(session: Pick<SessionDomain, "prompt">) {
   return {
     name: "strix",
@@ -434,6 +488,8 @@ export default Plugin.define({
       if (!editor.get(realSfx.id)) editor.add(realSfx)
       const strix = buildStrixSkill()
       if (!editor.get(strix.id)) editor.add(strix)
+      const impeccable = buildImpeccableSkill()
+      if (!editor.get(impeccable.id)) editor.add(impeccable)
     })
     await ctx.tool.transform((editor) => {
       if (editor.get("arena")) return
@@ -458,6 +514,7 @@ export default Plugin.define({
       editor.add(buildOpenverseCommand(ctx.session))
       editor.add(buildRealSfxCommand(ctx.session))
       editor.add(buildStrixCommand(ctx.session))
+      editor.add(buildImpeccableCommand(ctx.session))
       editor.add(buildVideoCommand(ctx.session))
     })
   },

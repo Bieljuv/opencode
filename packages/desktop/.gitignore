@@ -27,5 +27,7 @@ out/
 resources/opencode-cli*
 resources/manostech-tools/*
 !resources/manostech-tools/README.md
+resources/impeccable/*
+!resources/impeccable/README.md
 resources/icons
 resources/*.metainfo.xml

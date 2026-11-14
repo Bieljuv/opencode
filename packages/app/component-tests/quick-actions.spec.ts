@@ -43,15 +43,20 @@ story("expanding a category and picking an action sends its prompt", async ({ mo
   await expect(component.locator("output")).toContainText(`Submitted: ${BLINDAR_PROMPT}`)
 })
 
-story("the visual improvement action stays disabled until Impeccable lands", async ({ mount, page }) => {
+story("the visual improvement action is enabled and sends /impeccable", async ({ mount, page }) => {
   const component = await mount("opencode-composer-flow--empty-draft", { globals: { locale: "br" } })
   await page.evaluate(() => document.fonts.ready.then(() => undefined))
   await component.getByRole("button", { name: "Ações rápidas", exact: true }).click()
 
   const menu = page.getByRole("menu")
   await menu.getByRole("button", { name: "Aparência", exact: true }).click()
-  await expect(menu.getByRole("menuitem", { name: "Melhorar o visual" })).toBeDisabled()
-  await expect(menu.getByText("Em breve", { exact: true })).toBeVisible()
+  const action = menu.getByRole("menuitem", { name: "Melhorar o visual" })
+  await expect(action).toBeEnabled()
+  await expect(menu.getByText("Em breve", { exact: true })).toHaveCount(0)
+
+  await action.click()
+  await expect(page.getByRole("menu")).toHaveCount(0)
+  await expect(component.locator("output")).toContainText("Submitted: /impeccable")
 })
 
 story("two-line action items keep title and description inside their row", async ({ mount, page }) => {

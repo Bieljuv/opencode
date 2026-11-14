@@ -18,6 +18,21 @@ export interface ManostechTools {
   readonly node: string
 }
 
+/**
+ * The visual-quality engine the installer bundles for the Impeccable
+ * flow: the `impeccable` binary plus the skill files it reads at runtime
+ * (SKILL.md, reference/, the font index). It lives under
+ * `resources/impeccable/<platform>-<arch>/`, staged on the build machine
+ * only — restored by `script/fetch-impeccable.ts`, like manostech-tools.
+ * When nothing is staged the app still ships and the skill reports the
+ * missing detector instead of checking; nothing here ever asks the user
+ * to install or download anything.
+ */
+export interface ImpeccableEngine {
+  readonly dir: string
+  readonly binary: string
+}
+
 export function manostechToolsDirName(platform: string, arch: string): string {
   return `${platform}-${arch}`
 }
@@ -44,6 +59,22 @@ export function resolveManostechTools(input: {
   return { dir, ffmpeg, ffprobe, node }
 }
 
+/** The staged Impeccable engine for this platform, or undefined when the build did not stage it. */
+export function resolveImpeccable(input: {
+  resourcesRoot: string
+  platform?: string
+  arch?: string
+}): ImpeccableEngine | undefined {
+  const platform = input.platform ?? process.platform
+  const arch = input.arch ?? process.arch
+  const dir = path.join(input.resourcesRoot, "impeccable", manostechToolsDirName(platform, arch))
+  const binary = path.join(dir, executableName("impeccable", platform))
+
+  if (!existsSync(binary)) return undefined
+
+  return { dir, binary }
+}
+
 /**
  * Environment additions for the sidecar service, so the agent's shell finds
  * the bundled tools on PATH and can also address them by variable. Added to
@@ -53,15 +84,22 @@ export function resolveManostechTools(input: {
 export function manostechToolsEnv(
   tools: ManostechTools | undefined,
   inheritedPath: string | undefined,
+  impeccable?: ImpeccableEngine | undefined,
 ): Record<string, string> {
-  if (!tools) return {}
+  if (!tools && !impeccable) return {}
   const delimiter = process.platform === "win32" ? ";" : ":"
+  const staged = [impeccable?.dir, tools?.dir].filter((dir): dir is string => dir !== undefined)
 
   return {
-    MANOSTECH_TOOLS_DIR: tools.dir,
-    MANOSTECH_FFMPEG: tools.ffmpeg,
-    MANOSTECH_FFPROBE: tools.ffprobe,
-    MANOSTECH_NODE: tools.node,
-    PATH: inheritedPath ? `${tools.dir}${delimiter}${inheritedPath}` : tools.dir,
+    ...(tools
+      ? {
+          MANOSTECH_TOOLS_DIR: tools.dir,
+          MANOSTECH_FFMPEG: tools.ffmpeg,
+          MANOSTECH_FFPROBE: tools.ffprobe,
+          MANOSTECH_NODE: tools.node,
+        }
+      : {}),
+    ...(impeccable ? { IMPECCABLE_SKILL_DIR: impeccable.dir } : {}),
+    PATH: inheritedPath ? `${[...staged, inheritedPath].join(delimiter)}` : staged.join(delimiter),
   }
 }

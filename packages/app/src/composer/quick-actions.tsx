@@ -124,9 +124,7 @@ const CATEGORIES: QuickActionCategory[] = [
         icon: "appearance",
         titleKey: "composer.quickActions.visual.title",
         descriptionKey: "composer.quickActions.visual.description",
-        send: { kind: "command", text: "" },
-        // Gated on the Impeccable decisions: shown, but not usable yet.
-        disabled: true,
+        send: { kind: "command", text: "/impeccable" },
       },
     ],
   },

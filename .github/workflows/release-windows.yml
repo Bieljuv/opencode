@@ -147,6 +147,14 @@ jobs:
         working-directory: packages/desktop
         run: bun run script/fetch-manostech-tools.ts
 
+      # Stages the bundled Impeccable engine into
+      # packages/desktop/resources/impeccable/win32-x64/ so the pack ships
+      # it. Without this step the installer still builds, but the visual
+      # check reports the detector missing instead of checking.
+      - name: Fetch bundled Impeccable engine
+        working-directory: packages/desktop
+        run: bun run script/fetch-impeccable.ts
+
       # Packs the unpacked app into dist/desktop/app (no installer yet).
       # Also writes resources/app-update.yml with the github feed, which the
       # installed app reads to find its updates.
