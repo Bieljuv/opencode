@@ -2,6 +2,7 @@ import { For, Show } from "solid-js"
 import { formatKeybind, useCommand } from "@/shell/commands/command"
 import { useLanguage } from "@/runtime/i18n/language"
 import { DictationButton } from "@/voice/dictation"
+import { QuickActionsButton } from "./quick-actions"
 import { Button } from "@opencode/ui/button"
 import { Icon } from "@opencode/ui/icon"
 import { Menu } from "@opencode/ui/menu"
@@ -51,6 +52,7 @@ export function Composer(props: {
         attachKeybind={command.keybindParts("file.attach")}
         attachShortcut={command.keybind("file.attach")}
         dictationControl={<DictationButton controller={props.model} />}
+        quickActionsControl={<QuickActionsButton controller={props.model} />}
         alternateKeybind={[formatKeybind("mod", language.t), "↵"]}
         exitShellKeybind={[formatKeybind("esc", language.t)]}
         suggestionBoundary={props.suggestionBoundary}
