@@ -16,6 +16,7 @@ import { promptLength } from "@/composer/prompt-parts"
 import { useCommand } from "@/shell/commands/command"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useData, useServer } from "@/runtime/server/current"
+import { usePluginHost } from "@/runtime/plugin/host"
 import { useServerSDK } from "@/runtime/server/client"
 import { showToast } from "@/shell/notifications/toast"
 import { errorMessage } from "@/shell/layout/helpers"
@@ -30,6 +31,7 @@ import { requireServerKey, sessionHref } from "@/shell/routes/session"
 import { useComposerCommands } from "@/composer/commands"
 import { useSessionCommands } from "../commands/use-session-commands"
 import { useSessionLayout } from "../session-layout"
+import { collectPreviewMessages, latestBuildPreview } from "../preview-link"
 import type { SessionModel } from "../model"
 import type { SessionScreenLayout } from "../screen-layout"
 import { syncPromptModel } from "../session-model-helpers"
@@ -387,9 +389,40 @@ export function ActiveSessionComposerRegion(props: {
   const language = useLanguage()
   const openRoute = useOpenSessionRoute()
   const command = useCommand()
+  const host = usePluginHost()
   // The preview button reads the same side-region state the session header toggle shows, and triggers the same
   // `review.toggle` command it and the keybind use, so opening the preview here and there is the same panel.
   const { view } = useSessionLayout()
+
+  // The preview button opens the project, not an empty tab: the entry HTML the latest Build turn linked or wrote —
+  // the same file the build auto-opens — or the project's index.html when the session never built one. Without
+  // either, it only opens the region, as before. Closing still only toggles, and gives focus back to the composer.
+  const togglePreview = () => {
+    if (view().side.opened()) {
+      command.trigger("review.toggle")
+
+      return
+    }
+
+    // Open the region at once: the project tab lands asynchronously and replaces the New tab the empty region
+    // shows meanwhile.
+    command.trigger("review.toggle")
+
+    const session = props.view()
+    const preview = latestBuildPreview(
+      collectPreviewMessages(session.id, data.session.list(), data.session.message.list),
+    )
+
+    if (preview) {
+      host.links.open({ href: preview.href, session })
+
+      return
+    }
+
+    void Promise.resolve(host.links.exists({ href: "index.html", session })).then((exists) => {
+      if (exists) host.links.open({ href: "index.html", session })
+    })
+  }
 
   // Only the server's LocationNotFoundError for the session's own Location replaces the composer.
   // A refetched session info (on reconnect) must not remount the keyed view and close its open menu.
@@ -562,10 +595,7 @@ export function ActiveSessionComposerRegion(props: {
                   readOnly={props.model.queue.undoing()}
                   suggestionBoundary={props.suggestionBoundary}
                   previewControl={
-                    <PreviewButton
-                      opened={() => view().side.opened()}
-                      onToggle={() => command.trigger("review.toggle")}
-                    />
+                    <PreviewButton opened={() => view().side.opened()} onToggle={togglePreview} />
                   }
                 />
               </VoiceComposer>

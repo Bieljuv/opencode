@@ -1618,3 +1618,46 @@ test("pastes into the composer from the session view but not into other inputs",
   await expect(page.locator("#elsewhere")).toBeFocused()
   await expect.poll(() => editor.innerText()).toBe("pasted from the timeline")
 })
+
+test("Prévia reopens the built project instead of an empty tab", async ({ page }) => {
+  const messages = [
+    { id: "msg_preview_user", type: "user", text: "Build the landing page", time: { created: 1 } },
+    {
+      id: "msg_preview_build",
+      type: "assistant",
+      agent: "build",
+      model: { id: "test", providerID: "opencode" },
+      content: [{ type: "text", text: "Done — see [the page](index.html)." }],
+      time: { created: 2, completed: 3 },
+    },
+  ]
+
+  await openSession(page, {
+    name: "PreviewButton",
+    fileList: () => [],
+    fileContent: (path) =>
+      path === "index.html" ? "<!doctype html><html><body><h1>Preview page</h1></body></html>" : "",
+    pageMessages: () => ({ items: messages }),
+  })
+
+  const panel = page.locator("#review-panel")
+  const tab = panel.getByRole("tab", { name: "index.html", exact: true })
+  // The e2e build runs in the default locale, so the button reads "Preview" here ("Prévia" in pt-BR).
+  const preview = page.getByRole("button", { name: "Preview", exact: true })
+
+  // The build auto-opens its project in the side panel (the browser pane is off here, so the HTML file opens as an
+  // artifact tab with its rendered preview in an iframe).
+  await expect(tab).toHaveAttribute("aria-selected", "true")
+  await expect(panel.locator("iframe")).toBeVisible()
+  await expect(panel.frameLocator("iframe").getByText("Preview page", { exact: true })).toBeVisible()
+
+  // Clicking Prévia with the panel open closes it (toggle, as before).
+  await preview.click()
+  await expect(panel).toBeHidden()
+
+  // Clicking Prévia with the panel closed reopens the project, not an empty tab.
+  await preview.click()
+  await expect(tab).toHaveAttribute("aria-selected", "true")
+  await expect(panel.locator("iframe")).toBeVisible()
+  await expect(panel.frameLocator("iframe").getByText("Preview page", { exact: true })).toBeVisible()
+})
