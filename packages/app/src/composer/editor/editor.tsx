@@ -90,6 +90,8 @@ export type ComposerEditorProps = {
   modelControl?: JSX.Element
   /** The microphone, rendered next to the attach menu and before the model control. */
   dictationControl?: JSX.Element
+  /** The quick actions (⚡), rendered next to the attach menu and the microphone. */
+  quickActionsControl?: JSX.Element
   modelControlsVisible?: boolean
   attachKeybind?: string[]
   attachShortcut?: string
@@ -446,6 +448,7 @@ export function ComposerEditor(props: ComposerEditorProps) {
                 onShell={props.controller.openShell}
               />
               {props.dictationControl}
+              {props.quickActionsControl}
             </div>
           </Show>
           <div
