@@ -161,16 +161,25 @@ const SERVER_ERROR_TEXT =
 // Provider-side refusals that stay hop signals even with a 4xx status.
 // `degraded` is a provider marking a model/function degraded and refusing
 // to invoke it; "no longer available" is a retired model; "Specified
-// function ... is not found" is a function the provider no longer has.
-// All three refuse the MODEL, not the request, so the next model in the
+// function ... is not found" is a function the provider no longer has;
+// "Function '...' : Not found for account" is the same dead function
+// under a different wording; "404 page not found" is the provider
+// answering a plain-text 404 for a model/endpoint it does not serve.
+// All five refuse the MODEL, not the request, so the next model in the
 // chain may work — the router hops to the next model instead of killing
 // the turn. The general server phrasing above still needs no
-// contradicting 4xx status; only these three signals bypass that gate.
+// contradicting 4xx status; only these five signals bypass that gate.
 // The "specified function" arm stays narrow on purpose: the gap between
 // "specified function" and "is not found" is capped at 200 characters so
 // a long body cannot join two unrelated sentences, and a bare "not
 // found" (missing model, missing resource, plain 404) never matches.
-const PROVIDER_REFUSAL_TEXT = /\b(?:degraded|no longer available|specified function[\s\S]{0,200}?is not found)\b/i
+// The two new arms stay narrow the same way: the function arm requires
+// the quoted id, the colon, and "not found for account", so a bare
+// "The function 'x' is not found" never matches; the 404 arm requires
+// the literal "page" in the middle, so a plain "404 Not Found" never
+// matches.
+const PROVIDER_REFUSAL_TEXT =
+  /\b(?:degraded|no longer available|specified function[\s\S]{0,200}?is not found|function\s+['"][^'"]+['"]\s*:\s*not found for account|404 page not found)\b/i
 
 const Message = Schema.String.check(Schema.isPattern(/\S/))
 
