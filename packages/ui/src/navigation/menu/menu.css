@@ -158,6 +158,18 @@
     pointer-events: none;
     opacity: 0.5;
   }
+
+  /* A two-line item (title + description) cannot fit the single-line 28px
+     row: the content is taller than the row and, centered in it, paints
+     over the rows above and below. Opt in with data-multiline to let the
+     row grow with its content instead of overlapping its neighbors. */
+  &[data-multiline] {
+    height: auto;
+    min-height: 28px;
+    align-items: flex-start;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
 }
 
 [data-slot="menu-v2-separator"] {
