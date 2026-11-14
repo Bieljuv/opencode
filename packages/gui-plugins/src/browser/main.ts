@@ -86,6 +86,7 @@ const setup: Plugin.MainSetup = (ctx) => {
     highlight: async (input, caller) => (await pane()).highlight(caller.window, input.binding, input.tabID, input.ref),
     zoom: async (input, caller) => (await pane()).zoom(caller.window, input.binding, input.tabID, input.zoom),
     site: async (input, caller) => (await pane()).site(caller.window, input.binding, input.tabID),
+    capture: async (input, caller) => (await pane()).capture(caller.window, input.binding, input.tabID),
     clearSite: async (input, caller) => (await pane()).clearSite(caller.window, input.binding, input.tabID),
     close: async (input, caller) => (await pane()).close(caller.window, input.binding),
   })

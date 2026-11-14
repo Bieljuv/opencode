@@ -619,6 +619,22 @@ export function createModel(ctx: SetupContext<typeof definition>) {
     },
     /** The page's cookie count; undefined while the pane cannot answer. */
     site: (session: Session, tabID: Browser.TabID) => registration(session)?.site(tabID),
+    /** Captures the session's focused tab as an image; undefined when no tab is focused or the pane cannot answer. */
+    capture: async (session: SessionRef) => {
+      const tabID = sessionBrowser(machine(), session.key)?.focusedTabID
+
+      if (!tabID) return undefined
+
+      const shot = await registration(session)?.capture(tabID)
+
+      if (!shot) return undefined
+
+      return {
+        name: shot.name,
+        mime: shot.mime,
+        data: Uint8Array.from(atob(shot.data), (char) => char.charCodeAt(0)),
+      }
+    },
     /** Deletes the page's cookies and stored data, and reloads it. */
     clearSite: (session: Session, tabID: Browser.TabID) => registration(session)?.clearSite(tabID),
     /** Pages the browser showed, newest first. */

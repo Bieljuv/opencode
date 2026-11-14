@@ -1,6 +1,16 @@
 import { Contract } from "./core.js"
 import type { SessionRef } from "./host-apis.js"
 
+/** The image of a captured browser tab: the file the composer attaches to the draft. */
+export interface BrowserCapture {
+  /** The file name the composer shows for the attachment, for example `screenshot.jpeg`. */
+  name: string
+  /** The image mime type, for example `image/jpeg`. */
+  mime: string
+  /** The image bytes. */
+  data: Uint8Array<ArrayBuffer>
+}
+
 /** What the built-in browser offers other plugins: a session's desktop browser pane. Read it with `ctx.use(Browser)`. */
 export interface Browser {
   /**
@@ -32,6 +42,13 @@ export interface Browser {
    * @param path - The workspace-relative file path.
    */
   openFile(session: SessionRef, path: string): void
+  /**
+   * Captures the session's focused browser tab — the preview the user sees in the side panel — as an image.
+   *
+   * @param session - The session whose focused tab is captured.
+   * @returns The image (file name, mime, bytes), or undefined when no tab is focused or the pane cannot answer.
+   */
+  capture(session: SessionRef): Promise<BrowserCapture | undefined>
 }
 
 /** The browser plugin provides this on desktop. Inactive on web or while the plugin is off. */

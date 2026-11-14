@@ -18,6 +18,10 @@ const icons = {
     viewBox: "0 0 16 16",
     body: `<rect x="6" y="1.5" width="4" height="8" rx="2" stroke="currentColor"/><path d="M4 8.5a4 4 0 0 0 8 0" stroke="currentColor" stroke-linecap="round"/><path d="M8 12.5v2M5.5 14.5h5" stroke="currentColor" stroke-linecap="round"/>`,
   },
+  camera: {
+    viewBox: "0 0 16 16",
+    body: `<path d="M1.5 5H4L5.5 3.5H10.5L12 5H14.5V12.5H1.5V5Z" stroke="currentColor" stroke-linejoin="round"/><path d="M10.5 8.75C10.5 10.1307 9.38071 11.25 8 11.25C6.61929 11.25 5.5 10.1307 5.5 8.75C5.5 7.36929 6.61929 6.25 8 6.25C9.38071 6.25 10.5 7.36929 10.5 8.75Z" stroke="currentColor"/>`,
+  },
   globe: {
     viewBox: "0 0 16 16",
     body: `<circle cx="8" cy="8" r="6" stroke="currentColor"/><ellipse cx="8" cy="8" rx="2.5" ry="6" stroke="currentColor"/><path d="M2 8h12" stroke="currentColor"/>`,

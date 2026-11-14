@@ -325,6 +325,23 @@ export function createBrowserPane(input: {
 
       return (await page(binding, tabID)?.site()) ?? { cookies: 0 }
     },
+    // Captures the tab's viewport through the agent's screenshot action — the same capturePage path, viewport only —
+    // and returns the file as base64 for the window, which attaches it to the chat draft.
+    async capture(window: number, binding: string, tabID: Browser.TabID) {
+      owned(window, binding)
+
+      const result = await execute(
+        binding,
+        { action: { type: "screenshot", tabID }, files: [] },
+        new AbortController().signal,
+      )
+
+      const file = result.files[0]
+
+      if (!file) return null
+
+      return { name: file.name, mime: file.mime, data: Buffer.from(file.data).toString("base64") }
+    },
     async clearSite(window: number, binding: string, tabID: Browser.TabID) {
       owned(window, binding)
       await page(binding, tabID)?.clearSite()

@@ -5,8 +5,9 @@ import { useDialog } from "@opencode/ui/context/dialog"
 import { isScrollKeyTarget, scrollKey, scrollKeyOwner } from "@opencode/ui/scroll-view"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { useNavigate } from "@solidjs/router"
-import { createEffect, createMemo, on, onMount, Show, type Accessor } from "solid-js"
+import { createEffect, createMemo, createSignal, on, onMount, Show, type Accessor } from "solid-js"
 import { Composer } from "@/composer/composer"
+import { CameraButton } from "@/composer/camera-button"
 import { PreviewButton } from "@/composer/preview-button"
 import { VoiceComposer } from "@/voice/composer"
 import { useComposerState } from "@/composer/persistence"
@@ -17,6 +18,7 @@ import { useCommand } from "@/shell/commands/command"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useData, useServer } from "@/runtime/server/current"
 import { usePluginHost } from "@/runtime/plugin/host"
+import { Browser } from "@opencode/plugin/gui/browser"
 import { useServerSDK } from "@/runtime/server/client"
 import { showToast } from "@/shell/notifications/toast"
 import { errorMessage } from "@/shell/layout/helpers"
@@ -424,6 +426,40 @@ export function ActiveSessionComposerRegion(props: {
     })
   }
 
+  // The camera button captures the preview through the browser plugin's contract: the focused tab of the session's
+  // side panel, as an image the composer attaches to the draft — a draft already in progress keeps its text, and
+  // nothing is sent. The plugin is desktop-only, so on web — or while it is off — the button stays disabled and
+  // nothing is captured. A capture already running guards a second click.
+  const browserLive = host.context("browser")?.use(Browser)
+  const [capturingPreview, setCapturingPreview] = createSignal(false)
+
+  const capturePreview = () => {
+    if (capturingPreview() || !view().side.opened()) return
+
+    const live = browserLive?.()
+
+    if (live?.status !== "active") {
+      showToast({ title: language.t("common.requestFailed") })
+
+      return
+    }
+
+    setCapturingPreview(true)
+    void live.value
+      .capture(props.view())
+      .then((shot) => {
+        if (!shot) {
+          showToast({ title: language.t("common.requestFailed") })
+
+          return
+        }
+
+        props.model.composer.addAttachments([new File([shot.data], shot.name, { type: shot.mime })])
+      })
+      .catch(() => showToast({ title: language.t("common.requestFailed") }))
+      .finally(() => setCapturingPreview(false))
+  }
+
   // Only the server's LocationNotFoundError for the session's own Location replaces the composer.
   // A refetched session info (on reconnect) must not remount the keyed view and close its open menu.
   const missing = createMemo(
@@ -596,6 +632,13 @@ export function ActiveSessionComposerRegion(props: {
                   suggestionBoundary={props.suggestionBoundary}
                   previewControl={
                     <PreviewButton opened={() => view().side.opened()} onToggle={togglePreview} />
+                  }
+                  cameraControl={
+                    <CameraButton
+                      enabled={() => view().side.opened() && browserLive?.().status === "active"}
+                      capturing={capturingPreview}
+                      onCapture={capturePreview}
+                    />
                   }
                 />
               </VoiceComposer>

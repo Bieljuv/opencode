@@ -3,6 +3,7 @@ import { createStore } from "solid-js/store"
 import type { ModelSelection } from "@/providers/models/selection"
 import { STORY_MODEL, emptySessionDocument, pendingAndQueuedDocument } from "@opencode/session-ui/storybook"
 import { Composer } from "./composer"
+import { CameraButton } from "./camera-button"
 import { PreviewButton } from "./preview-button"
 import type { ComposerModel } from "./model"
 import { createComposerEditor } from "./editor/interaction"
@@ -69,6 +70,8 @@ function ComposerStory(props: {
   planBlocked?: boolean
   /** Show the preview button in the composer footer, with local open state. */
   preview?: boolean
+  /** Show the camera button beside it, enabled while the story's preview is open. */
+  camera?: boolean
   suggestionBoundary?: () => HTMLElement | undefined
 }) {
   const [fileSearch, setFileSearch] = createStore<{ pending?: string }>({})
@@ -347,6 +350,11 @@ function ComposerStory(props: {
             <PreviewButton opened={previewOpened} onToggle={() => setPreviewOpened((opened) => !opened)} />
           ) : undefined
         }
+        cameraControl={
+          props.camera ? (
+            <CameraButton enabled={previewOpened} capturing={() => false} onCapture={() => undefined} />
+          ) : undefined
+        }
       />
       <Show when={props.fileSearch}>
         <button
@@ -392,6 +400,7 @@ type FlowArgs = {
   suggestions: "command" | "context" | "none"
   planBlocked: boolean
   preview: boolean
+  camera: boolean
 }
 
 export default {
@@ -399,7 +408,7 @@ export default {
   component: Composer,
   parameters: { layout: "centered" },
   // States that only change the composer's props share this render, so moving between them keeps one composer.
-  args: { working: false, stopping: false, failure: false, label: "Ready", suggestions: "none", planBlocked: false, preview: false },
+  args: { working: false, stopping: false, failure: false, label: "Ready", suggestions: "none", planBlocked: false, preview: false, camera: false },
   argTypes: { suggestions: { control: "select", options: ["none", "command", "context"] } },
   render: (args: FlowArgs) => <ComposerStory {...args} />,
 }
@@ -407,6 +416,8 @@ export default {
 export const EmptyDraft = {}
 
 export const PreviewToggle = { args: { preview: true } }
+
+export const CameraCapture = { args: { preview: true, camera: true } }
 
 export const PromptHistory = {
   args: { many: false },

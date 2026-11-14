@@ -16,6 +16,7 @@ export type IconName =
   | "branch-out"
   | "bubble-5"
   | "bullet-list"
+  | "camera"
   | "check"
   | "check-small"
   | "checklist"

@@ -1661,3 +1661,39 @@ test("Prévia reopens the built project instead of an empty tab", async ({ page 
   await expect(panel.locator("iframe")).toBeVisible()
   await expect(panel.frameLocator("iframe").getByText("Preview page", { exact: true })).toBeVisible()
 })
+
+test("Camera button stays disabled without a desktop browser pane", async ({ page }) => {
+  const messages = [
+    { id: "msg_camera_user", type: "user", text: "Build the landing page", time: { created: 1 } },
+    {
+      id: "msg_camera_build",
+      type: "assistant",
+      agent: "build",
+      model: { id: "test", providerID: "opencode" },
+      content: [{ type: "text", text: "Done — see [the page](index.html)." }],
+      time: { created: 2, completed: 3 },
+    },
+  ]
+
+  await openSession(page, {
+    name: "CameraButton",
+    fileList: () => [],
+    fileContent: (path) =>
+      path === "index.html" ? "<!doctype html><html><body><h1>Preview page</h1></body></html>" : "",
+    pageMessages: () => ({ items: messages }),
+  })
+
+  const panel = page.locator("#review-panel")
+  // The e2e build runs in the default locale, so the button reads "Screenshot" here ("Print" in pt-BR).
+  const camera = page.getByRole("button", { name: "Screenshot", exact: true })
+
+  await expect(camera).toBeVisible()
+  // The build auto-opens its project in the side panel, but the browser pane is off in this build, so the camera
+  // never enables: a print needs the desktop pane, and the button never captures anything else.
+  await expect(camera).toBeDisabled()
+
+  // Closing the panel keeps it disabled.
+  await page.getByRole("button", { name: "Preview", exact: true }).click()
+  await expect(panel).toBeHidden()
+  await expect(camera).toBeDisabled()
+})

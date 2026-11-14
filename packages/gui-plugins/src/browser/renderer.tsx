@@ -106,6 +106,7 @@ const setup: Plugin.Setup<typeof definition> = (ctx) => {
     canOpen: (session, path) => model()?.canOpen(session, path) ?? false,
     open: (session, url) => model()?.openURL(session, url),
     openFile: (session, path) => model()?.openFile(session, path),
+    capture: (session) => model()?.capture(session) ?? Promise.resolve(undefined),
   })
 
   ctx.add(Command, (): Command | undefined => {

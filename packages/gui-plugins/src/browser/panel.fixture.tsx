@@ -386,6 +386,7 @@ export function mountBrowserPane(input: PaneHost) {
 
         return { cookies: store.cookies }
       },
+      capture: async () => null,
       // Main deletes the site's data and reloads the page.
       clearSite: async () => {
         setStore({ cookies: 0, generation: store.generation + 1 })
@@ -989,6 +990,7 @@ export function mountBrowserRegion(input: RegionHost) {
       highlight: async () => undefined,
       zoom: async () => undefined,
       site: async () => ({ cookies: 0 }),
+      capture: async () => null,
       clearSite: async () => undefined,
       close: async () => undefined,
       state: () => undefined,

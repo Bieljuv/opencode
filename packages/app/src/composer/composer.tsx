@@ -19,6 +19,7 @@ export function Composer(props: {
   suggestionBoundary?: () => HTMLElement | undefined
   /** The preview button, rendered before "IA Automática". Only the session composer passes it: the new-session screen has no side region to toggle. */
   previewControl?: JSX.Element
+  cameraControl?: JSX.Element
 }) {
   const command = useCommand()
   const language = useLanguage()
@@ -61,6 +62,7 @@ export function Composer(props: {
         modelControl={
           <>
             {props.previewControl}
+            {props.cameraControl}
             <span class="flex h-[28px] items-center text-[13px] font-[440] leading-4 text-v2-text-text-faint">
               {"✦ "}
               {language.t("composer.model.automatic")}
