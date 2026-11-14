@@ -53,3 +53,33 @@ story("the visual improvement action stays disabled until Impeccable lands", asy
   await expect(menu.getByRole("menuitem", { name: "Melhorar o visual" })).toBeDisabled()
   await expect(menu.getByText("Em breve", { exact: true })).toBeVisible()
 })
+
+story("two-line action items keep title and description inside their row", async ({ mount, page }) => {
+  const component = await mount("opencode-composer-flow--empty-draft", { globals: { locale: "br" } })
+  await page.evaluate(() => document.fonts.ready.then(() => undefined))
+  await component.getByRole("button", { name: "Ações rápidas", exact: true }).click()
+  const menu = page.getByRole("menu")
+  await menu.getByRole("button", { name: "Desempenho", exact: true }).click()
+
+  // The Desempenho items have a title plus a description ("Diminuir o peso
+  // das imagens" wraps its description to two lines): each line must stay
+  // inside its own row, never paint over the row above or below.
+  const items = [
+    { title: "Otimizar velocidade", desc: "Reduz o peso e elimina código sem uso." },
+    { title: "Diminuir o peso das imagens", desc: "Comprime as imagens sem perder qualidade visível." },
+  ]
+  let previousBottom = -Infinity
+  for (const { title, desc } of items) {
+    const item = menu.getByRole("menuitem", { name: title })
+    const itemBox = await item.boundingBox()
+    const titleBox = await menu.getByText(title, { exact: true }).boundingBox()
+    const descBox = await menu.getByText(desc, { exact: true }).boundingBox()
+
+    if (!itemBox || !titleBox || !descBox) throw new Error(`Missing boxes for ${title}`)
+    expect(titleBox.y).toBeGreaterThanOrEqual(itemBox.y)
+    expect(titleBox.y + titleBox.height).toBeLessThanOrEqual(descBox.y)
+    expect(descBox.y + descBox.height).toBeLessThanOrEqual(itemBox.y + itemBox.height)
+    expect(titleBox.y).toBeGreaterThanOrEqual(previousBottom)
+    previousBottom = itemBox.y + itemBox.height
+  }
+})

@@ -219,6 +219,7 @@ export function QuickActionsButton(props: { controller: ComposerModel }) {
                       {(action) => (
                         <Menu.Item
                           disabled={action.disabled}
+                          data-multiline
                           badge={
                             action.disabled ? (
                               <span class="text-[11px] leading-[var(--line-height-compact)] text-v2-text-text-faint">
