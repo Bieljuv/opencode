@@ -6894,13 +6894,16 @@ describe("SessionRunnerLLM", () => {
   scenario("gives up with the generic message when every model freezes", function* (s) {
     // One model held the user 142.8s in Gabriel's gate test (2026-11-10
     // 08:50, "lento demais"). The whole cascade — several frozen models —
-    // must resolve before that: three attempts at the 30s first-output
+    // must resolve before that: six attempts at the 15s first-output
     // deadline is 90s, and the turn fails with the generic message.
     const modelA = Model.Info.default(Provider.ID.make("fake-a"), Model.ID.make("model-a"))
     const modelB = Model.Info.default(Provider.ID.make("fake-b"), Model.ID.make("model-b"))
     const modelC = Model.Info.default(Provider.ID.make("fake-c"), Model.ID.make("model-c"))
     const modelD = Model.Info.default(Provider.ID.make("fake-d"), Model.ID.make("model-d"))
-    s.availableModels.push(modelA, modelB, modelC, modelD)
+    const modelE = Model.Info.default(Provider.ID.make("fake-e"), Model.ID.make("model-e"))
+    const modelF = Model.Info.default(Provider.ID.make("fake-f"), Model.ID.make("model-f"))
+    const modelG = Model.Info.default(Provider.ID.make("fake-g"), Model.ID.make("model-g"))
+    s.availableModels.push(modelA, modelB, modelC, modelD, modelE, modelF, modelG)
     yield* s.llm.always(TestLLM.hangAfter())
     const startedAt = yield* Clock.currentTimeMillis
     let outcome: Exit.Exit<unknown, unknown> | undefined
@@ -6916,7 +6919,7 @@ describe("SessionRunnerLLM", () => {
     expect(endedAt - startedAt).toBeGreaterThanOrEqual(SessionRouter.CASCADE_BUDGET_MS)
     expect(endedAt - startedAt).toBeLessThan(SessionRouter.CASCADE_BUDGET_MS + 5_000)
     expect(endedAt - startedAt).toBeLessThan(142_800)
-    expect(s.requests).toHaveLength(3)
+    expect(s.requests).toHaveLength(6)
     expect(outcome).toBeDefined()
     if (outcome === undefined) return
     expect(Exit.isFailure(outcome)).toBe(true)

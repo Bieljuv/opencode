@@ -135,20 +135,22 @@ const PREFERRED_FREE = [
 export const EXHAUSTED_MESSAGE = "Tente novamente mais tarde."
 
 /**
- * First output within this long or the model is frozen: hop. 30 seconds —
- * the same per-request timeout the code-mode fetch already uses
- * (`TIMEOUT_MS` in `codemode/fetch.ts`), and far below the 142.8s one
- * model held the user in Gabriel's gate test (2026-11-10 08:50, "lento
- * demais"). Normal first tokens arrive in seconds, and reasoning models
- * stream reasoning as output, so a model that produced nothing in 30s is
- * frozen for the user's purposes — the next model tries instead of the
- * user waiting minutes.
+ * First output within this long or the model is frozen: hop. 15 seconds —
+ * normal first tokens arrive in seconds, and reasoning models stream
+ * reasoning as output, so a model that produced nothing in 15s is frozen
+ * for the user's purposes — the next model tries instead of the user
+ * waiting minutes. 15s, not 30s: on 2026-11-14 a step died after trying
+ * only 9 of 836 models because three slow attempts ate 85.6s of the 90s
+ * budget (two frozen at the 30s deadline, one slow 502 at 25.6s). At 15s
+ * those three cost 45s and the same budget tries about five times as many
+ * models. Still far below the 142.8s one model held the user in Gabriel's
+ * gate test (2026-11-10 08:50, "lento demais").
  */
-export const FIRST_OUTPUT_TIMEOUT_MS = 30_000
+export const FIRST_OUTPUT_TIMEOUT_MS = 15_000
 
 /**
  * Total silence a step tolerates before the turn gives up with the
- * generic message. 90 seconds: three frozen attempts at the first-output
+ * generic message. 90 seconds: six frozen attempts at the first-output
  * deadline, and still 52.8s below the 142.8s a single model held the user
  * in Gabriel's gate test — the whole cascade resolves before one frozen
  * model used to. Fast failures (429s) hop in ~0s, so the budget never
