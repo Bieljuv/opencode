@@ -32,6 +32,7 @@ import {
   nextHopWithLargerWindow,
   refKey,
   requestCeiling,
+  routingModeFromMetadata,
   sessionFallback,
   stepHead,
   variantForEffort,
@@ -343,6 +344,83 @@ describe("buildChain", () => {
     })
     expect(afterSmall.map(refKey)).toEqual(chain.map(refKey))
   })
+
+  test("priorizar_pagas simple: paid first, cheapest first, Kimi last, then free", () => {
+    const chain = buildChain([priceyPaid, kimi, otherFree, go, cheapPaid, deepseekFree, pickle], {
+      complexity: "simple",
+      effort: "automatico",
+      routingMode: "priorizar_pagas",
+    })
+    expect(chain.map(refKey)).toEqual([
+      "openrouter/cheap",
+      "anthropic/pricey",
+      "moonshotai/kimi-k3.1-pro",
+      "opencode/big-pickle",
+      "openrouter/deepseek-v4.1-flash-free",
+      "openrouter/other-free",
+    ])
+  })
+
+  test("priorizar_pagas complex: Kimi first, then cheapest paid, then free", () => {
+    const chain = buildChain([otherFree, priceyPaid, kimi, cheapPaid, pickle], {
+      complexity: "complex",
+      effort: "automatico",
+      routingMode: "priorizar_pagas",
+    })
+    expect(chain.map(refKey)).toEqual([
+      "moonshotai/kimi-k3.1-pro",
+      "openrouter/cheap",
+      "anthropic/pricey",
+      "opencode/big-pickle",
+      "openrouter/other-free",
+    ])
+  })
+
+  test("padrao simple: free and paid interleaved, starting with free", () => {
+    const chain = buildChain([priceyPaid, kimi, otherFree, cheapPaid, deepseekFree, pickle], {
+      complexity: "simple",
+      effort: "automatico",
+      routingMode: "padrao",
+    })
+    expect(chain.map(refKey)).toEqual([
+      "opencode/big-pickle",
+      "openrouter/cheap",
+      "openrouter/deepseek-v4.1-flash-free",
+      "anthropic/pricey",
+      "openrouter/other-free",
+      "moonshotai/kimi-k3.1-pro",
+    ])
+  })
+
+  test("padrao complex: paid and free interleaved, starting with Kimi", () => {
+    const chain = buildChain([otherFree, priceyPaid, kimi, cheapPaid, pickle], {
+      complexity: "complex",
+      effort: "automatico",
+      routingMode: "padrao",
+    })
+    expect(chain.map(refKey)).toEqual([
+      "moonshotai/kimi-k3.1-pro",
+      "opencode/big-pickle",
+      "openrouter/cheap",
+      "openrouter/other-free",
+      "anthropic/pricey",
+    ])
+  })
+
+  test("no routing mode: free first, exactly like before", () => {
+    const chain = buildChain([priceyPaid, kimi, otherFree, cheapPaid, deepseekFree, pickle], {
+      complexity: "simple",
+      effort: "automatico",
+    })
+    expect(chain.map(refKey)).toEqual([
+      "opencode/big-pickle",
+      "openrouter/deepseek-v4.1-flash-free",
+      "openrouter/other-free",
+      "openrouter/cheap",
+      "anthropic/pricey",
+      "moonshotai/kimi-k3.1-pro",
+    ])
+  })
 })
 
 describe("stepHead", () => {
@@ -491,6 +569,19 @@ describe("effortFromMetadata", () => {
     expect(effortFromMetadata({ manostechEffort: "turbo" })).toBe("automatico")
     expect(effortFromMetadata({})).toBe("automatico")
     expect(effortFromMetadata(undefined)).toBe("automatico")
+  })
+})
+
+describe("routingModeFromMetadata", () => {
+  test("passes valid modes through", () => {
+    expect(routingModeFromMetadata({ manostechRoutingMode: "padrao" })).toBe("padrao")
+    expect(routingModeFromMetadata({ manostechRoutingMode: "priorizar_gratis" })).toBe("priorizar_gratis")
+    expect(routingModeFromMetadata({ manostechRoutingMode: "priorizar_pagas" })).toBe("priorizar_pagas")
+  })
+  test("unknown or missing means no mode — the chain keeps the order it always built", () => {
+    expect(routingModeFromMetadata({ manostechRoutingMode: "turbo" })).toBeUndefined()
+    expect(routingModeFromMetadata({})).toBeUndefined()
+    expect(routingModeFromMetadata(undefined)).toBeUndefined()
   })
 })
 

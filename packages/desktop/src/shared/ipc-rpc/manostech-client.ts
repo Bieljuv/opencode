@@ -55,6 +55,15 @@ const ClientUsage = Schema.Struct({
   weekly: Schema.optional(WeeklyUsage),
   monthly: Schema.optional(MonthlyUsage),
   weeklyWarned: Schema.Boolean,
+  // The panel's routing mode for this client; absent when the panel does
+  // not report one (old panel) — the chain keeps the order it always built.
+  routingMode: Schema.optional(
+    Schema.Union([
+      Schema.Literal("padrao"),
+      Schema.Literal("priorizar_gratis"),
+      Schema.Literal("priorizar_pagas"),
+    ]),
+  ),
 })
 
 const ClientError = Schema.Struct({

@@ -27,6 +27,13 @@ import { usePlatform } from "@/runtime/platform/platform"
  * destrava no próximo poll (60s) quando todos limparem.
  */
 
+/**
+ * The panel's routing mode for this client, as GET /api/uso reports it
+ * in `modo_roteamento`: which group the chain tries first. Never shown
+ * to the user — the mode is the panel's choice, not the app's.
+ */
+export type RoutingMode = "padrao" | "priorizar_gratis" | "priorizar_pagas"
+
 export type PlanUsage = {
   readonly percent: number
   readonly resetsAt: string
@@ -39,6 +46,8 @@ export type PlanUsage = {
   readonly monthly?: MonthlyUsage
   /** O aviso semanal dos 75% já apareceu neste ciclo (o main guarda o ciclo avisado). */
   readonly weeklyWarned: boolean
+  /** The panel's routing mode for this client; ausente = o painel não o reporta e a cadeia fica na ordem de sempre. */
+  readonly routingMode?: RoutingMode
 }
 
 /**

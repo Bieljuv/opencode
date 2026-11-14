@@ -304,11 +304,17 @@ export function createComposerModel(
 
   const variants = createMemo(() => ["default", ...adapter.controls().model.selection.variant.list()])
 
+  // ManosTech: the client's plan usage, polled from the panel every 60s.
+  // The routing mode rides the same poll; the submit below reads it at
+  // send time, so a mode changed in the panel applies to the next prompt.
+  const clientUsage = useClientUsage()
+
   const submission = createComposerSubmit({
     adapter,
     mode,
     effort: options.effort.current,
     multiAgent: options.multiAgent.current,
+    routingMode: () => clientUsage()?.routingMode,
     commands: () => data.location.command.list({ directory: sdk().directory }),
     editor: () => editor,
     queueScroll: () => requestAnimationFrame(() => editor?.scrollIntoView({ block: "nearest" })),
@@ -362,7 +368,6 @@ export function createComposerModel(
   // the daily, weekly or monthly allowance is spent. The usage polls
   // every 60s, so the composer unlocks on the next poll after the block
   // clears. No usage (logged out, no limit configured) = no lock.
-  const clientUsage = useClientUsage()
   const planBlockState = createMemo(() => {
     const usage = clientUsage()
 

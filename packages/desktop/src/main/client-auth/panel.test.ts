@@ -471,6 +471,58 @@ describe("fetchDailyUsage", () => {
     })
   })
 
+  test("a routing mode comes back with the daily one", async () => {
+    const mode = Bun.serve({
+      port: 0,
+      fetch: () =>
+        Response.json({
+          usado_percentual: 40,
+          reseta_em: "2026-11-10T03:00:00Z",
+          modo_roteamento: "priorizar_pagas",
+        }),
+    })
+
+    try {
+      expect(await fetchDailyUsage(`http://127.0.0.1:${mode.port}`, "key-1")).toEqual({
+        percent: 40,
+        resetsAt: "2026-11-10T03:00:00Z",
+        blocked: false,
+        weekly: undefined,
+        monthly: undefined,
+        routingMode: "priorizar_pagas",
+      })
+    } finally {
+      mode.stop()
+    }
+  })
+
+  test("an unknown routing mode is dropped and the rest still comes back", async () => {
+    const mode = Bun.serve({
+      port: 0,
+      fetch: () =>
+        Response.json({
+          usado_percentual: 40,
+          reseta_em: "2026-11-10T03:00:00Z",
+          modo_roteamento: "turbo",
+        }),
+    })
+
+    try {
+      const usage = await fetchDailyUsage(`http://127.0.0.1:${mode.port}`, "key-1")
+
+      expect(usage?.routingMode).toBeUndefined()
+      expect(usage?.percent).toBe(40)
+    } finally {
+      mode.stop()
+    }
+  })
+
+  test("a response without a routing mode leaves it undefined", async () => {
+    const usage = await fetchDailyUsage(base, "key-1")
+
+    expect(usage?.routingMode).toBeUndefined()
+  })
+
   test("a response without a weekly object hides only the weekly bar", async () => {
     const usage = await fetchDailyUsage(base, "key-1")
 

@@ -9,7 +9,11 @@ export * as SessionRouter from "./router.js"
  * free-message counter.
  *
  * The law, in order:
- * - Free models first, always. Simple chats and requests use the lightest
+ * - The panel's routing mode orders the groups when it reports one:
+ *   free first on `priorizar_gratis`, paid first on `priorizar_pagas`,
+ *   interleaved one and one on `padrao`. With no mode the chain keeps
+ *   the order it always built: free first on a simple turn, paid first
+ *   on a complex one. Simple chats and requests use the lightest
  *   free model, even among the free ones.
  * - Steps rotate the starting free model round-robin: each step starts at
  *   the next capable free model after the one that answered the previous
@@ -74,6 +78,22 @@ export const EFFORT_METADATA_KEY = "manostechEffort"
 
 /** Prompt-metadata key carrying the multi-agent toggle (`manostechMultiAgent`). */
 export const MULTI_AGENT_METADATA_KEY = "manostechMultiAgent"
+
+/**
+ * The panel's routing mode for this client: which group the chain tries
+ * first. `priorizar_gratis` runs the free group first on either
+ * complexity; `priorizar_pagas` runs the paid group first on either
+ * complexity; `padrao` interleaves paid and free, one and one. The mode
+ * is the panel's choice (`clients.routing_mode`), reported to the app in
+ * GET /api/uso and carried to the server as prompt metadata — the app
+ * never invents one, and the user never sees it. A prompt without the
+ * metadata keeps the order the app always built: free first on a simple
+ * turn, paid first on a complex one.
+ */
+export type RoutingMode = "padrao" | "priorizar_gratis" | "priorizar_pagas"
+
+/** Prompt-metadata key carrying the panel routing mode (`manostechRoutingMode`). */
+export const ROUTING_MODE_METADATA_KEY = "manostechRoutingMode"
 
 /** Kimi K3.1 Pro: paid tier, complex tasks only, only with a Moonshot key. */
 export const KIMI_K3 = { providerID: "moonshotai", id: "kimi-k3.1-pro" } as const
@@ -304,6 +324,20 @@ export function effortFromMetadata(metadata: Record<string, unknown> | undefined
   if (value === "rapido" || value === "equilibrado" || value === "aprofundado" || value === "automatico")
     return value
   return "automatico"
+}
+
+/**
+ * Routing mode from prompt metadata; anything unknown — or no metadata
+ * at all — means no mode, and the chain keeps the order it always
+ * built. Only a mode the panel actually reported reorders the chain:
+ * the panel's own default is "padrao" (interleaved), but the app must
+ * never switch a user to it on its own, and an old panel (or no panel
+ * at all) must not flip a complex turn to free-first.
+ */
+export function routingModeFromMetadata(metadata: Record<string, unknown> | undefined): RoutingMode | undefined {
+  const value = metadata?.[ROUTING_MODE_METADATA_KEY]
+  if (value === "padrao" || value === "priorizar_gratis" || value === "priorizar_pagas") return value
+  return undefined
 }
 
 /**
@@ -558,6 +592,22 @@ function rotateFreeRun(
 }
 
 /**
+ * Zip two runs, one ref from each, starting with `first`: when one run
+ * ends the rest of the other follows. The panel's "padrao" mode
+ * interleaves the paid and free runs instead of running one group out
+ * before the other.
+ */
+function interleave(first: readonly Model.Ref[], second: readonly Model.Ref[]): Model.Ref[] {
+  const out: Model.Ref[] = []
+  const longest = Math.max(first.length, second.length)
+  for (let index = 0; index < longest; index++) {
+    if (index < first.length) out.push(first[index]!)
+    if (index < second.length) out.push(second[index]!)
+  }
+  return out
+}
+
+/**
  * The hop chain for one turn: ordered model refs, each carrying the variant
  * that expresses the effort on that model.
  *
@@ -565,6 +615,18 @@ function rotateFreeRun(
  * (Kimi last — it is the most expensive paid model here).
  * Complex: Kimi first when Moonshot is connected, then the cheapest paid,
  * then every free model as the fallback when the paid ones run out.
+ *
+ * That is the order a prompt without a routing mode builds: free first
+ * on a simple turn, paid first on a complex one. The panel's routing
+ * mode (`routingMode`, from `manostechRoutingMode` in the prompt
+ * metadata) reorders the two groups, never the models inside them:
+ * `priorizar_gratis` runs the free group first on either complexity,
+ * `priorizar_pagas` runs the paid group first on either complexity,
+ * `padrao` interleaves paid and free one and one, starting with the
+ * head the complexity favors (paid for a complex turn, free for a
+ * simple one). Complexity still rules inside each group: Kimi stays
+ * the paid head of a complex turn, the paid run stays cheapest-first,
+ * and the free run still rotates.
  *
  * `promptTokens` is the size of this turn's real prompt, in tokens. When
  * given, models whose window cannot hold it (leaving room for the reply)
@@ -587,6 +649,7 @@ export function buildChain(
     effort: Effort
     promptTokens?: number
     rotateAfter?: Pick<Model.Ref, "providerID" | "id">
+    routingMode?: RoutingMode
   },
 ): Model.Ref[] {
   const pool = available.filter(isRoutable)
@@ -610,13 +673,28 @@ export function buildChain(
   }
   const orderedFree = orderFree(free, input.effort).map(toRef)
   const rotatedFree = rotateFreeRun(orderedFree, input.rotateAfter)
-  if (input.complexity === "complex")
-    return [
-      ...(kimi === undefined ? [] : [toRef(kimi)]),
-      ...otherPaid.map(toRef),
-      ...rotatedFree,
-    ]
-  return [...rotatedFree, ...otherPaid.map(toRef), ...(kimi === undefined ? [] : [toRef(kimi)])]
+  // The paid run, in the order this complexity wants it: a complex turn
+  // starts on Kimi when Moonshot is connected, a simple one on the
+  // cheapest paid model with Kimi last (the most expensive paid here).
+  const paidRun =
+    input.complexity === "complex"
+      ? [...(kimi === undefined ? [] : [toRef(kimi)]), ...otherPaid.map(toRef)]
+      : [...otherPaid.map(toRef), ...(kimi === undefined ? [] : [toRef(kimi)])]
+  // The panel's routing mode only reorders the two groups. A mode the
+  // panel reported governs both complexities — free first on
+  // `priorizar_gratis`, paid first on `priorizar_pagas`, interleaved on
+  // `padrao`. No mode (or an unknown one, already dropped by
+  // routingModeFromMetadata) keeps the order the app always built:
+  // free first on a simple turn, paid first on a complex one.
+  const mode = input.routingMode
+  if (mode === "priorizar_pagas") return [...paidRun, ...rotatedFree]
+  if (mode === "priorizar_gratis") return [...rotatedFree, ...paidRun]
+  if (mode === "padrao")
+    return input.complexity === "complex"
+      ? interleave(paidRun, rotatedFree)
+      : interleave(rotatedFree, paidRun)
+  if (input.complexity === "complex") return [...paidRun, ...rotatedFree]
+  return [...rotatedFree, ...paidRun]
 }
 
 /** First chain ref not tried yet and not from a dead provider, or undefined when exhausted. */

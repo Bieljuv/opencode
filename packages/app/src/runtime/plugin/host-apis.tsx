@@ -365,6 +365,7 @@ export function createHostApis() {
           blocked: usage.blocked,
           weekly: usage.weekly,
           monthly: usage.monthly,
+          routingMode: usage.routingMode,
         }
       }
     },

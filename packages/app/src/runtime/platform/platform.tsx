@@ -4,7 +4,7 @@ import type { Accessor } from "solid-js"
 import type { DesktopMenuAction, DesktopZoomLevel } from "@/shell/commands/desktop-menu"
 import type { DraftStore } from "@/runtime/persistence/drafts"
 import type { Bridge } from "@opencode/plugin/gui/host"
-import type { MonthlyUsage, WeeklyUsage } from "@opencode/plugin/gui"
+import type { MonthlyUsage, RoutingMode, WeeklyUsage } from "@opencode/plugin/gui"
 
 type PickerPaths = string | string[] | null
 
@@ -160,6 +160,8 @@ type PlatformBase = {
         weekly?: WeeklyUsage
         monthly?: MonthlyUsage
         weeklyWarned: boolean
+        /** The panel's routing mode for this client; absent when the panel does not report one. */
+        routingMode?: RoutingMode
       }
     | undefined
   >

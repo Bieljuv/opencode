@@ -559,10 +559,11 @@ export const layer = Layer.effect(
           return { ...result, metadata: { keepID, ...result.metadata } }
         })
 
-      // The summary is mechanical work — it reads a long conversation and writes a short one — so it always hops on
-      // the free-first chain, whatever the turn asked for: a dead model must not condemn the summary, and a paid
-      // model is only tried after every free one failed. The chain is built once per summary from the providers
-      // connected right now, sized to this summary's real prompt.
+      // The summary follows the client's routing mode, like any other
+      // step: a dead model must not condemn the summary, and the mode
+      // decides which group the chain tries first. The chain is built
+      // once per summary from the providers connected right now, sized
+      // to this summary's real prompt.
       const available = yield* catalog.available()
       const lastUser = [...messages]
         .reverse()
@@ -576,6 +577,7 @@ export const layer = Layer.effect(
         effort,
         promptTokens: total(trigger.reason === "manual" ? estimatePrompt(context) : (trigger.estimate ?? estimatePrompt(context))),
         rotateAfter: context.session.model,
+        routingMode: SessionRouter.routingModeFromMetadata(lastUser?.metadata),
       })
       const tried = new Set<string>([SessionRouter.refKey(context.model.ref)])
       // Providers killed for this summary: a model that fails with a
