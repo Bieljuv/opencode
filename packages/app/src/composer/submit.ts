@@ -31,6 +31,7 @@ import {
 } from "./machine"
 import { retryFingerprint } from "./retry"
 import type { RouterEffort } from "./effort"
+import type { RoutingMode } from "@/client/plan-usage"
 import {
   SERVER_PROMPT_STATUS,
   transitionPromptStatus,
@@ -52,6 +53,8 @@ type ComposerSubmitInput = {
   effort?: Accessor<RouterEffort>
   /** The multi-agent toggle; every prompt it sends carries it as metadata. */
   multiAgent?: Accessor<boolean>
+  /** The panel's routing mode for this client; every prompt it sends carries it as metadata. Undefined when the panel did not report one. */
+  routingMode?: Accessor<RoutingMode | undefined>
   commands: Accessor<readonly { name: string }[] | undefined>
   editor: () => HTMLDivElement | undefined
   queueScroll: () => void
@@ -555,6 +558,7 @@ function dispatchPrompt(input: ComposerSubmitInput, session: ComposerSession, va
     input.adapter.controls().model.selection.trackSessionCommit,
     input.effort,
     input.multiAgent,
+    input.routingMode,
   ).then(
     () => ({ ok: true as const }),
     (error) => ({ ok: false as const, error }),
@@ -782,6 +786,7 @@ async function sendPrompt(
   track: ModelSelection["trackSessionCommit"] | undefined,
   effort?: Accessor<RouterEffort>,
   multiAgent?: Accessor<boolean>,
+  routingMode?: Accessor<RoutingMode | undefined>,
 ) {
   const request = await buildSubmissionRequest(session, value)
 
@@ -806,6 +811,8 @@ async function sendPrompt(
   if (staged) await commit()
   // A retried admission reuses the first commit rather than switching again.
   let committed: Promise<void> | undefined
+  // The panel's routing mode for this client, read once at send time.
+  const routingModeValue = routingMode?.()
 
   const admission = {
     id: value.id,
@@ -830,6 +837,9 @@ async function sendPrompt(
       manostechEffort: effort?.() ?? "automatico",
       // The router reads this to decide whether the agent may split the work across parallel subagents.
       manostechMultiAgent: multiAgent?.() ?? true,
+      // The router reads this to order the chain the panel chose for this client; absent when the panel
+      // did not report a mode (logged out, old panel) — the chain keeps the order it always built.
+      ...(routingModeValue === undefined ? {} : { manostechRoutingMode: routingModeValue }),
     },
     prepare: staged ? undefined : () => (committed ??= commit()),
   }

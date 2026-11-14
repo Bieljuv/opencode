@@ -268,6 +268,11 @@ const layer = Layer.effect(
       // without the metadata — CLI, ACP, schedules, child sessions — runs
       // multi-agent, and only an explicit false turns it off.
       const multiAgent = SessionRouter.multiAgentFromMetadata(lastUser?.metadata)
+      // ManosTech routing mode: the panel's choice for this client,
+      // carried in the same prompt metadata as the effort. A prompt
+      // without it — CLI, ACP, schedules, child sessions, an old panel —
+      // keeps the order the chain always built, exactly like before.
+      const routingMode = SessionRouter.routingModeFromMetadata(lastUser?.metadata)
       const explicit = configured !== undefined || first.agent.info.model !== undefined
       const complexity = SessionRouter.classifyComplexity(lastUser?.text ?? "")
       // The chain only carries models that fit this turn's real prompt:
@@ -285,6 +290,7 @@ const layer = Layer.effect(
         effort,
         promptTokens,
         rotateAfter,
+        routingMode,
       })
       const tried = new Set<string>()
       // Providers killed for this step: a model that fails with a dead
@@ -331,6 +337,7 @@ const layer = Layer.effect(
           first.session.model === undefined ? undefined : SessionRouter.refKey(first.session.model),
         complexity,
         effort,
+        routingMode,
         multiAgent,
         explicit,
       })

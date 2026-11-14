@@ -1183,6 +1183,13 @@ export interface MonthlyUsage {
 }
 
 /**
+ * The panel's routing mode for this client, as GET /api/uso reports it
+ * in `modo_roteamento`: which group the chain tries first. Never shown
+ * to the user — the mode is the panel's choice, not the app's.
+ */
+export type RoutingMode = "padrao" | "priorizar_gratis" | "priorizar_pagas"
+
+/**
  * The signed-in client's plan usage, as the panel reports it in
  * `GET /api/uso`. Only the percents and the instants reach the interface —
  * never token counts or the size of the allowance.
@@ -1198,6 +1205,8 @@ export interface ClientUsage {
   readonly weekly: WeeklyUsage | undefined
   /** The monthly allowance, when the panel reports one; undefined when the client has no monthly limit. */
   readonly monthly: MonthlyUsage | undefined
+  /** The panel's routing mode for this client; absent when the panel does not report one — the chain keeps the order it always built. */
+  readonly routingMode?: RoutingMode
 }
 
 /**

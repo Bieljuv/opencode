@@ -74,6 +74,8 @@ export type ClientUsage = {
   readonly monthly: Panel.MonthlyUsage | undefined
   /** O aviso semanal dos 75% já apareceu neste ciclo? */
   readonly weeklyWarned: boolean
+  /** The panel's routing mode for this client; undefined when the panel does not report one. */
+  readonly routingMode: Panel.RoutingMode | undefined
 }
 
 export type LoginResult =
@@ -247,6 +249,7 @@ export async function getClientUsage(): Promise<ClientUsage | null> {
     weekly: usage.weekly,
     monthly: usage.monthly,
     weeklyWarned: wasWeeklyUsageWarned(),
+    routingMode: usage.routingMode,
   }
 }
 

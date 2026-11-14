@@ -82,6 +82,15 @@ export type SessionInfo = {
   readonly trialEndsAt: string | null
 }
 
+/** The panel's routing mode for this client, as GET /api/uso reports it in `modo_roteamento`. */
+export type RoutingMode = "padrao" | "priorizar_gratis" | "priorizar_pagas"
+
+/** Reads a routing mode back from the panel value; anything else is not a mode. */
+export function parseRoutingMode(value: unknown): RoutingMode | undefined {
+  if (value === "padrao" || value === "priorizar_gratis" || value === "priorizar_pagas") return value
+  return undefined
+}
+
 /** Uso diário do plano, como o painel expõe em GET /api/uso. */
 export type DailyUsage = {
   readonly percent: number
@@ -92,6 +101,12 @@ export type DailyUsage = {
   readonly weekly: WeeklyUsage | undefined
   /** O uso mensal, quando o painel o reporta; undefined = sem limite mensal. */
   readonly monthly: MonthlyUsage | undefined
+  /**
+   * The panel's routing mode for this client. Undefined when the panel
+   * does not report one (old panel) — the chain keeps the order it
+   * always built.
+   */
+  readonly routingMode: RoutingMode | undefined
 }
 
 /**
@@ -196,6 +211,7 @@ const UsageResponse = Schema.Struct({
   usado_percentual: Schema.Number,
   reseta_em: Schema.String,
   bloqueado: Schema.optional(Schema.Boolean),
+  modo_roteamento: Schema.optional(Schema.String),
 })
 
 const WeeklyUsageResponse = Schema.Struct({
@@ -445,6 +461,9 @@ export async function googleLogin(
  * vem na mesma resposta; um `semanal` malformado ou sem limite esconde só
  * a barra semanal, nunca a diária. O objeto `mensal` vem no mesmo formato
  * do `semanal`; ausente ou malformado, o mensal some sem afetar o resto.
+ * `modo_roteamento` é o modo de roteamento do cliente; ausente ou
+ * desconhecido, o modo some sem afetar o resto — a cadeia fica na ordem
+ * de sempre.
  */
 export async function fetchDailyUsage(baseUrl: string, apiKey: string): Promise<DailyUsage | undefined> {
   let response: { status: number; json: unknown }
@@ -472,6 +491,7 @@ export async function fetchDailyUsage(baseUrl: string, apiKey: string): Promise<
     blocked: value.bloqueado ?? false,
     weekly: weeklyUsage(response.json),
     monthly: monthlyUsage(response.json),
+    routingMode: parseRoutingMode(value.modo_roteamento),
   }
 }
 
