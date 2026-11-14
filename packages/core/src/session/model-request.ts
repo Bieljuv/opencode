@@ -326,6 +326,46 @@ export const baseTranscript = (input: {
   }
 }
 
+/**
+ * ManosTech request cap: no request ever carries more than 50 entries in
+ * the provider's message array. The history package already limits the
+ * turn to the last 20 session messages plus one summary — but one session
+ * message is not one provider message: each assistant message with tool
+ * calls fans out into one assistant message plus one tool message per
+ * result, so a busy multi-agent turn packs 60+ entries and the gateway
+ * refuses the whole request on form (its own 50-message guard). The cap
+ * runs here, in the single constructor every provider and flow goes
+ * through, so the app never sends a request the server will refuse.
+ *
+ * Keeps the condensed summary (the checkpoint that carries the older
+ * history) and the newest messages; drops the oldest in between. The cut
+ * never lands before a tool message, or its result would arrive without
+ * the call that produced it.
+ */
+export const MAX_REQUEST_MESSAGES = 50
+
+const CHECKPOINT_PREFIX = "<conversation-checkpoint>"
+
+const isCheckpoint = (message: Message) =>
+  message.role === "user" &&
+  message.content.some((part) => part.type === "text" && part.text.startsWith(CHECKPOINT_PREFIX))
+
+export const capRequestMessages = (
+  messages: ReadonlyArray<Message>,
+  systemCount: number,
+): ReadonlyArray<Message> => {
+  const budget = MAX_REQUEST_MESSAGES - systemCount
+  if (messages.length <= budget) return messages
+  const first = messages[0]
+  const summary = first !== undefined && isCheckpoint(first) ? first : undefined
+  const rest = summary === undefined ? messages : messages.slice(1)
+  const keep = budget - (summary === undefined ? 0 : 1)
+  let start = Math.max(0, rest.length - keep)
+  while (start < rest.length && rest[start]!.role === "tool") start++
+  if (start >= rest.length) start = rest.length - 1
+  return [...(summary === undefined ? [] : [summary]), ...rest.slice(start)]
+}
+
 const mimeToModality = (mime: string) => {
   if (mime.startsWith("image/")) return "image"
   if (mime.startsWith("audio/")) return "audio"
@@ -509,6 +549,11 @@ export const layer = Layer.effect(
       const generation = Object.fromEntries(entries.filter(([k]) => GENERATION_KEYS.has(k))) as GenerationOptionsFields
       const providerOptions = Object.fromEntries(entries.filter(([k]) => !GENERATION_KEYS.has(k)))
       const affinity = SessionAffinity.get(session)
+      // The provider's message array is capped at 50 entries in total
+      // (one system message plus the messages below): the 20-message
+      // window fans out into 60+ entries once tool results are counted,
+      // and the gateway refuses the whole request on form past 50.
+      const capped = capRequestMessages(shaped.messages, shaped.system.length > 0 ? 1 : 0)
       // Gateway mode, primary only: the turn's complexity rides to the
       // server as a body overlay (`http.body` merges over the provider
       // body after validation). Compaction, title, and generate never
@@ -534,7 +579,7 @@ export const layer = Layer.effect(
         promptCacheKey: /^ses_[0-9a-f]{64}$/.test(affinity) ? affinity.slice(4) : affinity,
         cache: model.cache?.ttl === undefined ? undefined : { ttl: model.cache.ttl },
         system: shaped.system,
-        messages: boundImages(unsupportedParts(shaped.messages, model.capabilities, model.model.provider)),
+        messages: boundImages(unsupportedParts(capped, model.capabilities, model.model.provider)),
         tools: Array.from(hooked, ([name, t]) => ({ ...t, name })),
         toolChoice: input.toolChoice,
         ...generation,
