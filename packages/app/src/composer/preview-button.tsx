@@ -5,12 +5,10 @@ import { Tooltip } from "@opencode/ui/tooltip"
 import { useLanguage } from "@/runtime/i18n/language"
 
 /**
- * The preview button in the chat composer: it toggles the side region
- * (the review panel beside the chat) through the same action the session
- * header toggle and the `review.toggle` command use, so opening it here
- * and opening it there are the same panel. With nothing built yet it
- * opens the region empty; with a build in progress the preview the
- * agent opened stays where it was.
+ * The preview button in the chat composer: it opens the side region (the review panel beside the chat) with the
+ * project loaded in it — the entry HTML the latest Build turn linked or wrote, or the project's index.html — through
+ * the same `review.toggle` command the session header toggle and the keybind use, so opening it here and there is the
+ * same panel. Without a project entry to open, the region opens as before, with its New tab.
  */
 export function PreviewButton(props: { opened: Accessor<boolean>; onToggle: () => void }) {
   const language = useLanguage()
