@@ -1914,7 +1914,7 @@ export type ProjectUpdateOutput = Project.Info
 export type ProjectUpdateOperation<E = never> = (input: ProjectUpdateInput) => Effect.Effect<ProjectUpdateOutput, E>
 
 export type ProjectDeleteInput = { readonly projectID: Project.ID }
-export type ProjectDeleteOutput = void
+export type ProjectDeleteOutput = Project.DeleteResult
 export type ProjectDeleteOperation<E = never> = (input: ProjectDeleteInput) => Effect.Effect<ProjectDeleteOutput, E>
 
 export interface ProjectApi<E = never> {

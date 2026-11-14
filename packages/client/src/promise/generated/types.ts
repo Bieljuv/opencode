@@ -288,6 +288,8 @@ export type ProjectCommands = { start?: string }
 
 export type ProjectTime = { created: number; updated: number; active: number; archived?: number }
 
+export type ProjectDeleteResult = { leftoverDirectory?: string }
+
 export type PermissionID = string
 
 export type PermissionSource = { type: "tool"; messageID: string; id: string }
@@ -4290,7 +4292,7 @@ export type ProjectUpdateOutput = Project
 
 export type ProjectDeleteInput = { readonly projectID: string }
 
-export type ProjectDeleteOutput = void
+export type ProjectDeleteOutput = ProjectDeleteResult
 
 export type FormListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
 

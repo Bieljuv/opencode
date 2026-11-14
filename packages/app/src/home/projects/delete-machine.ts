@@ -18,7 +18,13 @@ export type ProjectDeleteEvent =
   | { readonly type: "cancel.requested" }
   /** `target`: undefined once the project is gone. */
   | { readonly type: "confirm.requested"; readonly target: ProjectDeleteTarget | undefined }
-  | { readonly type: "delete.succeeded"; readonly attempt: number; readonly target: ProjectDeleteTarget }
+  | {
+      readonly type: "delete.succeeded"
+      readonly attempt: number
+      readonly target: ProjectDeleteTarget
+      /** The original directory, when the trash copy is complete but it could not be removed (locked). */
+      readonly leftoverDirectory?: string
+    }
   | { readonly type: "delete.failed"; readonly attempt: number; readonly cause: unknown }
   | { readonly type: "delete.timed-out"; readonly attempt: number }
   | { readonly type: "disposed" }
@@ -34,6 +40,8 @@ export type ProjectDeleteEffect =
   | { readonly type: "dialog.close" }
   | { readonly type: "project.removed"; readonly target: ProjectDeleteTarget }
   | { readonly type: "toast.delete-failed"; readonly cause?: unknown }
+  /** The project is in the trash but its original directory could not be removed (locked). */
+  | { readonly type: "toast.delete-leftover"; readonly directory: string }
 
 export type ProjectDeleteTransition = {
   readonly state: ProjectDeleteState
@@ -54,7 +62,13 @@ export function transitionProjectDelete(state: ProjectDeleteState, event: Projec
   if (state.status === "closed" || state.status === "disposed") {
     // The server deleted the project after the dialog went: it still leaves the list and its tabs.
     if (event.type === "delete.succeeded")
-      return { state, effects: [{ type: "project.removed", target: event.target }] }
+      return {
+        state,
+        effects: [
+          { type: "project.removed", target: event.target },
+          ...leftoverToast(event.leftoverDirectory),
+        ],
+      }
 
     return { state, effects: NO_EFFECTS }
   }
@@ -67,7 +81,7 @@ export function transitionProjectDelete(state: ProjectDeleteState, event: Projec
 
   if (state.status === "confirming") {
     // A delete that timed out can still land; the project is gone, so the dialog goes too.
-    if (event.type === "delete.succeeded") return deleted(state, event.target)
+    if (event.type === "delete.succeeded") return deleted(state, event.target, event.leftoverDirectory)
 
     if (event.type === "cancel.requested" || (event.type === "confirm.requested" && !event.target))
       return { state: { ...state, status: "closed", attempt: state.attempt + 1 }, effects: [DIALOG_CLOSE] }
@@ -90,7 +104,7 @@ export function transitionProjectDelete(state: ProjectDeleteState, event: Projec
 
   if (event.attempt !== state.attempt) return { state, effects: NO_EFFECTS }
 
-  if (event.type === "delete.succeeded") return deleted(state, event.target)
+  if (event.type === "delete.succeeded") return deleted(state, event.target, event.leftoverDirectory)
 
   // A failed delete keeps the dialog, so the user can retry or cancel.
   return {
@@ -106,9 +120,14 @@ export function selectProjectDeleteView(state: ProjectDeleteState) {
   return { busy: state.status !== "confirming" }
 }
 
+function leftoverToast(leftoverDirectory: string | undefined): readonly ProjectDeleteEffect[] {
+  return leftoverDirectory ? [{ type: "toast.delete-leftover", directory: leftoverDirectory }] : NO_EFFECTS
+}
+
 function deleted(
   state: Extract<ProjectDeleteState, { status: "confirming" | "deleting" }>,
   target: ProjectDeleteTarget,
+  leftoverDirectory?: string,
 ): ProjectDeleteTransition {
   return {
     state: { status: "closed", attempt: state.attempt + 1 },
@@ -116,6 +135,7 @@ function deleted(
       ...(state.status === "deleting" ? [TIMER_CANCEL] : []),
       DIALOG_CLOSE,
       { type: "project.removed", target },
+      ...leftoverToast(leftoverDirectory),
     ],
   }
 }

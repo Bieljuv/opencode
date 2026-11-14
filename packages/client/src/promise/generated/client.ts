@@ -2164,9 +2164,9 @@ export function make(options: ClientOptions) {
           {
             method: "DELETE",
             path: `/api/project/${encodeURIComponent(input.projectID)}`,
-            successStatus: 204,
+            successStatus: 200,
             declaredStatuses: [400, 401, 404],
-            empty: true,
+            empty: false,
           },
           requestOptions,
         ),

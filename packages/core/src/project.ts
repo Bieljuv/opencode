@@ -45,6 +45,18 @@ export class DeleteRefusedError extends Schema.TaggedError<DeleteRefusedError>()
   reason: Schema.Literals(["global", "root", "home", "invalid"]),
 }) {}
 
+/** The trash copy failed because the directory is locked by another program; the app maps this to a clear message. */
+export class DeleteBusyError extends Schema.TaggedError<DeleteBusyError>()("Project.DeleteBusyError", {
+  projectID: ID,
+  directory: AbsolutePath,
+}) {}
+
+/**
+ * The result of moving a project to the trash: the project info, plus the original directory when the
+ * trash copy is complete but the original could not be removed (locked by another program).
+ */
+export type DeleteResult = Info & { readonly leftoverDirectory?: string }
+
 /** The trash folder for a trashed project was removed by hand; the row stays so "empty trash" can clear it. */
 export class TrashMissingError extends Schema.TaggedError<TrashMissingError>()("Project.TrashMissingError", {
   projectID: ID,
@@ -106,11 +118,13 @@ export interface Interface {
   /**
    * Moves the project to the trash: the directory moves under the server's trash directory and the registry rows
    * go away, so the project leaves the list but can be restored. When the directory is already gone there is
-   * nothing to recover, so the rows just go away and the project is permanently deleted instead. The caller
-   * removes the project's sessions first: this service must not depend on Session (Session resolves through
-   * Project), so the server handler owns that ordering.
+   * nothing to recover, so the rows just go away and the project is permanently deleted instead. When the trash
+   * copy is complete but the original directory could not be removed (locked by another program), the delete
+   * still succeeds and the result carries the leftover directory so the app can warn the user to remove it by
+   * hand. The caller removes the project's sessions first: this service must not depend on Session (Session
+   * resolves through Project), so the server handler owns that ordering.
    */
-  readonly delete: (projectID: ID) => Effect.Effect<Info, NotFoundError | DeleteRefusedError>
+  readonly delete: (projectID: ID) => Effect.Effect<DeleteResult, NotFoundError | DeleteRefusedError | DeleteBusyError>
   /** Lists the trashed projects, most recently trashed first. */
   readonly trashList: () => Effect.Effect<ReadonlyArray<ProjectSchema.Trashed>>
   /**
@@ -185,29 +199,106 @@ function trashRowToInfo(row: typeof TrashTable.$inferSelect): Info {
   }
 }
 
-// rename() fails across volumes (the trash usually lives on another drive than the project), so fall back to a
-// copy followed by a remove. `to` must not exist yet: on a fallback failure the half-copied destination is
-// removed again, so a pre-existing directory there would be destroyed.
-const moveDirectory = (from: string, to: string) =>
-  Effect.tryPromise({
-    try: () => nodeFs.rename(from, to),
-    catch: (error) => error,
-  }).pipe(
-    Effect.catch(() =>
-      Effect.tryPromise({
-        try: async () => {
-          try {
-            await nodeFs.cp(from, to, { recursive: true })
-            await nodeFs.rm(from, { recursive: true, force: true })
-          } catch (error) {
-            await nodeFs.rm(to, { recursive: true, force: true }).catch(() => undefined)
-            throw error
-          }
-        },
-        catch: (error) => error,
-      }),
+/** Lock errors a remove or copy can hit while another program (antivirus, indexer, editor, dev server) holds a file. */
+const LOCK_CODES = new Set(["EBUSY", "EPERM", "ENOTEMPTY"])
+/** Copy errors worth one retry: a file that vanishes mid-copy, or a transient lock. */
+const TRANSIENT_COPY_CODES = new Set(["ENOENT", "EBUSY", "EPERM"])
+
+const isErrnoExceptionWithCode = (error: unknown, codes: ReadonlySet<string>): error is NodeJS.ErrnoException =>
+  !!error && typeof error === "object" && "code" in error && typeof error.code === "string" && codes.has(error.code)
+
+/** How many times a locked directory remove is retried, and how long to wait between attempts. */
+export const REMOVE_ATTEMPTS = 5
+export const REMOVE_RETRY_DELAY_MS = 1000
+
+/** Removes a directory, retrying lock errors: a transient lock (antivirus, indexer) clears on its own. */
+export const removeDirectoryWithRetry = (
+  remove: (target: string) => Promise<void>,
+  target: string,
+  attempts: number = REMOVE_ATTEMPTS,
+  delayMs: number = REMOVE_RETRY_DELAY_MS,
+): Effect.Effect<void, unknown> =>
+  Effect.tryPromise({ try: () => remove(target), catch: (error) => error }).pipe(
+    Effect.catch((error) =>
+      attempts > 1 && isErrnoExceptionWithCode(error, LOCK_CODES)
+        ? Effect.sleep(Duration.millis(delayMs)).pipe(
+            Effect.andThen(() => removeDirectoryWithRetry(remove, target, attempts - 1, delayMs)),
+          )
+        : Effect.fail(error),
     ),
   )
+
+/** How many times a copy is retried, and how long to wait before retrying it. */
+export const COPY_ATTEMPTS = 2
+export const COPY_RETRY_DELAY_MS = 500
+
+/**
+ * Copies a directory, retrying once when a file vanishes mid-copy or a lock blocks it, and removing the
+ * half-copied destination on every failure so a retry starts clean and a final failure leaves nothing behind.
+ */
+export const copyDirectoryWithRetry = (
+  copy: (from: string, to: string) => Promise<void>,
+  remove: (target: string) => Promise<void>,
+  from: string,
+  to: string,
+  attempts: number = COPY_ATTEMPTS,
+  delayMs: number = COPY_RETRY_DELAY_MS,
+): Effect.Effect<void, unknown> =>
+  Effect.tryPromise({ try: () => copy(from, to), catch: (error) => error }).pipe(
+    Effect.catch((error) =>
+      attempts > 1 && isErrnoExceptionWithCode(error, TRANSIENT_COPY_CODES)
+        ? Effect.promise(() => remove(to)).pipe(
+            Effect.ignore,
+            Effect.andThen(() => Effect.sleep(Duration.millis(delayMs))),
+            Effect.andThen(() => copyDirectoryWithRetry(copy, remove, from, to, attempts - 1, delayMs)),
+          )
+        : Effect.promise(() => remove(to)).pipe(Effect.ignore, Effect.andThen(() => Effect.fail(error))),
+    ),
+  )
+
+export interface MoveResult {
+  /** False when the trash copy is complete but the original directory could not be removed (locked). */
+  readonly sourceRemoved: boolean
+  /** The remove error, when the source was left behind. */
+  readonly removeError?: unknown
+}
+
+// rename() fails across volumes (the trash usually lives on another drive than the project), so fall back to a
+// copy followed by a remove. `to` must not exist yet: on a fallback failure the half-copied destination is
+// removed again, so a pre-existing directory there would be destroyed. Once the copy is complete the move
+// never fails for a stuck remove: the copy is kept and the caller decides what to do with the leftover source.
+const moveDirectory = (from: string, to: string): Effect.Effect<MoveResult, unknown> =>
+  Effect.tryPromise({ try: () => nodeFs.rename(from, to), catch: (error) => error }).pipe(
+    Effect.as({ sourceRemoved: true } satisfies MoveResult),
+    Effect.catch(() =>
+      copyDirectoryWithRetry(
+        (source, destination) => nodeFs.cp(source, destination, { recursive: true }),
+        (target) => nodeFs.rm(target, { recursive: true, force: true }),
+        from,
+        to,
+      ).pipe(
+        Effect.andThen(() =>
+          removeDirectoryWithRetry((target) => nodeFs.rm(target, { recursive: true, force: true }), from).pipe(
+            Effect.as({ sourceRemoved: true } satisfies MoveResult),
+            Effect.catch((error) => Effect.succeed({ sourceRemoved: false, removeError: error })),
+          ),
+        ),
+      ),
+    ),
+  )
+
+/**
+ * A copy that fails because the directory is locked becomes a DeleteBusyError the app maps to a clear
+ * message; anything else stays a defect (500, as before) because the server does not know what it means.
+ */
+export const deleteMoveError = (
+  error: unknown,
+  projectID: ID,
+  directory: AbsolutePath,
+): Effect.Effect<never, DeleteBusyError> =>
+  isErrnoExceptionWithCode(error, LOCK_CODES)
+    ? Effect.fail(new DeleteBusyError({ projectID, directory }))
+    : Effect.die(error)
 
 const layer = Layer.effect(
   Service,
@@ -400,9 +491,12 @@ const layer = Layer.effect(
         attempt += 1
       }
       yield* Effect.promise(() => nodeFs.mkdir(trashDir, { recursive: true })).pipe(Effect.orDie)
-      yield* moveDirectory(canonical, trashPath).pipe(Effect.orDie)
+      const moved = yield* moveDirectory(canonical, trashPath).pipe(
+        Effect.catch((error) => deleteMoveError(error, projectID, canonical)),
+      )
       // If the database writes fail after the move, put the folder back so the project stays usable and the
-      // delete can be retried.
+      // delete can be retried. When the original directory was left behind (locked), the trash copy is the
+      // only thing to remove: the original is intact and the project stays usable as-is.
       yield* Effect.gen(function* () {
         const worktrees = yield* db
           .select()
@@ -436,14 +530,28 @@ const layer = Layer.effect(
           .pipe(Effect.orDie)
         yield* db.delete(WorktreeTable).where(eq(WorktreeTable.project_id, projectID)).run().pipe(Effect.orDie)
         yield* db.delete(ProjectTable).where(eq(ProjectTable.id, projectID)).run().pipe(Effect.orDie)
-      }).pipe(Effect.onError(() => moveDirectory(trashPath, canonical).pipe(Effect.ignore)))
+      }).pipe(
+        Effect.onError(() =>
+          moved.sourceRemoved
+            ? moveDirectory(trashPath, canonical).pipe(Effect.ignore)
+            : Effect.promise(() => nodeFs.rm(trashPath, { recursive: true, force: true })).pipe(Effect.ignore),
+        ),
+      )
+      // The delete succeeds with the original directory left behind, so the stuck remove gets a log line
+      // for support: the user only sees the warning toast.
+      if (!moved.sourceRemoved) {
+        yield* Effect.logWarning("project delete left the original directory behind", {
+          directory: canonical,
+          error: moved.removeError,
+        })
+      }
       yield* bus.publish(ProjectSchema.Event.Trashed, {
         id: projectID,
         name: info.name,
         directory: canonical,
         trashedAt,
       })
-      return info
+      return moved.sourceRemoved ? info : { ...info, leftoverDirectory: canonical }
     })
 
     const trashList = Effect.fn("Project.trashList")(function* () {
@@ -484,7 +592,16 @@ const layer = Layer.effect(
       if (!(yield* fs.exists(row.trash_path).pipe(Effect.orElseSucceed(() => true)))) return yield* new TrashMissingError({ projectID })
       const target = yield* freeDirectory(row.directory)
       yield* Effect.promise(() => nodeFs.mkdir(path.dirname(target), { recursive: true })).pipe(Effect.orDie)
-      yield* moveDirectory(row.trash_path, target).pipe(Effect.orDie)
+      const moved = yield* moveDirectory(row.trash_path, target).pipe(Effect.orDie)
+      // The copy is complete but the trash folder could not be removed (locked): the restore still goes
+      // through with the database writes and the leftover trash folder stays on disk for a manual cleanup,
+      // so a stuck remove never blocks a restore that already copied everything.
+      if (!moved.sourceRemoved) {
+        yield* Effect.logWarning("trash restore left the trash folder behind", {
+          trashPath: row.trash_path,
+          error: moved.removeError,
+        })
+      }
       // If the database writes fail after the move, put the folder back in the trash so the restore can be
       // retried.
       const restored = yield* Effect.gen(function* () {
@@ -534,10 +651,10 @@ const layer = Layer.effect(
         Effect.fnUntraced(function* (row) {
           // A folder that cannot be removed (a file locked by another program, for example) stays in the
           // trash with its row, so the next empty can retry it instead of losing the record.
-          const deleted = yield* Effect.tryPromise({
-            try: () => nodeFs.rm(row.trash_path, { recursive: true, force: true }),
-            catch: (error) => error,
-          }).pipe(Effect.as(true), Effect.orElseSucceed(() => false))
+          const deleted = yield* removeDirectoryWithRetry(
+            (target) => nodeFs.rm(target, { recursive: true, force: true }),
+            row.trash_path,
+          ).pipe(Effect.as(true), Effect.orElseSucceed(() => false))
           if (!deleted) return false
           yield* db.delete(TrashTable).where(eq(TrashTable.id, row.id)).run().pipe(Effect.orDie)
           yield* bus.publish(ProjectSchema.Event.Deleted, trashRowToInfo(row))
