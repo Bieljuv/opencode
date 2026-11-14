@@ -119,6 +119,12 @@ const getBase = (appId: string): Configuration => {
           // restored by script/fetch-manostech-tools.ts). A build without
           // them still packs — the skill then reports the missing tools.
           "manostech-tools/**",
+          // ManosTech: the bundled Impeccable engine ships only when the
+          // build machine staged it under
+          // resources/impeccable/<platform>-<arch>/ (git-ignored,
+          // restored by script/fetch-impeccable.ts). A build without it
+          // still packs — the skill then reports the missing detector.
+          "impeccable/**",
         ],
       },
     ],
@@ -160,6 +166,27 @@ const getBase = (appId: string): Configuration => {
 
           if (missing.length > 0)
             throw new Error(`Bundled video tools incomplete in manostech-tools/${dir}: missing ${missing.join(", ")}`)
+        }
+      }
+
+      // ManosTech: same rule for the Impeccable engine — a staged
+      // directory must hold the engine binary, or the detector fails at
+      // runtime instead of at pack time. When nothing was staged the
+      // build still packs and only warns.
+      const impeccableRoot = path.join(resources, "impeccable")
+      const impeccableStaged = await readdir(impeccableRoot, { withFileTypes: true }).catch(() => [])
+      const impeccableDirs = impeccableStaged.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+
+      if (impeccableDirs.length === 0) {
+        console.warn("Bundled Impeccable engine missing: impeccable/ was not staged for this build")
+      } else {
+        for (const dir of impeccableDirs) {
+          const exe = dir.startsWith("win32") ? ".exe" : ""
+          const present = await readdir(path.join(impeccableRoot, dir)).catch(() => [])
+          const missing = [`impeccable${exe}`].filter((name) => !present.includes(name))
+
+          if (missing.length > 0)
+            throw new Error(`Bundled Impeccable engine incomplete in impeccable/${dir}: missing ${missing.join(", ")}`)
         }
       }
 

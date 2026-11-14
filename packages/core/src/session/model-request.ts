@@ -151,6 +151,23 @@ export const STRIX_AUTO =
   "Strix (automatic, only when the request justifies it): load the \"strix\" skill when (a) the user asks for a security audit, a pentest, or to harden the project (\"auditoria de segurança\", \"pentest\", \"blindar o projeto\", \"acha as falhas\", \"revisar a segurança\", \"vulnerabilidade\"), or (b) the user asks to check the security of a system or site before delivering it. Never run the full audit unasked: before delivering a system or site, offer the audit instead of running it silently. When unsure, offer it and ask instead of running it silently. When you run it, tell the user in chat that the security audit is running and why, so they know why it takes longer. The user can always start it directly with /strix."
 
 /**
+ * ManosTech Impeccable auto-activation, appended to the system prompt of
+ * every turn. The visual-quality check is a tool the agent fires when the
+ * request justifies it, not on every turn. The triggers are an explicit
+ * request to improve the look, or UI work that just landed: after building
+ * or changing a visual surface, load the "impeccable" skill and run the
+ * detector over the changed files before delivering, and fix what it finds
+ * (or report it). The check never runs on a question, a greeting, or a
+ * non-visual change. When the project's hook is off
+ * (`.impeccable/config.json`, `hook.enabled: false`), skip the automatic
+ * check and run the detector only when the user asks. The detector ships
+ * with the app as the `impeccable` command; if it is missing, say the
+ * check did not run and continue — never ask the user to install anything.
+ */
+export const IMPECCABLE_AUTO =
+  "Impeccable (automatic, only when the request justifies it): load the \"impeccable\" skill when (a) the user asks to improve the look (\"melhorar o visual\", \"revisar o visual\", \"auditar a interface\", \"criticar o layout\", \"refinar a tela\", \"deixar mais bonito\"), or (b) you just built or changed a visual surface (a page, a screen, a component, a layout, a style). After UI work, run the detector over the changed files before delivering, and fix what it finds or report it; for a live variant round, use the skill's live mode when the project has a running dev server. Never run the check for a question, a greeting, or a change with no visual surface. When the project's hook is off, skip the automatic check and run the detector only when the user asks. If the detector is missing, say the check did not run and continue. When you run the check, tell the user in chat that the visual check is running and why, so they know why it takes longer. The user can always start it directly with /impeccable."
+
+/**
  * ManosTech identity masking, appended to the system prompt of every turn.
  * The user must never learn which model or provider is answering, what tier
  * it runs on, or that models are switched behind the scenes. The rule covers
@@ -307,6 +324,12 @@ export const baseTranscript = (input: {
       // the user asks for one (or to check a delivery), never unasked,
       // and offers it before delivering instead of running it silently.
       SystemPart.make(STRIX_AUTO),
+      // ManosTech Impeccable auto-activation: embedded in every message,
+      // invisible to the user. The agent loads the visual-quality skill
+      // when the user asks to improve the look, or after UI work lands,
+      // and runs the detector before delivering — never for a question
+      // or a non-visual change, and never when the project's hook is off.
+      SystemPart.make(IMPECCABLE_AUTO),
       // ManosTech approval before building: embedded in every message,
       // invisible to the user. The agent shows a short plan and asks the
       // user to confirm it with the question tool before creating or

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { manostechToolsEnv, resolveManostechTools, type ManostechTools } from "./manostech-tools"
+import { manostechToolsEnv, resolveImpeccable, resolveManostechTools, type ImpeccableEngine, type ManostechTools } from "./manostech-tools"
 
 function staged(resourcesRoot: string, platform: string, arch: string, files: string[]): string {
   const dir = path.join(resourcesRoot, "manostech-tools", `${platform}-${arch}`)
@@ -103,4 +103,95 @@ describe("manostechToolsEnv", () => {
 
     expect(manostechToolsEnv(tools, undefined).PATH).toBe("/opt/tools")
   })
+
+  test("impeccable alone goes first on PATH and sets the skill directory", () => {
+    const impeccable: ImpeccableEngine = {
+      dir: "C:\\impeccable",
+      binary: "C:\\impeccable\\impeccable.exe",
+    }
+    const env = manostechToolsEnv(undefined, "C:\\Windows\\System32", impeccable)
+
+    expect(env.IMPECCABLE_SKILL_DIR).toBe("C:\\impeccable")
+    expect(env.PATH?.startsWith("C:\\impeccable")).toBe(true)
+    expect(env.PATH).toContain("C:\\Windows\\System32")
+    expect(env.MANOSTECH_TOOLS_DIR).toBeUndefined()
+  })
+
+  test("tools and impeccable together put both staged directories first", () => {
+    const tools: ManostechTools = {
+      dir: "C:\\tools",
+      ffmpeg: "C:\\tools\\ffmpeg.exe",
+      ffprobe: "C:\\tools\\ffprobe.exe",
+      node: "C:\\tools\\node.exe",
+    }
+    const impeccable: ImpeccableEngine = {
+      dir: "C:\\impeccable",
+      binary: "C:\\impeccable\\impeccable.exe",
+    }
+    const env = manostechToolsEnv(tools, "C:\\Windows\\System32", impeccable)
+
+    expect(env.PATH?.startsWith("C:\\impeccable")).toBe(true)
+    expect(env.PATH).toContain("C:\\tools")
+    expect(env.PATH).toContain("C:\\Windows\\System32")
+    expect(env.IMPECCABLE_SKILL_DIR).toBe("C:\\impeccable")
+    expect(env.MANOSTECH_TOOLS_DIR).toBe("C:\\tools")
+  })
+})
+
+function stagedImpeccable(resourcesRoot: string, platform: string, arch: string, files: string[]): string {
+  const dir = path.join(resourcesRoot, "impeccable", `${platform}-${arch}`)
+  mkdirSync(dir, { recursive: true })
+  for (const file of files) writeFileSync(path.join(dir, file), "fake binary")
+  return dir
+}
+
+const impeccableCases = [
+  {
+    name: "win32-x64 with the engine binary resolves",
+    platform: "win32",
+    arch: "x64",
+    files: ["impeccable.exe"],
+    resolves: true,
+  },
+  {
+    name: "win32-x64 with a bare name (no .exe) does not resolve",
+    platform: "win32",
+    arch: "x64",
+    files: ["impeccable"],
+    resolves: false,
+  },
+  {
+    name: "linux-x64 with the engine binary resolves",
+    platform: "linux",
+    arch: "x64",
+    files: ["impeccable"],
+    resolves: true,
+  },
+  {
+    name: "darwin-arm64 with nothing staged does not resolve",
+    platform: "darwin",
+    arch: "arm64",
+    files: [],
+    resolves: false,
+  },
+]
+
+describe("resolveImpeccable", () => {
+  for (const item of impeccableCases) {
+    test(item.name, () => {
+      const resourcesRoot = mkdtempSync(path.join(tmpdir(), "impeccable-test-"))
+      const dir = stagedImpeccable(resourcesRoot, item.platform, item.arch, item.files)
+      const engine = resolveImpeccable({ resourcesRoot, platform: item.platform, arch: item.arch })
+
+      if (!item.resolves) {
+        expect(engine).toBeUndefined()
+        return
+      }
+
+      expect(engine).toEqual({
+        dir,
+        binary: path.join(dir, item.platform === "win32" ? "impeccable.exe" : "impeccable"),
+      })
+    })
+  }
 })

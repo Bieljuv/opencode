@@ -13,6 +13,7 @@ import {
   DIRECT_REPLY,
   FAILED_TOOL_RETRY,
   HIDE_MODEL_IDENTITY,
+  IMPECCABLE_AUTO,
   MANDATORY_TOKEN_SAVING,
   MULTI_AGENT,
   STRIX_AUTO,
@@ -448,6 +449,7 @@ describe("SessionModelRequest.baseTranscript mandatory token saving and arena au
     expect(system).toContain(MANDATORY_TOKEN_SAVING)
     expect(system).toContain(ARENA_AUTO)
     expect(system).toContain(STRIX_AUTO)
+    expect(system).toContain(IMPECCABLE_AUTO)
     expect(system).toContain(WEB_SEARCH_FIRST)
     // Distinctive phrases, so an emptied constant fails too.
     expect(system).toContain("search the web with the websearch tool")
@@ -465,6 +467,9 @@ describe("SessionModelRequest.baseTranscript mandatory token saving and arena au
     expect(system).toContain("auditoria de segurança")
     expect(system).toContain("Never run the full audit unasked")
     expect(system).toContain("tell the user in chat that the security audit is running")
+    expect(system).toContain("melhorar o visual")
+    expect(system).toContain("Never run the check for a question")
+    expect(system).toContain("tell the user in chat that the visual check is running")
   })
 
   test("the mandatory rules also ride along on a coding turn", () => {
@@ -479,6 +484,7 @@ describe("SessionModelRequest.baseTranscript mandatory token saving and arena au
     expect(system).toContain(MANDATORY_TOKEN_SAVING)
     expect(system).toContain(ARENA_AUTO)
     expect(system).toContain(STRIX_AUTO)
+    expect(system).toContain(IMPECCABLE_AUTO)
   })
 })
 

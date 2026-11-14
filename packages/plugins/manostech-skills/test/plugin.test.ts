@@ -1,5 +1,5 @@
 import { describe, expect, test, afterEach } from "bun:test"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp, readdir, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import type { Context } from "@opencode/plugin/promise/plugin"
@@ -11,6 +11,8 @@ import plugin, {
   buildGraphifyCommand,
   buildGraphifySkill,
   buildHyperframesSkill,
+  buildImpeccableCommand,
+  buildImpeccableSkill,
   buildOpenverseCommand,
   buildOpenverseSkill,
   buildPonytailCommand,
@@ -21,6 +23,7 @@ import plugin, {
   buildStrixSkill,
   buildVideoCommand,
   graphifyCommandText,
+  impeccableCommandText,
   openverseCommandText,
   ponytailCommandText,
   ponytailLevel,
@@ -283,12 +286,12 @@ describe("ponytail skill", () => {
     const { ctx, skills, commands } = makeCtx(dir)
     await plugin.setup(ctx as unknown as Context)
     await plugin.setup(ctx as unknown as Context)
-    // Seven skills (arena, ponytail, graphify, hyperframes, openverse,
-    // real-sfx, strix) and seven commands (arena, ponytail, graphify,
-    // openverse, real-sfx, strix, video): setup twice still registers each
-    // one once.
-    expect(skills.size).toBe(7)
-    expect(commands.size).toBe(7)
+    // Eight skills (arena, ponytail, graphify, hyperframes, openverse,
+    // real-sfx, strix, impeccable) and eight commands (arena, ponytail,
+    // graphify, openverse, real-sfx, strix, impeccable, video): setup twice
+    // still registers each one once.
+    expect(skills.size).toBe(8)
+    expect(commands.size).toBe(8)
   })
 
   test("user-visible descriptions and command texts stay in pt-BR and name nothing internal", async () => {
@@ -914,6 +917,150 @@ describe("strix command", () => {
     } as never)
     expect(prompts[0]?.["skills"]).toEqual([{ id: "strix" }])
     expect(String(prompts[0]?.["text"])).toContain("a rota de login")
+  })
+})
+
+describe("impeccable skill", () => {
+  test("skill impeccable is the upstream skill, adapted to this app", async () => {
+    const dir = await makeTmp()
+    const { ctx, skills, tools, commands } = makeCtx(dir)
+    await plugin.setup(ctx as unknown as Context)
+
+    const skill = skills.get("impeccable")
+    expect(skill).toBeDefined()
+    const info = buildImpeccableSkill()
+    expect(String(info.id)).toBe("impeccable")
+    expect(String(info.name)).toBe("Impeccable")
+    expect(String(info.path)).toBe("skill://impeccable/SKILL.md")
+    expect(info.autoinvoke).toBe(true)
+    for (const trigger of ["melhorar o visual", "revisar o visual", "auditar a interface", "criticar o layout", "modo ao vivo"]) {
+      expect(info.description ?? "").toContain(trigger)
+    }
+    // Adapted from the upstream Impeccable skill (pbakaus/impeccable,
+    // Apache 2.0): the 62-rule detector, the 24 commands and the live
+    // mode are kept, but the engine ships with the app — the launcher,
+    // the first-run download and the other harnesses' hook installs are
+    // gone, the automatic check is built into the agent, and the pin
+    // command does not exist here.
+    expect(info.content).toContain("impeccable context")
+    expect(info.content).toContain("## Setup")
+    expect(info.content).toContain("## Commands")
+    expect(info.content).toContain("reference/craft-floor.md")
+    expect(info.content).toContain("the engine comes with the app and is never downloaded")
+    expect(info.content).toContain("Detector unavailable")
+    expect(info.content).toContain("not available in this app: every `/impeccable` command already ships inside the app")
+    expect(info.content).toContain("unless the project's hook is off")
+    for (const word of ["Claude", "OpenCode", "python3", "Python", "Shift+Tab", "free", "paid", "model", "provider", "grátis", "pago", "cota", "install", "instal"]) {
+      expect(info.content).not.toContain(word)
+      expect(info.description ?? "").not.toContain(word)
+    }
+
+    // Impeccable is a behavior instruction: no tool, only the skill and the command.
+    expect(tools.get("impeccable")).toBeUndefined()
+    expect(commands.get("impeccable")).toBeDefined()
+  })
+
+  test("user-visible descriptions and command texts stay in pt-BR and name nothing internal", async () => {
+    const dir = await makeTmp()
+    const { ctx, commands } = makeCtx(dir)
+    await plugin.setup(ctx as unknown as Context)
+    const forbidden = ["Claude", "OpenCode", "Nexus", "grátis", "gratuito", "pago", "cota", "crédito", "roteamento", "US$", "free", "paid", "model", "provider"]
+    const info = buildImpeccableSkill()
+    for (const word of forbidden) {
+      expect(info.description ?? "").not.toContain(word)
+    }
+    const command = buildImpeccableCommand({ prompt: async () => undefined } as never)
+    expect(command.description).toMatch(/Impeccable/)
+    for (const word of forbidden) {
+      expect(command.description).not.toContain(word)
+      expect((commands.get("impeccable") as unknown as { description: string }).description).not.toContain(word)
+    }
+    for (const args of ["", "a tela de login", "o painel"]) {
+      for (const word of forbidden) {
+        expect(impeccableCommandText(args)).not.toContain(word)
+      }
+    }
+  })
+})
+
+describe("impeccable references", () => {
+  const skillDir = new URL("../skills/impeccable/", import.meta.url)
+
+  function citedReferences(content: string): string[] {
+    return [...new Set([...content.matchAll(/reference\/([A-Za-z0-9_.-]+\.md)/g)].map((m) => m[1] as string))]
+  }
+
+  async function allReferenceFiles(): Promise<string[]> {
+    const entries = await readdir(new URL("reference/", skillDir), { recursive: true })
+    return (entries as unknown as string[]).filter((name) => name.endsWith(".md")).sort()
+  }
+
+  test("every references/ file the skill cites exists beside SKILL.md", async () => {
+    const info = buildImpeccableSkill()
+    const cited = citedReferences(info.content)
+    // The 36 procedures the skill cites. Locking the count means a
+    // future citation cannot point at a file nobody wrote.
+    expect(cited).toHaveLength(36)
+    for (const name of cited) {
+      expect(await Bun.file(new URL(`reference/${name}`, skillDir)).exists()).toBe(true)
+    }
+  })
+
+  test("every shipped reference file is mask-clean", async () => {
+    const forbidden = ["claude", "opencode", "gemini", "google", "anthropic", "openai", "github", "pip install", "uv tool install", "uv tool run", "break-system-packages", "sponsors", "whisper", "free", "paid"]
+    const files = await allReferenceFiles()
+    // 45 procedures plus the 4 degraded/ fallbacks. Locking the count
+    // means a future port cannot silently ship a file this test never saw.
+    expect(files).toHaveLength(49)
+    for (const name of files) {
+      const text = (await Bun.file(new URL(`reference/${name}`, skillDir)).text()).toLowerCase()
+      for (const word of forbidden) {
+        expect(text).not.toContain(word)
+      }
+    }
+  })
+})
+
+describe("impeccable command", () => {
+  test("blank arguments load the skill for the current project", async () => {
+    const prompts: Array<Record<string, unknown>> = []
+    const session = {
+      prompt: async (input: Record<string, unknown>) => {
+        prompts.push(input)
+        return undefined
+      },
+    }
+    const command = buildImpeccableCommand(session as never)
+    await command.execute({
+      sessionID: "ses_impeccable_command_test",
+      prompt: { text: "   " },
+      delivery: "steer",
+    } as never)
+    expect(prompts).toHaveLength(1)
+    const sent = prompts[0]
+    expect(sent["sessionID"]).toBe("ses_impeccable_command_test")
+    expect(sent["delivery"]).toBe("steer")
+    expect(sent["skills"]).toEqual([{ id: "impeccable" }])
+    expect(String(sent["text"])).toContain('skill "impeccable"')
+    expect(String(sent["text"])).toContain("(nenhum")
+  })
+
+  test("the visual target passes through to the skill", async () => {
+    const prompts: Array<Record<string, unknown>> = []
+    const session = {
+      prompt: async (input: Record<string, unknown>) => {
+        prompts.push(input)
+        return undefined
+      },
+    }
+    const command = buildImpeccableCommand(session as never)
+    await command.execute({
+      sessionID: "ses_impeccable_command_args",
+      prompt: { text: "a tela de login" },
+      delivery: "steer",
+    } as never)
+    expect(prompts[0]?.["skills"]).toEqual([{ id: "impeccable" }])
+    expect(String(prompts[0]?.["text"])).toContain("a tela de login")
   })
 })
 
