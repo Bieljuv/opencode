@@ -184,12 +184,53 @@ describe("provider error classification", () => {
     ).toBe("ProviderInternal")
   })
 
+  test("classifies a provider function missing from the account as provider internal even with a 4xx status", () => {
+    // The live case (Gabriel's "Sistema responsivo" session,
+    // ses_e2ca6aa19ffeMmXr7NPkY5GtmT, 2026-11-13 05:28:21Z, 3.4.44):
+    // the SAME dead function came back with yet another wording —
+    // "Function '...' : Not found for account '...'" — and the
+    // classifier turned it into InvalidRequest on the 404, so the
+    // turn died instead of hopping. A function the provider no longer
+    // has for the account refuses the MODEL, not the request, so it
+    // stays a hop signal even with a status. The account id below is
+    // the live one from the log; it is an identifier, not a secret.
+    expect(
+      classifyProviderFailure({
+        message:
+          "Function 'd64c848d-0a4b-400a-b780-75d603c6bc3a': Not found for account '5WnNEXp-ERjiejBPc85newbI_5KaSXnLHUbvrphl7c0'",
+        status: 404,
+      })._tag,
+    ).toBe("ProviderInternal")
+  })
+
+  test("classifies a provider 404 page as provider internal even with a 4xx status", () => {
+    // The live case (Gabriel's "Greeting" session,
+    // ses_e286feb90ffer4GC77uxTAtmKi, 2026-11-14 02:25:08Z, 3.4.47):
+    // the turn died on "Provider request failed with HTTP 404: 404
+    // page not found", classified as InvalidRequest on the 404, so
+    // the turn died instead of hopping. A plain-text 404 page means
+    // the provider does not serve that model/endpoint — it refuses
+    // the MODEL, not the request, so it stays a hop signal even with
+    // a status. Only the literal "404 page not found" matches; a
+    // plain "404 Not Found" still stays InvalidRequest (see the
+    // negative test below).
+    expect(
+      classifyProviderFailure({
+        message: "Provider request failed with HTTP 404: 404 page not found",
+        status: 404,
+      })._tag,
+    ).toBe("ProviderInternal")
+  })
+
   test("keeps unrelated not-found failures as invalid requests", () => {
     // Only the provider's "Specified function ... is not found"
     // wording is a hop signal. A plain 404, a missing resource, a
     // missing model, a function named without "specified", and a
     // function that is unsupported rather than missing stay
-    // deterministic rejections of the request.
+    // deterministic rejections of the request. The same narrowness
+    // holds for the two newer arms: a function that is merely "not
+    // found" without "for account", and a page that was not found
+    // without a "404" in front of it, stay invalid requests.
     expect(
       [
         classifyProviderFailure({ message: "404 Not Found", status: 404 }),
@@ -200,8 +241,21 @@ describe("provider error classification", () => {
           message: "The specified function is not supported by this model",
           status: 400,
         }),
+        classifyProviderFailure({
+          message: "Function 'd64c848d-0a4b-400a-b780-75d603c6bc3a': Not found",
+          status: 404,
+        }),
+        classifyProviderFailure({ message: "The page was not found", status: 404 }),
       ].map((failure) => failure._tag),
-    ).toEqual(["InvalidRequest", "InvalidRequest", "InvalidRequest", "InvalidRequest", "InvalidRequest"])
+    ).toEqual([
+      "InvalidRequest",
+      "InvalidRequest",
+      "InvalidRequest",
+      "InvalidRequest",
+      "InvalidRequest",
+      "InvalidRequest",
+      "InvalidRequest",
+    ])
   })
 
   test("prioritizes specific failures over retryable server text", () => {
