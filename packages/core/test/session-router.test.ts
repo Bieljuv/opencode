@@ -799,13 +799,13 @@ describe("chain from the packaged catalog (Gabriel's providers)", () => {
 })
 
 describe("cascade speed limits", () => {
-  test("a 30s first-output deadline and a 90s cascade budget, both below Gabriel's 142.8s gate", () => {
+  test("a 15s first-output deadline and a 90s cascade budget, both below Gabriel's 142.8s gate", () => {
     // One model held the user 142.8s in Gabriel's gate test (2026-11-10
     // 08:50, "lento demais"). The whole cascade — several frozen models —
-    // must resolve before that: three attempts at the 30s deadline is
+    // must resolve before that: six attempts at the 15s deadline is
     // 90s, still 52.8s below the ceiling a single model took. The failure
     // is the generic message, never a detail about the models tried.
-    expect(FIRST_OUTPUT_TIMEOUT_MS).toBe(30_000)
+    expect(FIRST_OUTPUT_TIMEOUT_MS).toBe(15_000)
     expect(CASCADE_BUDGET_MS).toBe(90_000)
     expect(CASCADE_BUDGET_MS).toBeLessThan(142_800)
     expect(CASCADE_EXHAUSTED).toEqual({ type: "provider.exhausted", message: "Tente novamente mais tarde." })
