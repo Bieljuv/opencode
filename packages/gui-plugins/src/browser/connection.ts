@@ -21,6 +21,8 @@ export type Registration = {
   highlight(tabID: Browser.TabID, ref?: Browser.Ref): void
   zoom(tabID: Browser.TabID, zoom: Zoom): void
   site(tabID: Browser.TabID): Promise<{ cookies: number }>
+  /** Captures the tab's viewport as an image, base64 bytes; null when the pane shot nothing. */
+  capture(tabID: Browser.TabID): Promise<{ name: string; mime: string; data: string } | null>
   clearSite(tabID: Browser.TabID): Promise<void>
   close(): void
 }
@@ -76,6 +78,7 @@ export function openBinding(input: {
       void ready.then(() => client.zoom({ binding, tabID, zoom })).catch(() => undefined)
     },
     site: (tabID) => ready.then(() => client.site({ binding, tabID })),
+    capture: (tabID) => ready.then(() => client.capture({ binding, tabID })),
     clearSite: (tabID) => ready.then(() => client.clearSite({ binding, tabID })),
     close() {
       if (status.closed) return

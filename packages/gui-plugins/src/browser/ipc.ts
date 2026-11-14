@@ -121,6 +121,18 @@ export const BrowserPane = Ipc.define({
       input: Schema.Struct({ binding, tabID: Browser.TabID }),
       output: Schema.Struct({ cookies: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)) }),
     },
+    // Captures the tab's viewport as an image, for the chat composer to attach. The bytes travel as base64: the
+    // shot can be megabytes, and the file cap bounds it.
+    capture: {
+      input: Schema.Struct({ binding, tabID: Browser.TabID }),
+      output: Schema.NullOr(
+        Schema.Struct({
+          name: text(256),
+          mime: text(64),
+          data: Schema.String.check(Schema.isMinLength(1)),
+        }),
+      ),
+    },
     // Deletes the cookies the page's address can read and its origin's stored data, then reloads the page.
     clearSite: { input: Schema.Struct({ binding, tabID: Browser.TabID }) },
     close: { input: Schema.Struct({ binding }) },
