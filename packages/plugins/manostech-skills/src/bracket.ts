@@ -52,6 +52,10 @@ import skillMd from "../skills/arena/SKILL.md" with { type: "text" }
 import strategiesJson from "../skills/arena/strategies.json" with { type: "json" }
 import rubricMd from "../skills/arena/rubric.md" with { type: "text" }
 
+// The Windows release build inlines these files from a CRLF checkout, so the
+// rubric a run carries is normalized once here instead of trusting the bytes.
+const rubricText = rubricMd.replace(/\r\n?/g, "\n")
+
 export class ArenaError extends Error {}
 
 const DEFAULT_AGENTS = 20 // the editor's default: simple tasks run fewer, complex ones more
@@ -930,14 +934,21 @@ export async function missingJobs(jobs: Job[]): Promise<Job[]> {
 const TEMPLATE_RE = /<!-- template:([a-z]+) -->\s*```text\n([\s\S]*?)\n```\s*<!-- \/template:\1 -->/g
 const PLACEHOLDER_RE = /\{\{(\w+)\}\}/g
 
-export function loadTemplates(): Record<TemplateName, string> {
+export function parseTemplates(text: string): Record<TemplateName, string> {
+  // The regex matches LF line endings only, and the Windows release build
+  // inlines SKILL.md from a CRLF checkout: without this every template reads
+  // as missing and the tournament dies at the first prompts call.
   const found: Partial<Record<string, string>> = {}
-  for (const m of skillMd.matchAll(TEMPLATE_RE)) {
+  for (const m of text.replace(/\r\n?/g, "\n").matchAll(TEMPLATE_RE)) {
     found[m[1]] = m[2]
   }
   const missing = TEMPLATES.filter((t) => !(t in found))
   if (missing.length > 0) throw new ArenaError(`SKILL.md is missing prompt templates: ${missing.join(", ")}`)
   return found as Record<TemplateName, string>
+}
+
+export function loadTemplates(): Record<TemplateName, string> {
+  return parseTemplates(skillMd)
 }
 
 export function fill(template: string, values: Record<string, string | number>): string {
@@ -1121,6 +1132,17 @@ export async function loadState(cwd: string, dirFlag?: string): Promise<ArenaSta
   }
   if (!isRecord(parsed) || !isRecord(parsed["agents"]) || !Array.isArray(parsed["rounds"]) || typeof parsed["dir"] !== "string") {
     throw new ArenaError(`${STATE_FILE} in ${d} is missing the arena state`)
+  }
+  // The run folder can go missing after init (deleted, or created under a
+  // different working directory than a later read): recreate it with the
+  // rubric before anything tries to read from it.
+  await mkdir(d, { recursive: true })
+  const rubric = path.join(d, "rubric.md")
+  if (await stat(rubric).then(
+    () => false,
+    () => true,
+  )) {
+    await writeFile(rubric, rubricText, "utf8")
   }
   return parsed as unknown as ArenaState
 }
@@ -1374,7 +1396,7 @@ async function cmdInit(cwd: string, args: ParsedArgs): Promise<ArenaResult> {
   if (baseline) await writeFile(path.join(d, "baseline.md"), `${baseline}\n`, "utf8")
   // The run gets its own copy of the rubric: frozen for this run, and inside the
   // working directory, so judges can read it without a permission prompt each.
-  await writeFile(path.join(d, "rubric.md"), rubricMd, "utf8")
+  await writeFile(path.join(d, "rubric.md"), rubricText, "utf8")
   const state = newState(n, seed, data, d, wave, Boolean(baseline))
   await saveState(state)
   if (defaultDir) {
