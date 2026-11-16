@@ -3738,7 +3738,7 @@ describe("SessionRunnerLLM", () => {
     expect(yield* s.context).not.toContainEqual(expect.objectContaining({ type: "compaction" }))
   })
 
-  scenario("stops after required automatic compaction fails", function* (s) {
+  scenario("sends with uncompacted context after required automatic compaction fails", function* (s) {
     // The first answer is 4,700, not 3,950: its usage anchors the next turn's compaction trigger,
     // which must clear the wider window's ceiling (see the compact window note above).
     yield* s.llm.push(TestLLM.textWithUsage("Earlier answer", "text-before-failed-compaction", 4_700))
@@ -3748,13 +3748,15 @@ describe("SessionRunnerLLM", () => {
     s.requests.length = 0
     yield* s.llm.push(
       TestLLM.failAfter(providerRejected({ message: "Unsupported parameter: max_output_tokens" })),
-      TestLLM.text("Must not run", "text-after-failed-compaction"),
+      TestLLM.text("Answered without compaction", "text-after-failed-compaction"),
     )
     yield* s.admit("Recent exact request ".repeat(180))
-    expect(yield* Effect.exit(s.resume)).toMatchObject({ _tag: "Failure" })
+    expect(yield* Effect.exit(s.resume)).toMatchObject({ _tag: "Success" })
 
-    expect(s.requests).toHaveLength(1)
+    // The failed compaction attempt plus the primary request, which carries the uncompacted context.
+    expect(s.requests).toHaveLength(2)
     expect(s.requests[0]?.maxTokens).toBe(50)
+    expect(JSON.stringify(s.requests[1].messages)).toContain("Recent exact request ".repeat(180))
     expect(yield* s.context).toContainEqual(
       expect.objectContaining({
         type: "compaction",
@@ -3763,6 +3765,11 @@ describe("SessionRunnerLLM", () => {
         error: expect.objectContaining({ message: "O pedido não pôde ser enviado. Tente reformular." }),
       }),
     )
+    expect((yield* s.context).at(-1)).toMatchObject({
+      type: "assistant",
+      finish: "stop",
+      content: [{ type: "text", text: "Answered without compaction" }],
+    })
   })
 
   scenario("forces one compaction and retries after provider context overflow", function* (s) {

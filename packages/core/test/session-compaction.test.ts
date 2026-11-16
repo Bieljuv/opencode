@@ -8,6 +8,7 @@ import {
   LLMEvent,
   LanguageModel,
   Message,
+  ProviderInternalError,
   ToolDefinition,
   type LLMRequest,
 } from "@opencode/ai/effect"
@@ -496,9 +497,9 @@ it.effect("auto compaction estimates current content against the buffered prompt
     // Without provider usage, the estimate includes the whole system prompt and tool definition, not just the
     // message. The parts are named here, not pinned as a number: editing a rule's wording leaves the expectation
     // alone, while adding or removing a rule moves it — and this list must follow baseTranscript. Today it is
-    // 2,002 tokens (agent system 7, instructions 5, token economy 62, identity masking 300, direct reply 214,
+    // 2,182 tokens (agent system 7, instructions 5, token economy 62, identity masking 300, direct reply 214,
     // web search first 119, failed tool retry 96, mandatory token saving 235, arena auto 195, strix auto 178,
-    // impeccable auto 249, approval before building 186, delivery rules 148, read tool 8), plus the one "Done" token.
+    // impeccable auto 249, preview auto 180, approval before building 186, delivery rules 148, read tool 8), plus the one "Done" token.
     const systemTokens =
       Token.estimate("You are a helpful assistant.") +
       Token.estimate("Project instructions.") +
@@ -511,6 +512,7 @@ it.effect("auto compaction estimates current content against the buffered prompt
       Token.estimate(SessionModelRequest.ARENA_AUTO) +
       Token.estimate(SessionModelRequest.STRIX_AUTO) +
       Token.estimate(SessionModelRequest.IMPECCABLE_AUTO) +
+      Token.estimate(SessionModelRequest.PREVIEW_AUTO) +
       Token.estimate(SessionModelRequest.APPROVAL_BEFORE_BUILD) +
       Token.estimate(SessionModelRequest.DELIVERY_RULES) +
       // Mirrors estimateTool: name + description + input schema.
@@ -1717,5 +1719,72 @@ hopIt.effect("summary fails without hopping when the failure is not a hop signal
     expect(outcome.status).toBe("failed")
     if (outcome.status === "failed") expect(outcome.error.type).toBe("provider.content-filter")
     expect(requests.map((request) => `${request.model.provider}/${request.model.id}`)).toEqual(["dead/dead-model"])
+  }),
+)
+
+hopIt.effect("summary hops to the next model when its model answers invalid request", () =>
+  Effect.gen(function* () {
+    const fixture = yield* hopFixture([textUser("First question"), measured("First answer", 100)])
+    failRequest = (request) =>
+      request.model.id === "dead-model"
+        ? new AIError({
+            reason: new InvalidRequestError({ message: "Unsupported parameter: max_output_tokens" }),
+          })
+        : undefined
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        failRequest = undefined
+      }),
+    )
+    expect(yield* fixture.run()).toEqual({ status: "completed" })
+    expect(requests.map((request) => `${request.model.provider}/${request.model.id}`)).toEqual([
+      "dead/dead-model",
+      "test/working-one",
+    ])
+  }),
+)
+
+hopIt.effect("summary stops hopping on invalid request after three hops", () =>
+  Effect.gen(function* () {
+    const fixture = yield* hopFixture([textUser("First question"), measured("First answer", 100)])
+    failRequest = () => new AIError({ reason: new InvalidRequestError({ message: "Unsupported parameter" }) })
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        failRequest = undefined
+      }),
+    )
+    const outcome = yield* fixture.run()
+    expect(outcome.status).toBe("failed")
+    if (outcome.status === "failed") expect(outcome.error.type).toBe("provider.invalid-request")
+    // Three invalid-request hops, then the chain is exhausted and the session fallback is spent:
+    // a request no model accepts still fails fast instead of sweeping the chain.
+    expect(requests.map((request) => `${request.model.provider}/${request.model.id}`)).toEqual([
+      "dead/dead-model",
+      "test/working-one",
+      "test/working-two",
+      "dead/dead-model",
+    ])
+  }),
+)
+
+hopIt.effect("summary hops at once when its model fails with a provider failure", () =>
+  Effect.gen(function* () {
+    const fixture = yield* hopFixture([textUser("First question"), measured("First answer", 100)])
+    failRequest = (request) =>
+      request.model.id === "dead-model"
+        ? new AIError({ reason: new ProviderInternalError({ message: "Provider unavailable" }) })
+        : undefined
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        failRequest = undefined
+      }),
+    )
+    expect(yield* fixture.run()).toEqual({ status: "completed" })
+    // Exactly one attempt on the dead model: the failure names a model problem, so the summary hops
+    // instead of burning the retry allowance on it (ten retries with backoff, about 95s).
+    expect(requests.map((request) => `${request.model.provider}/${request.model.id}`)).toEqual([
+      "dead/dead-model",
+      "test/working-one",
+    ])
   }),
 )

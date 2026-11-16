@@ -386,47 +386,18 @@ const layer = Layer.effect(
         const estimate = SessionCompaction.estimatePrompt(loaded)
         const compacted = yield* compaction.compact({ reason: "auto", context: loaded, estimate })
         if (compacted.status === "failed") {
-          // A compaction that fails because its model is down must not
-          // kill the step: the compaction model is a model like any
-          // other, so a hop-signal failure hops to the next model in the
-          // chain and the step retries with it — the same hop the step's
-          // own model call makes. Only a failure that is not a hop
-          // signal (the compaction itself cannot run) still fails the
-          // step, and only after the chain and the session model are
-          // exhausted does the step fail — with the generic message,
-          // never the provider's own error.
-          if (!SessionRouter.isHopSignal(compacted.error))
-            return yield* new StepFailedError({ error: compacted.error })
-          if (SessionRouter.isProviderDead(compacted.error))
-            deadProviders.add(loaded.model.ref.providerID)
-          const next = SessionRouter.nextHopFor(
-            chain,
-            tried,
-            available,
-            compacted.error,
-            loaded.model,
-            deadProviders,
-          )
-          if (next !== undefined) {
-            tried.add(SessionRouter.refKey(next))
-            yield* Effect.logInfo("manostech router hop", {
-              sessionID,
-              from: SessionRouter.refKey(loaded.model.ref),
-              to: SessionRouter.refKey(next),
-              errorType: compacted.error.type,
-              errorStatus: compacted.error.status,
-              tried: tried.size,
-              chain: chain.length,
-            })
-            yield* bus.publish(SessionEvent.ModelSelected, {
-              sessionID,
-              model: next,
-              previous: loaded.session.model,
-            })
-            continue
-          }
-          if (yield* fallbackToSessionModel(loaded.model.ref)) continue
-          return yield* new StepFailedError({ error: SessionRouter.CASCADE_EXHAUSTED })
+          // A failed automatic compaction must never fail the step: the
+          // compaction is best effort, and the primary request below is
+          // packaged (last messages plus a summary), so it usually fits
+          // without it — and when it does not, the overflow path compacts
+          // then. Failing the step here bricked the session: every later
+          // message re-ran the same failing compaction and died the same
+          // way, so even a trivial message could no longer be sent. The
+          // failure itself is already published as Compaction.Failed, so
+          // the timeline still shows it; the send just goes on with the
+          // uncompacted context instead of dying on it. The primary
+          // request keeps its own hop and retry machinery, so a dead
+          // model is retried there rather than here.
         }
         if (compacted.status === "completed") {
           assistantMessageID = SessionMessage.ID.create()
