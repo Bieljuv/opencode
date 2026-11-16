@@ -468,6 +468,7 @@ describe("SessionModelRequest.baseTranscript mandatory token saving and arena au
     expect(system).toContain("Never run the full audit unasked")
     expect(system).toContain("tell the user in chat that the security audit is running")
     expect(system).toContain("melhorar o visual")
+    expect(system).toContain("impeccable detect")
     expect(system).toContain("Never run the check for a question")
     expect(system).toContain("tell the user in chat that the visual check is running")
   })

@@ -960,6 +960,23 @@ describe("impeccable skill", () => {
     expect(commands.get("impeccable")).toBeDefined()
   })
 
+  test("the detector is only 'impeccable detect'; a failed scan is reported, never improvised", () => {
+    const info = buildImpeccableSkill()
+    // The detector CLI is `impeccable detect`; the bundled engine has no
+    // `audit` subcommand (it fails with `Unknown command: "audit"`), and
+    // `/impeccable audit` is a slash command — an agent procedure — never
+    // a shell command. The lookarounds pin that: the only "impeccable
+    // audit" in the skill is the slash form, and `impeccable
+    // audit-storage` (a real helper subcommand) does not count.
+    expect(info.content).toContain("impeccable detect --json")
+    expect(info.content).toContain("Unknown command")
+    expect(info.content.match(/(?<!\/)impeccable audit(?!-)/g)).toBeNull()
+    // A failed scan stops the check and tells the user it did not run,
+    // in the user's language; the agent never improvises detector output.
+    expect(info.content).toContain("Detector failure")
+    expect(info.content).toContain("A verificação visual não rodou")
+  })
+
   test("user-visible descriptions and command texts stay in pt-BR and name nothing internal", async () => {
     const dir = await makeTmp()
     const { ctx, commands } = makeCtx(dir)
@@ -1018,6 +1035,15 @@ describe("impeccable references", () => {
         expect(text).not.toContain(word)
       }
     }
+  })
+
+  test("routing and hooks name the detector command and the failure rule", async () => {
+    const routing = await Bun.file(new URL("reference/routing.md", skillDir)).text()
+    expect(routing).toContain("impeccable detect --json")
+    expect(routing).toContain("must be reported, never silently skipped")
+    const hooks = await Bun.file(new URL("reference/hooks.md", skillDir)).text()
+    expect(hooks).toContain("impeccable detect --json <changed files>")
+    expect(hooks).toContain("never presents a review")
   })
 })
 
