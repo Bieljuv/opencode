@@ -9,6 +9,8 @@ import {
   deal,
   decide,
   loadStrategies,
+  loadTemplates,
+  parseTemplates,
   planTotals,
   runArena,
   weightedTotal,
@@ -308,6 +310,35 @@ describe("init", () => {
     expect(runDir).toBe(path.join(cwd, "run"))
     const taskFile = path.join(cwd, "task.md")
     await expect(runArena(["init", "--agents", "4", "--seed", "7", "--task-file", taskFile, "--dir", runDir], { cwd })).rejects.toThrow("already has an arena in it")
+  })
+
+  test("prompts recreates a missing rubric before reading it", async () => {
+    const cwd = await makeTmp()
+    const { runDir } = await initArena(cwd)
+    await rm(path.join(runDir, "rubric.md"))
+    const prompts = await arena(cwd, runDir, ["prompts", "spawn"])
+    expect(prompts.code).toBe(0)
+    expect(await readFile(path.join(runDir, "rubric.md"), "utf8")).toContain("The arena rubric")
+  })
+
+  test("a deleted run folder fails naming the run dir", async () => {
+    const cwd = await makeTmp()
+    const { runDir } = await initArena(cwd)
+    await rm(runDir, { recursive: true, force: true })
+    await expect(arena(cwd, runDir, ["prompts", "spawn"])).rejects.toThrow(`no arena.json in ${runDir}`)
+  })
+})
+
+describe("prompt templates", () => {
+  test("loadTemplates finds all five templates in the shipped skill", () => {
+    expect(Object.keys(loadTemplates()).sort()).toEqual(["attacker", "competitor", "defender", "final", "judge"])
+  })
+
+  test("parseTemplates reads the skill as the Windows release build ships it (CRLF)", async () => {
+    const skill = await readFile(path.join(import.meta.dir, "../skills/arena/SKILL.md"), "utf8")
+    const crlf = skill.replace(/\n/g, "\r\n")
+    expect(Object.keys(parseTemplates(crlf)).sort()).toEqual(["attacker", "competitor", "defender", "final", "judge"])
+    expect(() => parseTemplates("no templates here")).toThrow("SKILL.md is missing prompt templates: competitor, attacker, defender, judge, final")
   })
 })
 
