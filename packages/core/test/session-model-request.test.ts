@@ -16,6 +16,7 @@ import {
   IMPECCABLE_AUTO,
   MANDATORY_TOKEN_SAVING,
   MULTI_AGENT,
+  PREVIEW_AUTO,
   STRIX_AUTO,
   unsupportedParts,
   WEB_SEARCH_FIRST,
@@ -450,6 +451,9 @@ describe("SessionModelRequest.baseTranscript mandatory token saving and arena au
     expect(system).toContain(ARENA_AUTO)
     expect(system).toContain(STRIX_AUTO)
     expect(system).toContain(IMPECCABLE_AUTO)
+    expect(system).toContain(PREVIEW_AUTO)
+    expect(system).toContain("Call the `preview` tool when")
+    expect(system).toContain("never offer a preview link or an artifact")
     expect(system).toContain(WEB_SEARCH_FIRST)
     // Distinctive phrases, so an emptied constant fails too.
     expect(system).toContain("search the web with the websearch tool")
@@ -486,6 +490,8 @@ describe("SessionModelRequest.baseTranscript mandatory token saving and arena au
     expect(system).toContain(ARENA_AUTO)
     expect(system).toContain(STRIX_AUTO)
     expect(system).toContain(IMPECCABLE_AUTO)
+    expect(system).toContain(PREVIEW_AUTO)
+    expect(system).toContain("Call the `preview` tool when")
   })
 })
 
