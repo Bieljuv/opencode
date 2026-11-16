@@ -4,6 +4,7 @@ import { useI18n } from "@opencode/ui/context/i18n"
 import { Collapsible } from "@opencode/ui/collapsible"
 import type { IconProps } from "@opencode/ui/icon"
 import { TextShimmer } from "@opencode/ui/text-shimmer"
+import { displayToolName } from "@opencode/util/mask"
 import { createDisclosure } from "./disclosure"
 
 export type TriggerTitle = {
@@ -248,7 +249,7 @@ export function GenericTool(props: { tool: string; status?: string; hideDetails?
       icon="mcp"
       status={props.status}
       trigger={{
-        title: i18n.t("ui.basicTool.called", { tool: props.tool }),
+        title: i18n.t("ui.basicTool.called", { tool: displayToolName(props.tool) }),
         subtitle: label(props.input),
         args: args(props.input),
       }}

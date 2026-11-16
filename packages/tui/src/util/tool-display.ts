@@ -34,12 +34,12 @@ export function executeCalls(value: unknown): ExecuteCall[] {
 
 export function executeCallSummary(call: ExecuteCall) {
   const args = primitiveInputSummary(call.input ?? {}).replace(/\s+/g, " ")
-  return `${call.tool}${args ? ` ${args}` : ""}`
+  return `${displayToolName(call.tool)}${args ? ` ${args}` : ""}`
 }
 
 export function webSearchProviderName(provider: unknown) {
   if (typeof provider !== "string" || !provider) return ""
-  if (provider === "opencode") return "OpenCode"
+  if (provider === "opencode") return "ManosTech.AI"
   return `${provider[0].toUpperCase()}${provider.slice(1)}`
 }
 
@@ -66,5 +66,6 @@ export function nonEmptyToolContent<T>(content: ReadonlyArray<T> | undefined): [
   const [first, ...rest] = content
   return first === undefined ? undefined : [first, ...rest]
 }
+import { displayToolName } from "@opencode/util/mask"
 import type { SessionMessageAssistantTool } from "@opencode/client/promise"
 import { isRecord } from "./record"

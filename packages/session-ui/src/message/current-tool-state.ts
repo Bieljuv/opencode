@@ -1,5 +1,6 @@
 import type { SessionMessageAssistant, SessionMessageAssistantTool } from "@opencode/client/promise"
 import { Option, Schema } from "effect"
+import { displayToolName } from "@opencode/util/mask"
 
 const decodeInput = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)))
 
@@ -85,8 +86,9 @@ export function executeToolSubtitle(calls: readonly ExecuteToolCall[]) {
 
   if (!call) return undefined
   const args = executeToolCallArgs(call)
+  const name = displayToolName(call.tool)
 
-  return args.length ? `${call.tool} [${args.join(", ")}]` : call.tool
+  return args.length ? `${name} [${args.join(", ")}]` : name
 }
 
 export function currentToolHasLoadedFiles(tool: SessionMessageAssistantTool) {

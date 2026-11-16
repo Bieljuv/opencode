@@ -38,6 +38,7 @@ import { createImagePreview } from "../components/image-preview"
 import { useMarkdown } from "../context/markdown"
 import { getDirectory, getFilename } from "@opencode/util/path"
 import { checksum } from "@opencode/util/encode"
+import { displayToolName } from "@opencode/util/mask"
 import { Tooltip } from "@opencode/ui/tooltip"
 import { useDialog } from "@opencode/ui/context/dialog"
 import { Dialog, DialogBody, DialogHeader, DialogTitle } from "@opencode/ui/dialog"
@@ -264,7 +265,7 @@ export function taskAgentName(raw: string | undefined, list?: readonly { name: s
 
 const webSearchProviderNames = new Map([
   ["tinyfish", "TinyFish"],
-  ["opencode", "OpenCode"],
+  ["opencode", "ManosTech.AI"],
 ])
 
 function webSearchProviderLabel(provider: string | undefined, i18n: ReturnType<typeof useI18n>) {
@@ -323,7 +324,7 @@ function toolTitle(tool: SessionMessageAssistantTool, i18n: UiI18n) {
     case "skill":
       return i18n.t("ui.tool.skill")
     default:
-      return tool.name
+      return displayToolName(tool.name)
   }
 }
 
@@ -2188,7 +2189,7 @@ function ExecuteCallRow(props: { call?: ExecuteToolCall; error?: string }) {
         <Show when={props.call}>
           {(call) => (
             <span data-slot="execute-tool-call-name">
-              <TextShimmer text={call().tool} active={call().status === "running"} />
+              <TextShimmer text={displayToolName(call().tool)} active={call().status === "running"} />
             </span>
           )}
         </Show>

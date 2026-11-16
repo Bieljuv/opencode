@@ -6,7 +6,7 @@ import { Icon } from "@opencode/ui/icon"
 import { IconButton } from "@opencode/ui/icon-button"
 import { Tooltip } from "@opencode/ui/tooltip"
 import { useI18n } from "@opencode/ui/context/i18n"
-import { maskToolErrorText } from "@opencode/util/mask"
+import { displayToolName, maskToolErrorText } from "@opencode/util/mask"
 import { createCopyFeedback } from "./copy"
 import { createDisclosure } from "./disclosure"
 
@@ -87,7 +87,7 @@ export function ToolErrorCard(props: ToolErrorCardProps) {
 
     const key = map.get(split.tool)
 
-    if (!key) return split.tool
+    if (!key) return displayToolName(split.tool)
 
     if (!key.includes(".")) return key
 
@@ -102,7 +102,7 @@ export function ToolErrorCard(props: ToolErrorCardProps) {
 
   const tail = createMemo(() => {
     const value = cleaned()
-    const prefix = `${split.tool} `
+    const prefix = `${displayToolName(split.tool)} `
 
     if (value.startsWith(prefix)) return value.slice(prefix.length)
 
