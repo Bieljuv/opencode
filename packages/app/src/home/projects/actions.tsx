@@ -9,7 +9,8 @@ import { ServerConnection } from "@/runtime/server/registry"
 import { isServerUnauthorized } from "@/runtime/server/health-machine"
 import { useGlobal } from "@/runtime/server/runtime"
 import { useSettingsSurface } from "@/settings/surface"
-import { errorMessage } from "@/shell/layout/helpers"
+import { useDirectoryPicker } from "@/workspaces/selection/picker"
+import { errorMessage, homeProjectDirectories } from "@/shell/layout/helpers"
 import { showToast } from "@/shell/notifications/toast"
 import type { LocalProject } from "@/shell/state/layout"
 import { createProjectSessionActions } from "@/shell/tabs/project-sessions"
@@ -21,6 +22,12 @@ import {
   type ProjectImportEvent,
   type ProjectImportTarget,
 } from "./import-machine"
+import {
+  createProjectDeleteOldState,
+  transitionProjectDeleteOld,
+  type ProjectDeleteOldEffect,
+  type ProjectDeleteOldEvent,
+} from "./delete-old-machine"
 import { useRevealProject } from "./reveal"
 
 export function createProjectActions() {
@@ -39,6 +46,78 @@ export function createProjectActions() {
   const sessions = createProjectSessionActions()
 
   const revealProject = useRevealProject()
+
+  const pickDirectory = useDirectoryPicker()
+
+  const [deleteOldState, setDeleteOldState] = createSignal(createProjectDeleteOldState())
+
+  const dispatchDeleteOld = (event: ProjectDeleteOldEvent) => {
+    const previous = untrack(deleteOldState)
+    const next = transitionProjectDeleteOld(previous, event)
+
+    if (next.state !== previous) setDeleteOldState(next.state)
+    next.effects.forEach((effect) =>
+      Promise.try(() => runDeleteOld(effect)).catch((cause: unknown) => console.error("[project.deleteOld]", cause)),
+    )
+  }
+
+  function runDeleteOld(effect: ProjectDeleteOldEffect) {
+    if (effect.type === "picker.open") {
+      pickDirectory({
+        server: effect.conn,
+        title: language.t("project.delete.old.picker.title"),
+        multiple: false,
+        onSelect: (result) =>
+          dispatchDeleteOld({
+            type: "picker.closed",
+            attempt: effect.attempt,
+            directory: homeProjectDirectories(result)[0],
+          }),
+      })
+
+      return
+    }
+
+    if (effect.type === "project.add") {
+      const ctx = global.serverCtx(ServerConnection.key(effect.conn))
+
+      if (!ctx) return dispatchDeleteOld({ type: "add.failed", attempt: effect.attempt })
+      // Remember whether the client had ever used this folder before registering it: a cancel
+      // hides it again, so the list ends exactly as it was.
+      const existing = ctx.projects.forDirectory(effect.directory)
+      const wasUsed = existing !== undefined && ctx.projects.used().some((item) => item.id === existing.id)
+      void ctx.projects.add(effect.directory).then((project) =>
+        project
+          ? dispatchDeleteOld({ type: "add.succeeded", attempt: effect.attempt, project, wasUsed })
+          : dispatchDeleteOld({ type: "add.failed", attempt: effect.attempt }),
+      )
+
+      return
+    }
+
+    if (effect.type === "dialog.open") {
+      void import("./delete-dialog").then(({ ProjectDeleteDialog }) => {
+        void dialog.show(
+          () => <ProjectDeleteDialog conn={effect.conn} project={effect.project} />,
+          () => {
+            // The client list refreshes from the trashed event, usually after the dialog already
+            // closed: reading "not deleted" here is the safe side — hiding a deleted project is a
+            // no-op, while a cancel always leaves the row behind to be hidden.
+            const ctx = global.serverCtx(ServerConnection.key(effect.conn))
+            dispatchDeleteOld({
+              type: "dialog.closed",
+              attempt: effect.attempt,
+              deleted: ctx !== undefined && ctx.projects.forDirectory(effect.directory) === undefined,
+            })
+          },
+        )
+      })
+
+      return
+    }
+
+    global.serverCtx(ServerConnection.key(effect.conn))?.projects.hide(effect.project)
+  }
 
   function editServer(conn: ServerConnection.Http, onSave?: (saved: ServerConnection.Http) => void) {
     void import("@/servers/connect/dialog").then(({ DialogServer }) => {
@@ -151,7 +230,10 @@ export function createProjectActions() {
     return api.import({ ...data, location: { directory: target.worktree } } as Parameters<typeof api.import>[0])
   }
 
-  onCleanup(() => dispatchImport({ type: "disposed" }))
+  onCleanup(() => {
+    dispatchImport({ type: "disposed" })
+    dispatchDeleteOld({ type: "disposed" })
+  })
 
   return {
     authenticate,
@@ -192,6 +274,9 @@ export function createProjectActions() {
       void import("./delete-dialog").then(({ ProjectDeleteDialog }) => {
         void dialog.show(() => <ProjectDeleteDialog conn={conn} project={project} />)
       })
+    },
+    deleteOld(conn: ServerConnection.Any) {
+      dispatchDeleteOld({ type: "deleteOld.requested", conn })
     },
     openTrash(conn: ServerConnection.Any) {
       void import("./trash-dialog").then(({ ProjectTrashDialog }) => {
