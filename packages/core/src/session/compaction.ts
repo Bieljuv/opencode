@@ -551,6 +551,16 @@ export const layer = Layer.effect(
               measured,
               // The provider just rejected this conversation, so sending it unchanged again would be rejected too.
               text: attemptTrigger.reason === "overflow",
+              // A failure that names a model problem fails fast here so the
+              // loop below hops to the next model at once, instead of
+              // burning the retry allowance on one that cannot carry this
+              // summary (a retryable provider failure retries the same
+              // model up to ten times with backoff — about 95s — before
+              // the loop ever gets to hop). Only while another model in
+              // the chain is still untried: when the chain is exhausted
+              // the same-model retry is the only recovery left, as in a
+              // manual compaction with nowhere to hop to.
+              failFastOnHopSignal: chain.some((ref) => !tried.has(SessionRouter.refKey(ref))),
             },
             background,
           )
@@ -602,13 +612,23 @@ export const layer = Layer.effect(
       // Fall back to the session model once per summary: when the chain is exhausted, the session keeps the model
       // it was on instead of dying — a key that just failed on another model may still answer on it.
       let sessionFallbackUsed = false
+      // Invalid-request hops taken so far. The router never hops on an invalid request — it is a request
+      // problem, not a spent model — but this request is machine-generated from the full transcript, so one
+      // model rejecting its shape does not condemn it for the rest of the chain: a different provider may
+      // accept it. Bounded, so a request no model accepts still fails fast instead of sweeping the chain.
+      let invalidRequestHops = 0
+      const maxInvalidRequestHops = 3
       let current = trigger
       while (true) {
         const outcome = yield* Effect.result(attempt(current))
         if (Result.isSuccess(outcome)) return outcome.success
         const failure = outcome.failure
         // Only a failure that names a model problem hops: anything else (the summary itself cannot run) fails now.
-        if (!SessionRouter.isHopSignal(failure.error)) return yield* Effect.fail(failure)
+        // The one exception is an invalid request, hopped at most maxInvalidRequestHops times (see above).
+        const invalidRequest =
+          failure.error.type === "provider.invalid-request" && invalidRequestHops < maxInvalidRequestHops
+        if (!SessionRouter.isHopSignal(failure.error) && !invalidRequest) return yield* Effect.fail(failure)
+        if (invalidRequest) invalidRequestHops++
         if (SessionRouter.isProviderDead(failure.error))
           deadProviders.add(current.context.model.ref.providerID)
         const next = yield* nextHop(current.context.model, failure.error)
@@ -706,8 +726,9 @@ export const layer = Layer.effect(
      * each shortening the transcript again from scratch, and a rejection after those gives up. A "payload too large"
      * rejection is about bytes, which inline media almost always accounts for, so one on the unchanged request resends
      * it as text, which carries no media, without counting; one on text counts as "too long". Other provider errors
-     * resend the same request under the session's retry policy. A `Failure` from `send` is a reply that cannot be
-     * used, and is never retried.
+     * resend the same request under the session's retry policy — unless failFastOnHopSignal is set, in which case a
+     * failure that names a model problem fails at once so the caller can hop to the next model instead of retrying
+     * this one. A `Failure` from `send` is a reply that cannot be used, and is never retried.
      */
     const deliver = Effect.fnUntraced(function* (
       trigger: Trigger,
@@ -719,6 +740,8 @@ export const layer = Layer.effect(
         readonly history: LLMRequest
         readonly measured?: Estimate
         readonly text?: boolean
+        /** Fail at once on a failure that names a model problem, so the caller can hop to the next model instead of retrying this one. Native compaction leaves it off: it has no hop loop, so retrying is its only recovery. */
+        readonly failFastOnHopSignal?: boolean
       } = {
         fit: target,
         history: prepared.request,
@@ -785,6 +808,12 @@ export const layer = Layer.effect(
           rejections++
           continue
         }
+
+        // A failure that names a model problem is for the summary loop to hop on, not for this model to retry:
+        // the loop tries the next model instead of burning the retry allowance here. Only the summarize path
+        // sets failFastOnHopSignal — native compaction has no hop loop, so it keeps retrying.
+        if (shrink.failFastOnHopSignal && SessionRouter.isHopSignal(error))
+          return yield* Effect.fail<Failure>({ error })
 
         const decision = yield* policy({
           cause,
