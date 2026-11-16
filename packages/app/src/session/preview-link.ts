@@ -57,6 +57,30 @@ export function findPreviewHref(text: string): string | undefined {
   return first
 }
 
+// The entry HTML a completed `preview` tool call resolved: an explicit
+// request to open the preview, or the start of UI work. The tool returns
+// the resolved file in its metadata; an explicit input path is the
+// fallback, and a call without either opens the project's entry file.
+function findPreviewToolCall(message: SessionMessageInfo): string | undefined {
+  if (message.type !== "assistant") return undefined
+
+  for (const part of [...message.content].reverse()) {
+    if (part.type !== "tool" || part.name !== "preview") continue
+
+    if (part.state.status !== "completed") continue
+
+    const resolved = Option.getOrUndefined(decodeString(part.state.metadata?.path))
+    if (resolved !== undefined && isLocalHtmlFile(resolved)) return resolved
+
+    const input = Option.getOrUndefined(decodeString(part.state.input.path))
+    if (input !== undefined && isLocalHtmlFile(input)) return input
+
+    return "index.html"
+  }
+
+  return undefined
+}
+
 // The local HTML file a finished write or edit just created, preferring the
 // entry file: a Build turn that wrote the entry file and then a page keeps
 // the preview on the entry file, while a turn that only touched a page
@@ -84,20 +108,28 @@ function findWrittenHtml(message: SessionMessageInfo): string | undefined {
 }
 
 /**
- * The preview the latest build-like message links or just wrote, if any.
- * Only a build opens a preview: a question, a Plan turn, or a read-only
- * agent never does — but a builder or general subagent does, exactly like
- * Build, so delegating the work no longer hides the preview. A finished
- * message's link is the entry point it chose; while it streams, a finished
- * write or edit of a local HTML file is the entry point instead, so the
- * preview opens as soon as the file exists. A write still streaming or
- * running does not count — the file may not exist yet.
+ * The preview the latest build-like message links, just wrote, or asked to
+ * open with the `preview` tool, if any. Only a build opens a preview: a
+ * question, a Plan turn, or a read-only agent never does — but a builder or
+ * general subagent does, exactly like Build, so delegating the work no
+ * longer hides the preview. A finished message's link is the entry point
+ * it chose; while it streams, a finished write or edit of a local HTML
+ * file is the entry point instead, so the preview opens as soon as the
+ * file exists. A completed `preview` tool call beats both: it is an
+ * explicit request to open the panel, or the start of UI work. A write
+ * still streaming or running does not count — the file may not exist yet.
  */
 export function latestBuildPreview(messages: readonly SessionMessageInfo[]): BuildPreview | undefined {
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index]
 
     if (message.type !== "assistant" || NON_BUILDING_AGENTS.has(message.agent)) continue
+
+    // An explicit preview request wins over whatever the turn linked or
+    // wrote: the agent asked to open the panel, so that file is the one.
+    const previewCall = findPreviewToolCall(message)
+
+    if (previewCall) return { href: previewCall, messageID: message.id }
 
     if (message.time.completed !== undefined) {
       const href = findPreviewHref(

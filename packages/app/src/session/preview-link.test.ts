@@ -46,6 +46,25 @@ const fileWrite = (
   time: { created: 1, completed: status === "completed" ? 2 : undefined },
 })
 
+const previewCall = (
+  id: string,
+  state: { status: "completed"; input?: { path?: string }; metadata?: { path?: string } } | { status: "running" },
+): SessionMessageAssistant["content"][number] => ({
+  id,
+  type: "tool",
+  name: "preview",
+  state:
+    state.status === "completed"
+      ? {
+          status: "completed",
+          input: state.input ?? {},
+          content: [{ type: "text", text: "Opened preview." }],
+          ...(state.metadata ? { metadata: state.metadata } : {}),
+        }
+      : { status: "running", input: {}, metadata: {} },
+  time: { created: 1, completed: state.status === "completed" ? 2 : undefined },
+})
+
 const user = (id: string): SessionMessageInfo => ({
   id,
   type: "user",
@@ -226,6 +245,83 @@ describe("latestBuildPreview", () => {
     }
 
     expect(latestBuildPreview([linked])).toBeUndefined()
+  })
+
+  test("a completed preview call opens the file its metadata resolved", () => {
+    const messages = [
+      assistantParts("msg_preview", "build", [
+        previewCall("call_preview", { status: "completed", metadata: { path: "public/index.html" } }),
+      ]),
+    ]
+
+    expect(latestBuildPreview(messages)).toEqual({ href: "public/index.html", messageID: "msg_preview" })
+  })
+
+  test("a completed preview call opens its input path when metadata is missing", () => {
+    const messages = [
+      assistantParts("msg_preview", "build", [
+        previewCall("call_preview", { status: "completed", input: { path: "loja.html" } }),
+      ]),
+    ]
+
+    expect(latestBuildPreview(messages)).toEqual({ href: "loja.html", messageID: "msg_preview" })
+  })
+
+  test("a completed preview call without a path opens the entry file", () => {
+    const messages = [assistantParts("msg_preview", "build", [previewCall("call_preview", { status: "completed" })])]
+
+    expect(latestBuildPreview(messages)).toEqual({ href: "index.html", messageID: "msg_preview" })
+  })
+
+  test("a completed preview call opens the preview while its message still streams", () => {
+    const messages = [
+      assistantParts(
+        "msg_streaming",
+        "build",
+        [previewCall("call_preview", { status: "completed", metadata: { path: "public/index.html" } })],
+        false,
+      ),
+    ]
+
+    expect(latestBuildPreview(messages)).toEqual({ href: "public/index.html", messageID: "msg_streaming" })
+  })
+
+  test("a preview call wins over the message's own link and an older link", () => {
+    const messages = [
+      assistant("msg_old", "build", "Pronto: [rascunho.html](rascunho.html)"),
+      assistantParts("msg_new", "build", [
+        { type: "text", text: "Pronto: [index.html](index.html)" },
+        previewCall("call_preview", { status: "completed", metadata: { path: "public/index.html" } }),
+      ]),
+    ]
+
+    expect(latestBuildPreview(messages)).toEqual({ href: "public/index.html", messageID: "msg_new" })
+  })
+
+  test("a preview call with a non-HTML path falls back to the entry file", () => {
+    const messages = [
+      assistantParts("msg_preview", "build", [
+        previewCall("call_preview", { status: "completed", metadata: { path: "estilo.css" } }),
+      ]),
+    ]
+
+    expect(latestBuildPreview(messages)).toEqual({ href: "index.html", messageID: "msg_preview" })
+  })
+
+  test("a preview call still running does not open a preview", () => {
+    const messages = [assistantParts("msg_preview", "build", [previewCall("call_preview", { status: "running" })])]
+
+    expect(latestBuildPreview(messages)).toBeUndefined()
+  })
+
+  test("a Plan agent's preview call never opens a preview", () => {
+    const messages = [
+      assistantParts("msg_plan", "plan", [
+        previewCall("call_preview", { status: "completed", metadata: { path: "index.html" } }),
+      ]),
+    ]
+
+    expect(latestBuildPreview(messages)).toBeUndefined()
   })
 })
 

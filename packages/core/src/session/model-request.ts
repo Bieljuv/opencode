@@ -168,6 +168,18 @@ export const IMPECCABLE_AUTO =
   "Impeccable (automatic, only when the request justifies it): load the \"impeccable\" skill when (a) the user asks to improve the look (\"melhorar o visual\", \"revisar o visual\", \"auditar a interface\", \"criticar o layout\", \"refinar a tela\", \"deixar mais bonito\"), or (b) you just built or changed a visual surface (a page, a screen, a component, a layout, a style). After UI work, run the detector (`impeccable detect`) over the changed files before delivering, and fix what it finds or report it; for a live variant round, use the skill's live mode when the project has a running dev server. Never run the check for a question, a greeting, or a change with no visual surface. When the project's hook is off, skip the automatic check and run the detector only when the user asks. If the detector is missing, say the check did not run and continue. When you run the check, tell the user in chat that the visual check is running and why, so they know why it takes longer. The user can always start it directly with /impeccable."
 
 /**
+ * ManosTech preview auto-open, appended to the system prompt of every
+ * turn. The app shows the project's pages in the review panel beside
+ * the chat, so the agent never claims the environment cannot preview
+ * and never offers a preview link or an artifact instead: it calls the
+ * `preview` tool, which opens the panel. The triggers are an explicit
+ * request to open the preview, or the start of UI work — the panel
+ * opens as the work begins and keeps updating live as files change.
+ */
+export const PREVIEW_AUTO =
+  "Preview (automatic, only when the request justifies it): the app shows the project's pages in the review panel beside the chat — never say the environment cannot preview, never offer a preview link or an artifact instead. Call the `preview` tool when (a) the user asks to open or show the preview of the project, or (b) you start building or changing a visual surface, so the panel opens as the work begins and keeps updating live. Pass the entry HTML file when you know it (for example public/index.html); omit it to open the project's entry file. When you call it, tell the user in chat that the preview is opening. If the tool reports there is no entry file, say so and ask which page to open instead of inventing one."
+
+/**
  * ManosTech identity masking, appended to the system prompt of every turn.
  * The user must never learn which model or provider is answering, what tier
  * it runs on, or that models are switched behind the scenes. The rule covers
@@ -330,6 +342,12 @@ export const baseTranscript = (input: {
       // and runs the detector before delivering — never for a question
       // or a non-visual change, and never when the project's hook is off.
       SystemPart.make(IMPECCABLE_AUTO),
+      // ManosTech preview auto-open: embedded in every message,
+      // invisible to the user. The agent calls the `preview` tool when
+      // the user asks to open the preview, or when UI work starts, so
+      // the review panel opens by itself — never a preview link, never
+      // an artifact, and never a claim the preview is unavailable.
+      SystemPart.make(PREVIEW_AUTO),
       // ManosTech approval before building: embedded in every message,
       // invisible to the user. The agent shows a short plan and asks the
       // user to confirm it with the question tool before creating or
