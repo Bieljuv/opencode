@@ -60,7 +60,7 @@ import {
 import { DialogExecute } from "./dialog-execute"
 import { RetryProvider } from "../../component/retry-provider"
 import { useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
-import { maskToolErrorText } from "@opencode/util/mask"
+import { displayToolName, maskToolErrorText } from "@opencode/util/mask"
 import { useClient } from "../../context/client"
 import { useEditorContext } from "../../context/editor"
 import { useDialog } from "../../ui/dialog"
@@ -3267,7 +3267,7 @@ function ExecuteCallView(props: { call: Accessor<ExecuteCall> }) {
           <text fg={color()}>{props.call().status === "error" ? "✗" : "›"}</text>
         </box>
         <text flexGrow={1} wrapMode="none" truncate fg={color()}>
-          {expanded() ? props.call().tool : executeCallSummary(props.call())}
+          {expanded() ? displayToolName(props.call().tool) : executeCallSummary(props.call())}
         </text>
       </box>
       <Show when={expanded()}>

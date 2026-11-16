@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
+  displayToolName,
   hasMaskedVocabulary,
   isProviderFlavoredErrorText,
   maskToolErrorText,
@@ -192,5 +193,21 @@ describe("maskToolErrorText", () => {
   test("passes a clean local error through byte-for-byte", () => {
     const text = "ENOENT: no such file or directory, open 'src/index.ts'"
     expect(maskToolErrorText(text)).toBe(text)
+  })
+})
+
+describe("displayToolName", () => {
+  test("replaces the opencode namespace with the brand ManosTech.AI", () => {
+    expect(displayToolName("opencode.read_mcp_resource")).toBe("ManosTech.AI.read_mcp_resource")
+    expect(displayToolName("opencode_read_mcp_resource")).toBe("ManosTech.AI_read_mcp_resource")
+    expect(displayToolName("opencode")).toBe("ManosTech.AI")
+    expect(displayToolName("Opencode.list_mcp_resources")).toBe("ManosTech.AI.list_mcp_resources")
+  })
+
+  test("leaves other namespaces and bare names untouched", () => {
+    expect(displayToolName("github.list_issues")).toBe("github.list_issues")
+    expect(displayToolName("read")).toBe("read")
+    expect(displayToolName("opencodex.foo")).toBe("opencodex.foo")
+    expect(displayToolName("myopencode.foo")).toBe("myopencode.foo")
   })
 })

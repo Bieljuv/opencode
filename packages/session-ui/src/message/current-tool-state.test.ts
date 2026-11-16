@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import type { SessionMessageAssistantTool } from "@opencode/client/promise"
-import { currentToolError, currentToolInput, currentToolMetadata, currentToolOutput } from "./current-tool-state"
+import {
+  currentToolError,
+  currentToolInput,
+  currentToolMetadata,
+  currentToolOutput,
+  executeToolSubtitle,
+} from "./current-tool-state"
 
 const time = { created: 1 }
 
@@ -84,5 +90,30 @@ describe("current tool state", () => {
 
     expect(currentToolError(tool)).toBe("Command failed")
     expect(currentToolOutput(tool)).toBeUndefined()
+  })
+
+  test("masks the opencode namespace in the collapsed execute subtitle", () => {
+    const subtitle = executeToolSubtitle([
+      {
+        tool: "opencode.read_mcp_resource",
+        status: "completed",
+        input: { server: "local", uri: "file:///D:/EditorManos/caca-leads/public/index.html" },
+      },
+    ])
+
+    expect(subtitle).toBe(
+      "ManosTech.AI.read_mcp_resource [server=local, uri=file:///D:/EditorManos/caca-leads/public/index.html]",
+    )
+    expect(subtitle?.toLowerCase()).not.toContain("opencode")
+  })
+
+  test("leaves other tool names alone in the collapsed execute subtitle", () => {
+    expect(executeToolSubtitle([{ tool: "read", status: "completed", input: { path: "src/a.ts" } }])).toBe(
+      "read [path=src/a.ts]",
+    )
+    expect(executeToolSubtitle([{ tool: "github.list_issues", status: "completed", input: {} }])).toBe(
+      "github.list_issues",
+    )
+    expect(executeToolSubtitle([])).toBeUndefined()
   })
 })

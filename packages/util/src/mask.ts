@@ -216,3 +216,18 @@ export function maskToolErrorText(text: string): string {
   if (isProviderFlavoredErrorText(text)) return MASKED_GENERIC_ERROR
   return scrubMaskedText(text)
 }
+
+/**
+ * Display form of a tool identifier: only the leading `opencode`
+ * namespace becomes the brand "ManosTech.AI" — the dotted code-mode
+ * path (`opencode.read_mcp_resource`) and the underscored effective
+ * name (`opencode_read_mcp_resource`) alike. Any other namespace
+ * (`github.list_issues`) and bare names (`read`) pass through
+ * unchanged, so call rows keep the grouping other namespaced tools
+ * show. Deliberately not the prose scrubber: scrubMaskedText would
+ * rewrite other words inside identifiers (a `google.search` tool
+ * would come out "o serviço.search").
+ */
+export function displayToolName(tool: string): string {
+  return tool.replace(/^opencode(?=[._]|$)/i, "ManosTech.AI")
+}
