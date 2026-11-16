@@ -97,6 +97,12 @@ export function createHomeProjectsController(home: HomeController) {
       },
       hide: actions.hide,
       delete: actions.delete,
+      deleteOld: (conn: ServerConnection.Any) => {
+        if (actions.authenticate(conn, (next) => actions.deleteOld(next))) return
+
+        if (isServerFailed(home.server.health(conn))) return
+        actions.deleteOld(conn)
+      },
       openTrash: actions.openTrash,
       canReveal: actions.canReveal,
       reveal: actions.reveal,

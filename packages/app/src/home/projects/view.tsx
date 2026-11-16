@@ -79,6 +79,7 @@ export type HomeProjectsViewProps = {
   onClearNotifications: (server: ServerConnection.Any, project: LocalProject) => void
   onHideProject: (server: ServerConnection.Any, project: LocalProject) => void
   onDeleteProject: (server: ServerConnection.Any, project: LocalProject) => void
+  onDeleteOldProject: (server: ServerConnection.Any) => void
   onOpenTrash: (server: ServerConnection.Any) => void
   onOpenSettings: () => void
   onOpenHelp: () => void
@@ -284,6 +285,16 @@ function HomeProjectsPanel(props: HomeProjectsViewProps) {
                       <Icon name="trash" size="small" />
                       <span class={HOME_PROJECT_NAV_LABEL}>{props.language.t("project.trash.title")}</span>
                     </HomeProjectNavButton>
+                    <HomeProjectNavButton
+                      type="button"
+                      data-action="home-delete-old-project"
+                      class="mt-1 disabled:opacity-60 [&>[data-slot=icon-svg]]:text-v2-icon-icon-muted"
+                      disabled={isServerFailed(props.serverHealth(server()))}
+                      onClick={() => props.onDeleteOldProject(server())}
+                    >
+                      <Icon name="trash" size="small" />
+                      <span class={HOME_PROJECT_NAV_LABEL}>{props.language.t("project.delete.old.title")}</span>
+                    </HomeProjectNavButton>
                   </div>
                 )}
               </Show>
@@ -341,6 +352,14 @@ function HomeProjectsPanel(props: HomeProjectsViewProps) {
                         >
                           <Icon name="trash" size="small" />
                           <span class={HOME_PROJECT_NAV_LABEL}>{props.language.t("project.trash.title")}</span>
+                        </HomeProjectNavButton>
+                        <HomeProjectNavButton
+                          type="button"
+                          data-action="home-delete-old-project"
+                          onClick={() => props.onDeleteOldProject(item)}
+                        >
+                          <Icon name="trash" size="small" />
+                          <span class={HOME_PROJECT_NAV_LABEL}>{props.language.t("project.delete.old.title")}</span>
                         </HomeProjectNavButton>
                       </Show>
                     </div>
