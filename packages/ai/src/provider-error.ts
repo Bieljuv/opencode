@@ -57,7 +57,18 @@ const patterns = [
   /request_too_large/i,
 ]
 
-const payloadPatterns = [/request entity too large/i, /payload too large/i, /request too large/i]
+const payloadPatterns = [
+  /request entity too large/i,
+  /payload too large/i,
+  /request too large/i,
+  // ManosTech panel: the gateway answers in pt-BR and caps the request
+  // at 100k characters — "messages muito longas (máx. 100000 caracteres)".
+  // A character cap is a request-size limit, not a model context window,
+  // so it classifies as payload-too-large and the sender shrinks the
+  // request instead of failing the turn on a generic invalid request.
+  /(?:messages?|mensagens?) muito longas?/i,
+  /m[aá]x\.?\s*[\d.,]+\s*caracteres/i,
+]
 
 const exclusions = [
   /^(throttling error|service unavailable):/i,

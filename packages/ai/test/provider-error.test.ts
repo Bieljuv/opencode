@@ -49,6 +49,18 @@ describe("provider error classification", () => {
     )
   })
 
+  test("classifies the ManosTech gateway character cap as payload too large", () => {
+    // The gateway rejects an over-long request with a 400 in pt-BR; the
+    // sender must shrink the request instead of failing the turn on a
+    // generic invalid request.
+    expect(
+      classifyProviderFailure({ message: "messages muito longas (máx. 100000 caracteres)", status: 400 }),
+    ).toMatchObject({ _tag: "InvalidRequest", classification: "payload-too-large" })
+    expect(
+      classifyProviderFailure({ message: "mensagens muito longas (máx. 100.000 caracteres)", status: 400 }),
+    ).toMatchObject({ _tag: "InvalidRequest", classification: "payload-too-large" })
+  })
+
   test("does not classify rate limits as context overflow", () => {
     const messages = [
       "Throttling error: Too many tokens, please wait before trying again.",
