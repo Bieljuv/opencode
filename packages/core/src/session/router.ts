@@ -610,6 +610,30 @@ function interleave(first: readonly Model.Ref[], second: readonly Model.Ref[]): 
 }
 
 /**
+ * How long a provider or model that failed with a stable rejection stays
+ * demoted to the end of the chain. A dead key only heals when the user
+ * fixes it in Settings, and a removed model only comes back if the
+ * provider restores it — both are rare inside a session, so the demotion
+ * outlasts a burst of turns, but it expires on its own instead of
+ * needing a restart for a fix to take effect.
+ */
+export const DEMOTED_TTL_MS = 30 * 60 * 1000
+
+/**
+ * The entries of `marked` (provider id or `"providerID/modelID"` ref key
+ * to the time it was marked, in ms since epoch) still demoted at `now`.
+ * Expired entries are simply not returned; the map itself is left alone,
+ * its keys bounded by the provider catalog.
+ */
+export function liveDemoted(marked: ReadonlyMap<string, number>, now: number): Set<string> {
+  const live = new Set<string>()
+  for (const [key, at] of marked) {
+    if (now - at < DEMOTED_TTL_MS) live.add(key)
+  }
+  return live
+}
+
+/**
  * The hop chain for one turn: ordered model refs, each carrying the variant
  * that expresses the effort on that model.
  *
@@ -643,6 +667,15 @@ function interleave(first: readonly Model.Ref[], second: readonly Model.Ref[]): 
  * turns spread across the free pool instead of draining one model to its
  * free limit. It only moves the free run — a complex turn still starts
  * on its paid head, never on a free model.
+ *
+ * `demote` lists providers and models that failed with a stable
+ * rejection in an earlier step (a dead key, a removed model): they
+ * answer last, never first. The chain is rebuilt every step with no
+ * memory of its own, so without this the same dead entries head every
+ * turn and burn the cascade budget before a live model is tried.
+ * Demoted entries are never removed: a fixed key or a restored model
+ * still answers when nothing else does, and the session fallback still
+ * finds its model here.
  */
 export function buildChain(
   available: readonly Model.Info[],
@@ -652,6 +685,10 @@ export function buildChain(
     promptTokens?: number
     rotateAfter?: Pick<Model.Ref, "providerID" | "id">
     routingMode?: RoutingMode
+    demote?: {
+      readonly providers?: ReadonlySet<string>
+      readonly models?: ReadonlySet<string>
+    }
   },
 ): Model.Ref[] {
   const pool = available.filter(isRoutable)
@@ -688,15 +725,25 @@ export function buildChain(
   // `padrao`. No mode (or an unknown one, already dropped by
   // routingModeFromMetadata) keeps the order the app always built:
   // free first on a simple turn, paid first on a complex one.
+  // Demoted entries answer last, never first, in every mode.
+  const demoteLast = (chain: Model.Ref[]): Model.Ref[] => {
+    const demote = input.demote
+    if (demote === undefined) return chain
+    const isDemoted = (ref: Model.Ref) =>
+      demote.providers?.has(ref.providerID) === true || demote.models?.has(refKey(ref)) === true
+    return [...chain.filter((ref) => !isDemoted(ref)), ...chain.filter(isDemoted)]
+  }
   const mode = input.routingMode
-  if (mode === "priorizar_pagas") return [...paidRun, ...rotatedFree]
-  if (mode === "priorizar_gratis") return [...rotatedFree, ...paidRun]
+  if (mode === "priorizar_pagas") return demoteLast([...paidRun, ...rotatedFree])
+  if (mode === "priorizar_gratis") return demoteLast([...rotatedFree, ...paidRun])
   if (mode === "padrao")
-    return input.complexity === "complex"
-      ? interleave(paidRun, rotatedFree)
-      : interleave(rotatedFree, paidRun)
-  if (input.complexity === "complex") return [...paidRun, ...rotatedFree]
-  return [...rotatedFree, ...paidRun]
+    return demoteLast(
+      input.complexity === "complex"
+        ? interleave(paidRun, rotatedFree)
+        : interleave(rotatedFree, paidRun),
+    )
+  if (input.complexity === "complex") return demoteLast([...paidRun, ...rotatedFree])
+  return demoteLast([...rotatedFree, ...paidRun])
 }
 
 /** First chain ref not tried yet and not from a dead provider, or undefined when exhausted. */

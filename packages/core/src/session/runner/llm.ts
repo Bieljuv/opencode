@@ -63,6 +63,16 @@ const layer = Layer.effect(
     const steps = yield* SessionStep.make
     // Title generation starts once input is visible and must not delay model execution.
     const titles = yield* FiberMap.make<SessionSchema.ID, void, never>()
+    // Providers and models that failed with a stable rejection (a dead
+    // key, a removed model) in an earlier step, with the time they were
+    // marked. The chain is rebuilt every step, so without this memory
+    // the same dead entries head every turn; the demotion expires on
+    // its own (see SessionRouter.DEMOTED_TTL_MS). Process-lifetime, one
+    // entry per provider or model: a fixed key comes back without a
+    // restart, and a provider that leaves `available()` simply stops
+    // matching the chain.
+    const demotedProviders = new Map<string, number>()
+    const demotedModels = new Map<string, number>()
 
     // Each drain is one turn and starts its own trace, whatever fiber woke it.
     const drain = Effect.fn("SessionRunner.drain", { root: true })(function* (input: DrainInput) {
@@ -285,12 +295,21 @@ const layer = Layer.effect(
       // the chain is rebuilt per step, and the free run starts after
       // the session model. An explicit model never rotates.
       const rotateAfter = !explicit ? first.session.model : undefined
+      // Stable rejections from earlier steps answer last: the providers
+      // and models demoted here stay demoted until the TTL expires, so
+      // the chain head is a live model even though the chain is rebuilt
+      // every step. `stepStartedAt` is this step's clock reading.
+      const demote = {
+        providers: SessionRouter.liveDemoted(demotedProviders, stepStartedAt),
+        models: SessionRouter.liveDemoted(demotedModels, stepStartedAt),
+      }
       const chain = SessionRouter.buildChain(available, {
         complexity,
         effort,
         promptTokens,
         rotateAfter,
         routingMode,
+        demote,
       })
       const tried = new Set<string>()
       // Providers killed for this step: a model that fails with a dead
@@ -332,6 +351,8 @@ const layer = Layer.effect(
         sessionID,
         available: available.length,
         chain: chain.length,
+        demotedProviders: demote.providers.size,
+        demotedModels: demote.models.size,
         promptTokens,
         sessionModel:
           first.session.model === undefined ? undefined : SessionRouter.refKey(first.session.model),
@@ -496,9 +517,25 @@ const layer = Layer.effect(
               // hop left falls through to the same-model retry instead.
               // Diagnostic log only, never the screen: each hop records
               // which model was tried and why the chain stopped.
+              // Stable rejections are remembered past this step. A dead
+              // key or an empty quota condemns the whole provider, and a
+              // 404 means this model is gone — both fail the same way
+              // on the next turn, so they are demoted to the end of
+              // every chain built until the TTL expires. A plain
+              // throttle (429) stays transient: the model is skipped
+              // for this step only (it counts as tried, and the hop
+              // prefers another provider) and keeps its place in the
+              // next turn's chain, when the quota may be back.
+              // Recorded before the hop branch, so a 404 that arrives
+              // as an invalid request is demoted too.
+              const now = yield* Clock.currentTimeMillis
+              if (SessionRouter.isProviderDead(error)) {
+                deadProviders.add(loaded.model.ref.providerID)
+                demotedProviders.set(loaded.model.ref.providerID, now)
+              }
+              if (error.status === 404) demotedModels.set(SessionRouter.refKey(loaded.model.ref), now)
               if (SessionRouter.isHopSignal(error)) {
                 const exhausted = SessionRouter.isExhaustionError(error)
-                if (SessionRouter.isProviderDead(error)) deadProviders.add(loaded.model.ref.providerID)
                 const next = SessionRouter.nextHopFor(chain, tried, available, error, loaded.model, deadProviders)
                 if (next !== undefined) {
                   tried.add(SessionRouter.refKey(next))

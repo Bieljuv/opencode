@@ -10,6 +10,7 @@ import { Money } from "@opencode/schema/money"
 import {
   CASCADE_BUDGET_MS,
   CASCADE_EXHAUSTED,
+  DEMOTED_TTL_MS,
   FIRST_OUTPUT_TIMEOUT_MS,
   buildChain,
   cascadeBudgetSpent,
@@ -25,6 +26,7 @@ import {
   isHopSignal,
   isProviderDead,
   isRoutable,
+  liveDemoted,
   multiAgentFromMetadata,
   nextHop,
   nextHopFor,
@@ -236,6 +238,51 @@ describe("buildChain", () => {
     expect(buildChain([], { complexity: "simple", effort: "automatico" })).toEqual([])
   })
 
+  test("a demoted provider answers last, live order untouched", () => {
+    const chain = buildChain([priceyPaid, kimi, otherFree, go, cheapPaid, deepseekFree, pickle], {
+      complexity: "simple",
+      effort: "automatico",
+      demote: { providers: new Set(["openrouter"]) },
+    })
+    expect(chain.map(refKey)).toEqual([
+      "opencode/big-pickle",
+      "anthropic/pricey",
+      "moonshotai/kimi-k3.1-pro",
+      "openrouter/deepseek-v4.1-flash-free",
+      "openrouter/other-free",
+      "openrouter/cheap",
+    ])
+  })
+
+  test("a demoted model answers last, its provider's other models stay", () => {
+    const chain = buildChain([priceyPaid, kimi, otherFree, go, cheapPaid, deepseekFree, pickle], {
+      complexity: "simple",
+      effort: "automatico",
+      demote: { models: new Set(["openrouter/deepseek-v4.1-flash-free"]) },
+    })
+    expect(chain.map(refKey)).toEqual([
+      "opencode/big-pickle",
+      "openrouter/other-free",
+      "openrouter/cheap",
+      "anthropic/pricey",
+      "moonshotai/kimi-k3.1-pro",
+      "openrouter/deepseek-v4.1-flash-free",
+    ])
+  })
+
+  test("demotion never removes: a fully demoted pool keeps its order", () => {
+    const chain = buildChain([otherFree, deepseekFree, pickle], {
+      complexity: "simple",
+      effort: "automatico",
+      demote: { providers: new Set(["openrouter", "opencode"]) },
+    })
+    expect(chain.map(refKey)).toEqual([
+      "opencode/big-pickle",
+      "openrouter/deepseek-v4.1-flash-free",
+      "openrouter/other-free",
+    ])
+  })
+
   test("rotation: consecutive turns start on different free models", () => {
     const pool = [priceyPaid, kimi, otherFree, cheapPaid, deepseekFree, pickle]
     const input = { complexity: "simple" as const, effort: "automatico" as const }
@@ -420,6 +467,22 @@ describe("buildChain", () => {
       "anthropic/pricey",
       "moonshotai/kimi-k3.1-pro",
     ])
+  })
+})
+
+describe("liveDemoted", () => {
+  test("entries younger than the TTL stay demoted", () => {
+    const marked = new Map([["openrouter", 1_000]])
+    expect(liveDemoted(marked, 1_000 + DEMOTED_TTL_MS - 1)).toEqual(new Set(["openrouter"]))
+  })
+
+  test("entries at the TTL are demoted no longer", () => {
+    const marked = new Map([["openrouter", 1_000]])
+    expect(liveDemoted(marked, 1_000 + DEMOTED_TTL_MS)).toEqual(new Set())
+  })
+
+  test("an empty registry demotes nothing", () => {
+    expect(liveDemoted(new Map(), 1_000)).toEqual(new Set())
   })
 })
 
